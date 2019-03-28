@@ -14,6 +14,7 @@ import libs.data_loader as data_loader
 import libs.shortlist_utils as shortlist_utils
 import libs.utils as utils
 from libs.tracking import Tracking
+from .collate_fn import construct_collate_fn
 
 
 class Model(object):
@@ -67,19 +68,19 @@ class Model(object):
 
 
     def _create_data_loader(self, dataset, batch_size=128, num_workers=4, shuffle=False, mode='predict'):
-        if dataset.use_shortlist:
-            collate_fn = data_loader.collate_fn_sl
-            if dataset.use_fixed:
-                collate_fn = data_loader.collate_fn_fx_sl
-        else:
-            collate_fn = data_loader.collate_fn_full
-            if dataset.use_fixed:
-                collate_fn = data_loader.collate_fn_fx_full
+        # if dataset.use_shortlist:
+        #     collate_fn = data_loader.collate_fn_sl
+        #     if dataset.use_fixed:
+        #         collate_fn = data_loader.collate_fn_fx_sl
+        # else:
+        #     collate_fn = data_loader.collate_fn_full
+        #     if dataset.use_fixed:
+        #         collate_fn = data_loader.collate_fn_fx_full
         
         dt_loader = DataLoader(dataset,
                               batch_size=batch_size,
                               num_workers=num_workers,
-                              collate_fn= collate_fn,
+                              collate_fn= construct_collate_fn(feature_type='sparse'),
                               shuffle=shuffle)
         return dt_loader
 
