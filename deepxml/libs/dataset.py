@@ -31,9 +31,9 @@ class DatasetDense(DatasetBase):
         Dataset to load and use dense XML-Datasets
     """
 
-    def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', use_shortlist=False,
-                 size_shortlist=-1, feature_indices=None, label_indices=None, normalize_features=True,
-                 keep_invalid=False, num_centroids=1):
+    def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', 
+                 size_shortlist=-1, feature_indices=None, label_indices=None, 
+                 normalize_features=True, keep_invalid=False, num_centroids=1):
         """
             Expects 'libsvm' format with header
             Args:

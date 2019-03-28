@@ -6,7 +6,8 @@ Implementation of DeepXML
 - [ ] Integrate parameters
 - [x] Refactor data loader
 - [x] Refactor dataset/collate_fn
-- [ ] Refactor model
+- [x] Refactor model
+- [ ] Refactor network
 - [ ] Integrate low rank factorization
 - [ ] Remove logit
 
