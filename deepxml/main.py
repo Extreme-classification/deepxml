@@ -62,7 +62,7 @@ def train(model, params):
               tr_fname=params.tr_fname,
               val_fname=params.val_fname,
               batch_size=params.batch_size,
-              num_workers=16,
+              num_workers=4,
               shuffle=params.shuffle,
               validate=params.validate,
               beta=params.beta,
@@ -79,27 +79,23 @@ def get_document_embeddings(model, params):
             model: model_utils
             params: parameters
     """
-    dataset = model._create_dataset(os.path.join(params.data_dir, params.dataset),
-                                    fname=params.ts_fname,
-                                    mode='predict',
-                                    # Implemented only for shortlist as of now.
-                                    use_shortlist=True,
-                                    keep_invalid=params.keep_invalid)
-    _data_loader = model._create_data_loader(dataset,
-                                             batch_size=params.batch_size,
-                                             num_workers=4)
-    document_embeddings = model.get_document_embeddings(_data_loader)
+    doc_embeddings = model.get_document_embeddings(data_dir=params.data_dir,
+                                                   dataset=params.dataset,
+                                                   fname=params.ts_fname,
+                                                   data=None,
+                                                   keep_invalid=params.keep_invalid,
+                                                   batch_size=params.batch_size,
+                                                   num_workers=4)
     fname = os.path.join(params.result_dir, params.out_fname)
-    np.save(fname, document_embeddings)
-
+    np.save(fname, doc_embeddings)
 
 def get_word_embeddings(model, params):
     """
-        Get document embedding for given test file
+        Get word embeddings
+        Embedding corresponding to padding index is removed
         Args:
             model: model_utils
             params: parameters
-            0th index is the padding index
     """
     if params.use_hash_embeddings:
         _embeddings, importance_wts = model.net.embeddings.get_weights()
@@ -114,6 +110,13 @@ def get_word_embeddings(model, params):
 
 
 def get_classifier_wts(model, params):
+    """
+        Get classifier weights and biases
+        -inf bias for untrained classifiers i.e. labels without any data
+        Args:
+            model: model_utils
+            params: parameters
+    """
     _split = None
     if params.label_indices is not None:
         _split = params.label_indices.split("_")[-1].split(".")[0]
@@ -121,22 +124,29 @@ def get_classifier_wts(model, params):
     fname = os.path.join(params.model_dir,
                          'labels_params.pkl' if _split is None
                          else "labels_params_split_{}.pkl".format(_split))
-    _l_map = pickle.load(open(fname, 'rb'))
-    label_mapping = _l_map['valid_labels']
-    num_labels = _l_map['num_labels']
+    temp = pickle.load(open(fname, 'rb'))
+    label_mapping = temp['valid_labels']
+    num_labels = temp['num_labels']
     clf_wts = np.zeros((num_labels, params.embedding_dims+1), dtype=np.float32) # +1 for bias
     clf_wts[:, -1] = -1e5  # -inf bias for untrained classifiers
-    clf_wts[label_mapping, :] = model.net._get_clf_wts()
+    clf_wts[label_mapping, :] = model.net.get_clf_weights()
     fname = os.path.join(params.result_dir, 'export/classifier.npy')
     np.save(fname, clf_wts)
 
 
 def inference(model, params):
+    """
+        Predict the top-k labels for given test data
+        Args:
+            model: model_utils
+            params: : parameters
+    """
     predicted_labels = model.predict(data_dir=params.data_dir,
                                      dataset=params.dataset,
                                      ts_fname=params.ts_fname,
                                      beta=params.beta,
                                      keep_invalid=params.keep_invalid)
+    # Real number of labels
     num_samples, _, num_labels = utils.get_data_header(
         os.path.join(params.data_dir, params.dataset, params.ts_fname))
     label_mapping = None
@@ -146,11 +156,11 @@ def inference(model, params):
             _split = params.label_indices.split("_")[-1].split(".")[0]
         fname = os.path.join(params.model_dir,
             'labels_params.pkl' if _split is None else "labels_params_split_{}.pkl".format(_split))
-        _l_map = pickle.load(open(fname, 'rb'))
-        label_mapping = _l_map['valid_labels']
-        num_labels = _l_map['num_labels']
-    utils.write_predictions(
-        predicted_labels, params.result_dir, params.out_fname, label_mapping, num_samples, num_labels)
+        temp = pickle.load(open(fname, 'rb'))
+        label_mapping = temp['valid_labels']
+        num_labels = temp['num_labels']
+    utils.save_predictions(predicted_labels, params.result_dir, label_mapping,
+                           num_samples, num_labels, _fnames=['knn', 'clf'])
 
 
 def post_process(model, params):
@@ -184,14 +194,13 @@ def main(params):
                                               freeze_embeddings=params.freeze_embeddings)
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
-        shorty = None
         if params.use_shortlist:
             shorty = shortlist.Shortlist(
                 params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-        #model = model_utils.Model(params, net, criterion, optimizer, shorty)
-        model = model_utils.ModelFull(params, net, criterion, optimizer)
+            model = model_utils.ModelShortlist(params, net, criterion, optimizer, shorty)
+        else:
+            model = model_utils.ModelFull(params, net, criterion, optimizer)
         model.transfer_to_devices()
-        #model.net = torch.nn.DataParallel(model.net, device_ids=[0, 1])
         train(model, params)
         fname = os.path.join(params.result_dir, 'params.json')
         utils.save_parameters(fname, params)
@@ -234,10 +243,13 @@ def main(params):
         if params.use_shortlist:
             shorty = shortlist.Shortlist(
                 params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-        model = model_utils.ModelFull(params, net, criterion=None, optimizer=None)
+        if params.use_shortlist:
+            shorty = shortlist.Shortlist(
+                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
+        else:
+            model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
         model.transfer_to_devices()
-        # model = model_utils.Model(
-        #     params, net, criterion=None, optimizer=None, shorty=shorty)
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
         print("\nModel configuration: ", net)
         inference(model, params)
@@ -270,8 +282,12 @@ def main(params):
         net = network.DeepXML(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
-        model = model_utils.Model(
-            params, net, criterion=None, optimizer=None, shorty=None)
+        if params.use_shortlist:
+            shorty = shortlist.Shortlist(
+                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
+        else:
+            model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
         if params.ts_fname == "0":

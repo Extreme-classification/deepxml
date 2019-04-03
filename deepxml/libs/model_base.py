@@ -34,21 +34,22 @@ class ModelBase(object):
         self.label_padding_index = params.label_padding_index
         self._validate = params.validate
         self.last_epoch = 0
+        self.label_indices = params.label_indices
         self.shortlist_size = params.num_nbrs if params.use_shortlist else -1
         self.dlr_step = params.dlr_step
         self.dlr_factor = params.dlr_factor
         self.progress_step = 500
         self.freeze_embeddings = params.freeze_embeddings
         self.logger = self.get_logger()
-        self.devices = self._create_devices(None)
-        # self.devices = self._create_devices(params.devices)
+        self.devices = self._create_devices(params.devices)
         self.embedding_dims = params.embedding_dims
         self.tracking = Tracking()
         self.model_fname = params.model_fname
 
     def _create_devices(self, _devices):
-        _devices = ["cuda:0", "cuda:0"]
-        # Allows distributed training
+        if len(_devices) < 2: # Repeat devices if required
+            _devices = _devices*2
+        # Allows model distributed training
         devices = []
         for item in _devices:
             devices.append(torch.device(
@@ -84,7 +85,7 @@ class ModelBase(object):
     #         self.criterion.to(self.devices[-1])
 
     def _create_dataset(self, data_dir, fname, data, mode='predict', normalize_features=True,
-                        keep_invalid=False):
+                        keep_invalid=False, **kwargs):
         """
             Create dataset as per given parameters
         """
@@ -95,7 +96,8 @@ class ModelBase(object):
                                      mode=mode,
                                      size_shortlist=self.shortlist_size,
                                      normalize_features=normalize_features,
-                                     keep_invalid=keep_invalid)
+                                     keep_invalid=keep_invalid, 
+                                     **kwargs)
         return _dataset
 
     def _create_data_loader(self, dataset, batch_size=128,
@@ -133,7 +135,7 @@ class ModelBase(object):
         # FIXME: For now it assumes classifier is on last device
         return tensor.to(self.devices[index])
 
-    def _step(self, data_loader):
+    def _step(self, data_loader, _div=False):
         """
             Training step
         """
@@ -147,6 +149,8 @@ class ModelBase(object):
             out_ans = self.net.forward(batch_data)
             loss = self.criterion(
                 out_ans, self._to_device(batch_data['Y']))
+            if _div: # If loss is sum and average over samples is required
+                loss = loss/batch_size
             mean_loss += loss.item()*batch_size
             loss.backward()
             self.optimizer.step()
@@ -155,7 +159,6 @@ class ModelBase(object):
                     "Training progress: [{}/{}]".format(batch_idx, num_batches))
             # TODO Delete items from tuple
             del batch_data
-        e = time.time()
         return mean_loss / data_loader.dataset.num_samples
 
     def validate(self, data_loader):
@@ -181,28 +184,7 @@ class ModelBase(object):
             del batch_data
         return predicted_labels, mean_loss / data_loader.dataset.num_samples
 
-    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
-            tr_fname='train.txt', val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False,
-            validate=False, init_epoch=0, keep_invalid=False, **kwargs):
-        self.logger.info("Loading training data.")
-        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                             fname=tr_fname,
-                                             data=data,
-                                             mode='train',
-                                             keep_invalid=keep_invalid)
-        train_loader = self._create_data_loader(train_dataset,
-                                                batch_size=batch_size,
-                                                num_workers=num_workers,
-                                                shuffle=shuffle)
-        self.logger.info("Loading validation data.")
-        validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                  fname=val_fname,
-                                                  data=data,
-                                                  mode='predict',
-                                                  keep_invalid=keep_invalid)
-        validation_loader = self._create_data_loader(validation_dataset,
-                                                     batch_size=batch_size,
-                                                     num_workers=num_workers)
+    def _fit(self, train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             if epoch != 0 and self.dlr_step != -1 and epoch % self.dlr_step == 0:
                 self._adjust_parameters()
@@ -231,11 +213,37 @@ class ModelBase(object):
                 self.logger.info("P@1: {}, loss: {}, time: {} sec".format(
                     _prec[0]*100, val_avg_loss, val_end_t-val_start_t))
             self.tracking.last_epoch += 1
-
         self.save_checkpoint(model_dir, epoch+1)
         self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
         self.logger.info("Training time: {} sec, Validation time: {} sec, Shortlist time: {} sec".format(
             self.tracking.train_time, self.tracking.validation_time, self.tracking.shortlist_time))
+    
+
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
+            tr_fname='train.txt', val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False,
+            validate=False, init_epoch=0, keep_invalid=False, **kwargs):
+        self.logger.info("Loading training data.")
+        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                             fname=tr_fname,
+                                             data=data,
+                                             mode='train',
+                                             keep_invalid=keep_invalid,
+                                             label_indices=self.label_indices)
+        train_loader = self._create_data_loader(train_dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers,
+                                                shuffle=shuffle)
+        self.logger.info("Loading validation data.")
+        validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                  fname=val_fname,
+                                                  data=data,
+                                                  mode='predict',
+                                                  keep_invalid=keep_invalid,
+                                                  label_indices=self.label_indices)
+        validation_loader = self._create_data_loader(validation_dataset,
+                                                     batch_size=batch_size,
+                                                     num_workers=num_workers)
+        self._fit(train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs)
 
     def predict(self, data_dir, dataset, data=None, ts_fname='test.txt', batch_size=256, num_workers=6,
                 keep_invalid=False, **kwargs):
@@ -243,14 +251,19 @@ class ModelBase(object):
         def eval(predictions, true_labels):
             _res = ""
             acc = self.evaluate(true_labels, predictions)
-            _res = "clf: {}".format(acc[0]*100)
+            if isinstance(acc, dict):                
+                for key, val in acc.items():
+                    _res += "{}: {} ".format(key, val[0]*100)
+            else:
+                _res = "clf: {}".format(acc[0]*100)
             return _res
 
         dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                        fname=ts_fname,
                                        data=data,
                                        mode='predict',
-                                       keep_invalid=keep_invalid)
+                                       keep_invalid=keep_invalid,
+                                       label_indices=self.label_indices)
         data_loader = self._create_data_loader(dataset=dataset,
                                                batch_size=batch_size,
                                                num_workers=num_workers)
@@ -281,10 +294,7 @@ class ModelBase(object):
                     "Prediction progress: [{}/{}]".format(batch_idx, num_batches))
         return predicted_labels
 
-    def get_document_embeddings(self, data_loader):
-        """
-            Get document embeddings
-        """
+    def _document_embeddings(self, data_loader):
         self.net.eval()
         torch.set_grad_enabled(False)
         embeddings = torch.zeros(
@@ -292,12 +302,27 @@ class ModelBase(object):
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
-            out_ans = self.net.forward(self._to_device(
-                batch_data), return_embeddings=True)
-            embeddings[count:count+batch_size, :] = out_ans.cpu()
+            out_ans = self.net.forward(batch_data, return_embeddings=True)
+            embeddings[count:count+batch_size, :] = out_ans.detach().cpu()
             count += batch_size
         torch.cuda.empty_cache()
         return embeddings.numpy()
+
+    def get_document_embeddings(self, data_dir, dataset, fname, data=None, 
+                                keep_invalid=False, batch_size=128, num_workers=4):
+        """
+            Get document embeddings
+        """
+        dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                  fname=fname,
+                                                  data=data,
+                                                  mode='predict',
+                                                  keep_invalid=keep_invalid)
+        data_loader = self._create_data_loader(dataset,
+                                                     batch_size=batch_size,
+                                                     num_workers=num_workers)
+        return self._document_embeddings(data_loader)
+
 
     def _adjust_parameters(self):
         self.optimizer.adjust_lr(self.dlr_factor)
@@ -316,7 +341,7 @@ class ModelBase(object):
         # Useful if there are multiple parts of a model
         fname = {'net': 'checkpoint_net_{}.pkl'.format(epoch)}
         torch.save(checkpoint, os.path.join(model_dir, fname['net']))
-        self.tracking.saved_checkpoints.append(fname['net'])
+        self.tracking.saved_checkpoints.append(fname)
         self.purge(model_dir)
 
     def load_checkpoint(self, model_dir, fname, epoch):
@@ -327,12 +352,14 @@ class ModelBase(object):
         if self.optimizer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
-    def save(self, model_dir, fname):
+    def save(self, model_dir, fname, *args):
+        fname = os.path.join(
+            model_dir, fname+'_network.pkl')
+        self.logger.info("Saving model at: {}".format(fname))
         state_dict = self.net.state_dict()
-        torch.save(state_dict, os.path.join(
-            model_dir, fname+'_network.pkl'))
+        torch.save(state_dict, fname)
 
-    def load(self, model_dir, fname):
+    def load(self, model_dir, fname, *args):
         fname_net = fname+'_network.pkl'
         state_dict = torch.load(
             os.path.join(model_dir, model_dir, fname_net))
@@ -345,7 +372,7 @@ class ModelBase(object):
         if len(self.tracking.saved_checkpoints) > self.tracking.checkpoint_history:
             fname = self.tracking.saved_checkpoints.pop(0)
             self.logger.info("Purging network checkpoint: {}".format(fname['net']))
-            os.remove(os.path.join(model_dir, fname))
+            os.remove(os.path.join(model_dir, fname['net']))
 
     def _evaluate(self, true_labels, predicted_labels):
         acc = xc_metrics.Metrices(true_labels)

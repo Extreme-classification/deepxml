@@ -21,7 +21,34 @@ class ModelFull(ModelBase):
     def __init__(self, params, net, criterion, optimizer):
         super().__init__(params, net, criterion, optimizer)
         self.feature_indices = params.feature_indices
-        self.label_indices = params.label_indices
+
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
+            tr_fname='train.txt', val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False,
+            validate=False, init_epoch=0, keep_invalid=False, **kwargs):
+        self.logger.info("Loading training data.")
+        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                             fname=tr_fname,
+                                             data=data,
+                                             mode='train',
+                                             keep_invalid=keep_invalid,
+                                             feature_indices=self.feature_indices, 
+                                             label_indices=self.label_indices)
+        train_loader = self._create_data_loader(train_dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers,
+                                                shuffle=shuffle)
+        self.logger.info("Loading validation data.")
+        validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                  fname=val_fname,
+                                                  data=data,
+                                                  mode='predict',
+                                                  keep_invalid=keep_invalid,
+                                                  feature_indices=self.feature_indices, 
+                                                  label_indices=self.label_indices)
+        validation_loader = self._create_data_loader(validation_dataset,
+                                                     batch_size=batch_size,
+                                                     num_workers=num_workers)
+        self._fit(train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs)
 
 
 class ModelShortlist(ModelBase):
@@ -29,7 +56,7 @@ class ModelShortlist(ModelBase):
         Models with label shortlist
     """
 
-    def __init__(self, params, net, criterion, optimizer, shorty=None):
+    def __init__(self, params, net, criterion, optimizer, shorty):
         super().__init__(params, net, criterion, optimizer)
         self.shorty = shorty
         self.num_centroids = params.num_centroids
@@ -66,9 +93,10 @@ class ModelShortlist(ModelBase):
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
-            out_ans = self.net.forward(self._to_device(batch_data))
+            out_ans = self.net.forward(batch_data)
             loss = self.criterion(
                 out_ans, self._to_device(batch_data['Y']))/batch_size
+            out_ans = out_ans.cpu()
             mean_loss += loss.item()*batch_size
             scores = self._combine_scores(
                 out_ans.data, batch_data['Y_d'].data, beta)
@@ -88,7 +116,7 @@ class ModelShortlist(ModelBase):
         return self._strip_padding_label(predicted_labels, num_labels), mean_loss / \
             data_loader.dataset.num_samples
 
-    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data, tr_fname='train.txt',
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None, tr_fname='train.txt',
             val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False, validate=False, beta=0.2,
             init_epoch=0, keep_invalid=False):
         self.logger.info("Loading training data.")
@@ -96,7 +124,9 @@ class ModelShortlist(ModelBase):
                                              fname=tr_fname,
                                              data=data,
                                              mode='train',
-                                             keep_invalid=keep_invalid)
+                                             keep_invalid=keep_invalid,
+                                             label_indices=self.label_indices,
+                                             feature_indices=self.feature_indices)
         train_loader_shuffle = self._create_data_loader(train_dataset,
                                                         batch_size=batch_size,
                                                         num_workers=num_workers,
@@ -109,7 +139,9 @@ class ModelShortlist(ModelBase):
                                                   fname=val_fname,
                                                   data=data,
                                                   mode='predict',
-                                                  keep_invalid=keep_invalid)
+                                                  keep_invalid=keep_invalid,
+                                                  label_indices=self.label_indices,
+                                                  feature_indices=self.feature_indices)
         validation_loader = self._create_data_loader(validation_dataset,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers)
@@ -152,15 +184,15 @@ class ModelShortlist(ModelBase):
                     _acc['clf'][0]*100, _acc['knn'][0]*100))
                 val_end_t = time.time()
                 self.tracking.validation_time = self.tracking.validation_time + val_end_t - val_start_t
-                _prec, _ndcg = self.evaluate(
+                _acc = self.evaluate(
                     validation_loader.dataset.labels, predicted_labels)
-                self.tracking.val_precision.append(_prec)
-                self.tracking.val_ndcg.append(_ndcg)
+                self.tracking.val_precision.append(_acc['combined'][0])
+                self.tracking.val_ndcg.append(_acc['combined'][1])
                 self.logger.info("Model saved after epoch: {}".format(epoch))
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
                 self.logger.info("P@1: {}, loss: {}, time: {} sec".format(
-                    _prec[0]*100, val_avg_loss, val_end_t-val_start_t))
+                    _acc['combined'][0][0]*100, val_avg_loss, val_end_t-val_start_t))
             self.tracking.last_epoch += 1
 
         self.save_checkpoint(model_dir, epoch+1)
@@ -197,7 +229,7 @@ class ModelShortlist(ModelBase):
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
-            out_ans = self.net.forward(batch_data)
+            out_ans = self.net.forward(batch_data).cpu()
             scores = self._combine_scores(
                 out_ans.data, batch_data['Y_d'].data, beta)
             batch_shortlist = batch_data['Y_s'].numpy()
@@ -243,7 +275,7 @@ class ModelShortlist(ModelBase):
         self.shorty.load(os.path.join(model_dir, fname+'_ANN.pkl'))
 
     def purge(self, model_dir):
-        if len(self.tracking.saved_checkpoints) > self.tracking.checkpoint_history:
-            fname = self.tracking.saved_checkpoints[-1]['ANN']
-            os.remove(os.path.join(model_dir, fname[1]))
+        # if len(self.tracking.saved_checkpoints) > self.tracking.checkpoint_history:
+        #     fname = self.tracking.saved_checkpoints[-1]['ANN']
+        #     os.remove(os.path.join(model_dir, fname[1]))
         super().purge(model_dir)

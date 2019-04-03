@@ -298,16 +298,11 @@ class Parameters(ParametersBase):
             type=bool,
             help='Shuffle data during training!')
         self.parser.add_argument(
-            '--device_embeddings',
+            '--devices',
             action='store',
-            default='cuda:0',
+            default=['cuda:0'],
+            nargs='+',
             help='Device for embeddings'
-        )
-        self.parser.add_argument(
-            '--device_classifier',
-            action='store',
-            default='cuda:0',
-            help='Device for classifier'
         )
         self.parser.add_argument(
             '--use_hash_embeddings',
