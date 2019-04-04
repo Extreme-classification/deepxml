@@ -15,7 +15,7 @@ import libs.utils as utils
 import models.network as network
 import libs.shortlist as shortlist
 import libs.shortlist_utils as shortlist_utils
-import libs.model_utils as model_utils
+import libs.model as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
 import pdb
@@ -209,7 +209,8 @@ def main(params):
         optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
                                               learning_rate=params.learning_rate,
                                               momentum=params.momentum,
-                                              freeze_embeddings=params.freeze_embeddings)
+                                              freeze_embeddings=params.freeze_embeddings,
+                                              weight_decay=params.weight_decay)
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
         if params.use_shortlist:
@@ -236,7 +237,7 @@ def main(params):
                                               freeze_embeddings=params.freeze_embeddings)
         criterion = torch.nn.BCEWithLogitsLoss(
             size_average=False if params.use_shortlist else True)
-        model = model_utils.Model(
+        model = model.Model(
             params, net, criterion=criterion, optimizer=None, shorty=shorty)
         
         model.load_checkpoint(

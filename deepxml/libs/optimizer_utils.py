@@ -2,11 +2,13 @@ import torch
 import torch.nn as nn
 
 class Optimizer(object):
-    def __init__(self, opt_type='Adam', learning_rate=0.01, momentum=0.9, freeze_embeddings=False):
+    def __init__(self, opt_type='Adam', learning_rate=0.01, momentum=0.9, weight_decay=0.0, nesterov=True, freeze_embeddings=False):
         self.opt_type = opt_type 
         self.optimizer = []
+        self.weight_decay = weight_decay
         self.learning_rate = learning_rate
         self.momentum = momentum
+        self.nesterov = nesterov
         self.freeze_embeddings = freeze_embeddings
 
     def _get_opt(self, params, is_sparse):
@@ -14,6 +16,7 @@ class Optimizer(object):
             return torch.optim.SGD(params,
                                     lr=self.learning_rate,
                                     momentum=self.momentum,
+                                    weight_decay=self.weight_decay
                                 )
         if self.opt_type == 'Adam':
             if is_sparse:
@@ -23,6 +26,7 @@ class Optimizer(object):
             else:
                 return torch.optim.Adam(params,
                                     lr=self.learning_rate,
+                                    weight_decay=self.weight_decay
                                 )
 
 
