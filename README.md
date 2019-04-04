@@ -10,11 +10,14 @@ Implementation of DeepXML
 - [x] Refactor network
 - [ ] Integrate low rank factorization
 - [x] Remove logit
-- [ ] Post-processing
+- [x] Post-processing
+- [ ] Integrate xclib
+- [ ] Fix run file
+- [ ] Parameters from json?
 
 # Testing
 
-- [ ] dataset for sparse & shortlist
+- [x] dataset for sparse & shortlist
 - [x] dataset for sparse & full
 - [x] network for dense
-- [ ] network for sparse 
+- [x] network for sparse 

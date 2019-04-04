@@ -22,34 +22,25 @@ class ModelFull(ModelBase):
         super().__init__(params, net, criterion, optimizer)
         self.feature_indices = params.feature_indices
 
-    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
-            tr_fname='train.txt', val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False,
-            validate=False, init_epoch=0, keep_invalid=False, **kwargs):
-        self.logger.info("Loading training data.")
-        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                             fname=tr_fname,
-                                             data=data,
-                                             mode='train',
-                                             keep_invalid=keep_invalid,
-                                             feature_indices=self.feature_indices, 
-                                             label_indices=self.label_indices)
-        train_loader = self._create_data_loader(train_dataset,
+    def _pp_with_shortlist(self, shorty, data_dir, dataset, fname='train.txt', 
+                           data=None, keep_invalid=False, batch_size=128, 
+                           num_workers=4, data_loader=None, **kwargs):
+        if data_loader is None:
+            dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                        fname=fname,
+                                        data=data,
+                                        mode='predict',
+                                        keep_invalid=keep_invalid,
+                                        **kwargs)
+            data_loader = self._create_data_loader(dataset,
                                                 batch_size=batch_size,
-                                                num_workers=num_workers,
-                                                shuffle=shuffle)
-        self.logger.info("Loading validation data.")
-        validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                  fname=val_fname,
-                                                  data=data,
-                                                  mode='predict',
-                                                  keep_invalid=keep_invalid,
-                                                  feature_indices=self.feature_indices, 
-                                                  label_indices=self.label_indices)
-        validation_loader = self._create_data_loader(validation_dataset,
-                                                     batch_size=batch_size,
-                                                     num_workers=num_workers)
-        self._fit(train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs)
+                                                num_workers=num_workers)
 
+        self.logger.info("Post-processing with shortlist!")
+        shorty.reset()
+        shortlist_utils.update(
+            data_loader, self, self.embedding_dims, shorty, flag=1)
+        return shorty
 
 class ModelShortlist(ModelBase):
     """
@@ -118,15 +109,14 @@ class ModelShortlist(ModelBase):
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None, tr_fname='train.txt',
             val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False, validate=False, beta=0.2,
-            init_epoch=0, keep_invalid=False):
+            init_epoch=0, keep_invalid=False, **kwargs):
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                              fname=tr_fname,
                                              data=data,
                                              mode='train',
                                              keep_invalid=keep_invalid,
-                                             label_indices=self.label_indices,
-                                             feature_indices=self.feature_indices)
+                                             **kwargs)
         train_loader_shuffle = self._create_data_loader(train_dataset,
                                                         batch_size=batch_size,
                                                         num_workers=num_workers,
@@ -140,8 +130,7 @@ class ModelShortlist(ModelBase):
                                                   data=data,
                                                   mode='predict',
                                                   keep_invalid=keep_invalid,
-                                                  label_indices=self.label_indices,
-                                                  feature_indices=self.feature_indices)
+                                                  **kwargs)
         validation_loader = self._create_data_loader(validation_dataset,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers)
@@ -166,7 +155,7 @@ class ModelShortlist(ModelBase):
                 batch_train_start_time = time.time()
                 validation_loader.dataset.save_shortlist(
                     self.model_dir+'/test_shorty.pkl')
-            tr_avg_loss = self._step(train_loader_shuffle)
+            tr_avg_loss = self._step(train_loader_shuffle, batch_div=True)
             self.tracking.mean_train_loss.append(tr_avg_loss)
             batch_train_end_time = time.time()
             self.tracking.train_time = self.tracking.train_time + \
@@ -200,7 +189,8 @@ class ModelShortlist(ModelBase):
         self.logger.info("Training time: {} sec, Validation time: {} sec, Shortlist time: {} sec".format(
             self.tracking.train_time, self.tracking.validation_time, self.tracking.shortlist_time))
 
-    def _predict(self, data_loader, beta):
+    def _predict(self, data_loader, **kwargs):
+        beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()
         num_labels = data_loader.dataset.num_labels

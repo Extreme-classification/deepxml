@@ -34,7 +34,6 @@ class ModelBase(object):
         self.label_padding_index = params.label_padding_index
         self._validate = params.validate
         self.last_epoch = 0
-        self.label_indices = params.label_indices
         self.shortlist_size = params.num_nbrs if params.use_shortlist else -1
         self.dlr_step = params.dlr_step
         self.dlr_factor = params.dlr_factor
@@ -135,7 +134,7 @@ class ModelBase(object):
         # FIXME: For now it assumes classifier is on last device
         return tensor.to(self.devices[index])
 
-    def _step(self, data_loader, _div=False):
+    def _step(self, data_loader, batch_div=False):
         """
             Training step
         """
@@ -149,7 +148,7 @@ class ModelBase(object):
             out_ans = self.net.forward(batch_data)
             loss = self.criterion(
                 out_ans, self._to_device(batch_data['Y']))
-            if _div: # If loss is sum and average over samples is required
+            if batch_div: # If loss is sum and average over samples is required
                 loss = loss/batch_size
             mean_loss += loss.item()*batch_size
             loss.backward()
@@ -228,7 +227,7 @@ class ModelBase(object):
                                              data=data,
                                              mode='train',
                                              keep_invalid=keep_invalid,
-                                             label_indices=self.label_indices)
+                                             **kwargs)
         train_loader = self._create_data_loader(train_dataset,
                                                 batch_size=batch_size,
                                                 num_workers=num_workers,
@@ -239,31 +238,30 @@ class ModelBase(object):
                                                   data=data,
                                                   mode='predict',
                                                   keep_invalid=keep_invalid,
-                                                  label_indices=self.label_indices)
+                                                  **kwargs)
         validation_loader = self._create_data_loader(validation_dataset,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers)
         self._fit(train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs)
 
+    def _format_acc(self, acc):
+        _res = ""
+        if isinstance(acc, dict):                
+            for key, val in acc.items():
+                _res += "{}: {} ".format(key, val[0]*100)
+        else:
+            _res = "clf: {}".format(acc[0]*100)
+        return _res
+
+
     def predict(self, data_dir, dataset, data=None, ts_fname='test.txt', batch_size=256, num_workers=6,
                 keep_invalid=False, **kwargs):
-        # FIXME: Print for multiple
-        def eval(predictions, true_labels):
-            _res = ""
-            acc = self.evaluate(true_labels, predictions)
-            if isinstance(acc, dict):                
-                for key, val in acc.items():
-                    _res += "{}: {} ".format(key, val[0]*100)
-            else:
-                _res = "clf: {}".format(acc[0]*100)
-            return _res
-
         dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                        fname=ts_fname,
                                        data=data,
                                        mode='predict',
                                        keep_invalid=keep_invalid,
-                                       label_indices=self.label_indices)
+                                       **kwargs)
         data_loader = self._create_data_loader(dataset=dataset,
                                                batch_size=batch_size,
                                                num_workers=num_workers)
@@ -271,7 +269,8 @@ class ModelBase(object):
         predicted_labels = self._predict(data_loader, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
-        _res = eval(predicted_labels, dataset.labels)
+        acc = self.evaluate(dataset.labels, predicted_labels)
+        _res = self._format_acc(acc)
         self.logger.info("Prediction time (total): {} sec., Prediction time (per sample): {} msec., P@k(%): {}".format(
             prediction_time, prediction_time*1000/data_loader.dataset.num_samples, _res))
         return predicted_labels
@@ -308,19 +307,22 @@ class ModelBase(object):
         torch.cuda.empty_cache()
         return embeddings.numpy()
 
-    def get_document_embeddings(self, data_dir, dataset, fname, data=None, 
-                                keep_invalid=False, batch_size=128, num_workers=4):
+    def get_document_embeddings(self, data_dir, dataset, fname, data=None,
+                                keep_invalid=False, batch_size=128, num_workers=4, 
+                                data_loader=None, **kwargs):
         """
             Get document embeddings
         """
-        dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                  fname=fname,
-                                                  data=data,
-                                                  mode='predict',
-                                                  keep_invalid=keep_invalid)
-        data_loader = self._create_data_loader(dataset,
-                                                     batch_size=batch_size,
-                                                     num_workers=num_workers)
+        if data_loader is None:
+            dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                        fname=fname,
+                                        data=data,
+                                        mode='predict',
+                                        keep_invalid=keep_invalid,
+                                        **kwargs)
+            data_loader = self._create_data_loader(dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers)
         return self._document_embeddings(data_loader)
 
 

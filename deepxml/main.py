@@ -18,6 +18,8 @@ import libs.shortlist_utils as shortlist_utils
 import libs.model_utils as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
+import pdb
+
 
 __author__ = 'KD'
 
@@ -46,6 +48,19 @@ def load_emeddings(params):
     return embeddings
 
 
+def pp_with_shorty(model, params, shorty):
+    model._pp_with_shortlist(shorty=shorty,
+                         data_dir=params.data_dir,
+                         dataset=params.dataset,
+                         fname=params.tr_fname,
+                         keep_invalid=False,
+                         batch_size=params.batch_size, 
+                         num_workers=4,
+                         label_indices=params.label_indices,
+                         feature_indices=params.feature_indices)
+    shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
+
+
 def train(model, params):
     """
         Train the model with given data
@@ -67,12 +82,14 @@ def train(model, params):
               validate=params.validate,
               beta=params.beta,
               init_epoch=params.last_epoch,
-              keep_invalid=params.keep_invalid)
+              keep_invalid=params.keep_invalid,
+              feature_indices=params.feature_indices,
+              label_indices=params.label_indices)
     #TODO: Accomodate low rank
     model.save(params.model_dir, params.model_fname, params.low_rank)
 
 
-def get_document_embeddings(model, params):
+def get_document_embeddings(model, params, _save=True):
     """
         Get document embedding for given test file
         Args:
@@ -85,9 +102,13 @@ def get_document_embeddings(model, params):
                                                    data=None,
                                                    keep_invalid=params.keep_invalid,
                                                    batch_size=params.batch_size,
-                                                   num_workers=4)
+                                                   num_workers=4,
+                                                   feature_indices=params.feature_indices,
+                                                   label_indices=params.label_indices)
     fname = os.path.join(params.result_dir, params.out_fname)
-    np.save(fname, doc_embeddings)
+    if _save:
+        np.save(fname, doc_embeddings)
+    return doc_embeddings
 
 def get_word_embeddings(model, params):
     """
@@ -145,7 +166,9 @@ def inference(model, params):
                                      dataset=params.dataset,
                                      ts_fname=params.ts_fname,
                                      beta=params.beta,
-                                     keep_invalid=params.keep_invalid)
+                                     keep_invalid=params.keep_invalid,
+                                     feature_indices=params.feature_indices,
+                                     label_indices=params.label_indices)
     # Real number of labels
     num_samples, _, num_labels = utils.get_data_header(
         os.path.join(params.data_dir, params.dataset, params.ts_fname))
@@ -162,11 +185,6 @@ def inference(model, params):
     utils.save_predictions(predicted_labels, params.result_dir, label_mapping,
                            num_samples, num_labels, _fnames=['knn', 'clf'])
 
-
-def post_process(model, params):
-    model.post_process_full(params.data_dir, params.model_dir, params.result_dir, params.dataset,
-                            params.tr_fname, params.batch_size, keep_invalid=params.keep_invalid, num_workers=4)
-    model.save(params.model_dir, params.model_fname, low_rank=-1)
 
 
 def main(params):
@@ -243,9 +261,6 @@ def main(params):
         if params.use_shortlist:
             shorty = shortlist.Shortlist(
                 params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-        if params.use_shortlist:
-            shorty = shortlist.Shortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
             model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
         else:
             model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
@@ -267,13 +282,10 @@ def main(params):
         if params.use_shortlist:
             shorty = shortlist.Shortlist(
                 params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-        model = model_utils.Model(
-            params, net, criterion=None, optimizer=None, shorty=None)
-        print(params.model_fname)
+        model = model_utils.ModelFull(params, net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
-        model.shorty = shorty
         model.transfer_to_devices()
-        post_process(model, params)
+        pp_with_shorty(model, params, shorty)
         utils.save_parameters(fname, params)
 
     elif params.mode == 'extract':
