@@ -21,26 +21,17 @@ def compute_svd(X, num_components):
     return U@s, Vh
 
 
-def write_predictions(predictions, result_dir, fname, label_mapping, num_samples, 
-                      num_labels):
-    ext = ['.npz', '_knn.npz', '_clf.npz']
-    if isinstance(predictions, tuple):
-        for _pred, _ext in zip(predictions, ext):
-            _fname = os.path.join(result_dir, fname.replace(".txt", _ext))
-            if label_mapping is not None:
-                _pred = map_to_original(
-                    _pred, label_mapping, (num_samples, num_labels))
-                #print(": ", _fname, _pred.nnz)
-            save_npz(_fname, _pred)
-            #data_utils.write_sparse_file(_pred, _fname, header=True)
+def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, _fnames=['knn', 'clf', 'combined']):
+    if isinstance(preds, tuple):
+        for _, (_pred, _fname) in enumerate(zip(preds, _fnames)):
+            predicted_labels = map_to_original(
+                _pred, valid_labels, _shape=(num_samples, num_labels))
+            save_npz(os.path.join(
+                result_dir, 'predictions_{}.npz'.format(_fname)), predicted_labels)
     else:
-        fname = os.path.join(result_dir, fname)
-        if label_mapping is not None:
-            predictions = map_to_original(
-                predictions, label_mapping, (num_samples, num_labels))
-        _fname = os.path.join(result_dir, fname.replace(".txt", ext[0]))
-        save_npz(_fname, predictions)
-
+        predicted_labels = map_to_original(
+            preds, valid_labels, _shape=(num_samples, num_labels))
+        save_npz(os.path.join(result_dir, 'predictions.npz'), predicted_labels)
 
 def adjust_for_low_rank(state_dict, rank):
     clf_wts = state_dict['classifier.weight']

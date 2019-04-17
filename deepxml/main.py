@@ -18,7 +18,6 @@ import libs.shortlist_utils as shortlist_utils
 import libs.model as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
-import pdb
 
 
 __author__ = 'KD'
@@ -182,9 +181,7 @@ def inference(model, params):
         temp = pickle.load(open(fname, 'rb'))
         label_mapping = temp['valid_labels']
         num_labels = temp['num_labels']
-    utils.save_predictions(predicted_labels, params.result_dir, label_mapping,
-                           num_samples, num_labels, _fnames=['knn', 'clf'])
-
+    utils.save_predictions(predicted_labels, params.result_dir, label_mapping, num_samples, num_labels)
 
 
 def main(params):
