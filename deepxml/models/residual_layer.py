@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-import models.custom_embeddings as custom_embeddings
+
 
 __author__ = 'KD'
 
@@ -57,8 +56,5 @@ class Residual(nn.Module):
             nn.init.eye_(self.hidden_layer[0].weight)
             nn.init.constant_(self.hidden_layer[0].bias, 0.0)
             if self.use_shortlist:
-                print("Bachodi...")
                 self.hidden_layer[1].weight.data.fill_(1.0)
                 self.hidden_layer[1].bias.data.fill_(0.0)
-            else:
-                print("No Bachodi...")

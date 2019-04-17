@@ -12,61 +12,6 @@ import models.sparse_linear as sparse_linear
 __author__ = 'KD'
 
 
-class Scale1(nn.Module):
-    def __init__(self, ):
-        super(Scale1, self).__init__()
-        self.alpha = nn.Parameter(torch.Tensor([1.0]).type(torch.FloatTensor))
-        self.beta = nn.Parameter(torch.Tensor([1.0]).type(torch.FloatTensor))
-        self.gamma = nn.Parameter(torch.Tensor([0.0]).type(torch.FloatTensor))
-
-    def forward(self, knn_out, clf_out):
-        return self.gamma.sigmoid()*(self.beta-self.alpha*self.alpha*knn_out), clf_out
-
-    def _get_score(self, knn, clf, beta):
-        return beta*(clf.sigmoid().log())+(1-beta)*(knn.sigmoid().log())
-    
-    def _reset(self):
-        self.alpha.data.fill_(1.0)
-        self.beta.data.fill_(1.0)
-        self.gamma.data.fill_(0.0)
-
-    def __repr__(self):
-        return "Scale1(alpha={},beta={},gamma={})".format(self.alpha.data,self.beta.data,self.gamma.data)
-
-class Scale2(nn.Module):
-    def __init__(self, ):
-        super(Scale2, self).__init__()
-        pass
-
-    def forward(self, knn_out, clf_out):
-        return 1-knn_out, clf_out
-
-    def _get_score(self, knn, clf, beta):
-        return beta*(clf.sigmoid().log())+(1-beta)*(knn.sigmoid().log())
-    
-    def _reset(self):
-        pass
-
-    def __repr__(self):
-        return "Scale2(alpha=1,beta=1)"
-
-class return_identity(nn.Module):
-    def __init__(self):
-        super(return_identity, self).__init__()
-        pass
-
-    def forward(self, knn, clf):
-        return 1-knn, clf
-
-    def _get_score(self, knn, clf, beta):
-        return beta*clf.sigmoid()+(1-beta)*(knn.sigmoid())
-
-    def _reset(self):
-        pass
-    
-    def __repr__(self):
-        return "return_identity()"
-
 class DeepXML(nn.Module):
     """
         DeepXML: A Scalable Deep learning approach for eXtreme Multi-label Learning
@@ -93,15 +38,6 @@ class DeepXML(nn.Module):
         # Hash embeddings append weights
         # TODO: will not work for aggregation_mode 'concat'
         self.pt_repr_dims, self.repr_dims = self._compute_rep_dims()
-        self.logit_type = params.logit_type
-        if self.logit_type == 1:
-            self.rescale_logits = Scale1()
-        elif self.logit_type == 2:
-            self.rescale_logits = Scale2()
-        elif self.logit_type == -1:
-            self.rescale_logits = return_identity()
-        else:
-            raise NotImplementedError("Unknown logit type.")
 
         if self.use_hash_embeddings:
             assert self.num_buckets != -1, "#buckets must be positive"
@@ -135,7 +71,7 @@ class DeepXML(nn.Module):
                 self.repr_dims, self.low_rank, sparse=False, bias=False)
         offset = 1 if self.label_padding_index is not None else 0
         self.classifier = sparse_linear.SparseLinear(self.repr_dims if self.low_rank == -1 else self.low_rank,
-                                                     self.num_labels + offset, #last one is padding index
+                                                     self.num_labels + offset,  # last one is padding index
                                                      sparse=True if self.use_shortlist else False,
                                                      low_rank=self.low_rank,
                                                      padding_idx=self.label_padding_index)
@@ -151,31 +87,34 @@ class DeepXML(nn.Module):
             rep_dims = self.hidden_dims
         return pt_repr_dims, rep_dims
 
-    def forward(self, features, weights, shortlist=None, return_embeddings=False):
+    def forward(self, batch_data, return_embeddings=False):
         """
             Forward pass
             Args:
-                features: torch.LongTensor: feature indices
-                weights: torch.Tensor: feature weights
-                shortlist: torch.LongTensor: Relevant labels for each sample
+                batch_data['X']: torch.LongTensor: feature indices
+                batch_data['X_w]: torch.Tensor: feature weights in case of sparse features
+                batch_data['Y_s]: torch.LongTensor: Relevant labels for each sample
                 return_embeddings: boolean: Return embeddings or classify
             Returns:
                 out: logits for each label
         """
-        if weights.size()[0]==1:
-            temp = features
-        else:
-            temp = self.embeddings(features, weights)
-        
-        embed = self.transform(temp)
+        if 'X_w' in batch_data: # Sparse features
+            embed = self.embeddings(batch_data['X'].to(
+                self.device_embeddings), 
+                batch_data['X_w'].to(self.device_embeddings))
+        else: # Dense features
+            embed = batch_data['X'].to(self.device_embeddings)
+        embed = self.transform(embed)
         if return_embeddings:
             out = embed
         else:
+            batch_shortlist = None
             if self.low_rank != -1:
                 embed = self.low_rank_layer(embed)
-            # out = self.classifier(embed, shortlist)
+            if 'Y_s' in batch_data: # Use shortlist
+                batch_shortlist = batch_data['Y_s'].to(self.device_classifier)
             out = self.classifier(
-                embed.to(self.device_classifier), shortlist)
+                embed.to(self.device_classifier), batch_shortlist)
             out = out.squeeze()
         return out
 
@@ -197,59 +136,9 @@ class DeepXML(nn.Module):
         self.classifier.bias.data.copy_(
             torch.from_numpy(clf_weights[:, -1]).view(-1, 1))
 
-    def _get_positive_logits(self, clf_out, knn_out):
-        pos_labels_logits = clf_out.clamp(max=0) + knn_out.clamp(max=0) - \
-            (
-                (
-                    -clf_out.clamp(min=0) + knn_out.clamp(max=0)
-                ).exp() +
-                (
-                    -clf_out.abs() - knn_out.clamp(min=0)
-                ).exp() +
-                (
-                    -knn_out.clamp(min=0)
-                ).exp()
-        ).log()
-        return pos_labels_logits
-
-    def _get_negative_logits(self, clf_out, knn_out):
-        neg_labels_logits = clf_out.clamp(min=0) + knn_out.clamp(min=0) + \
-            (
-                (
-                    knn_out.clamp(max=0)
-                ).exp() +
-                (
-                    -clf_out.abs() + knn_out.clamp(max=0)
-                ).exp() +
-                (
-                    -knn_out.clamp(min=0) + clf_out.clamp(max=0)
-                ).exp()
-        ).log()
-        return neg_labels_logits
-
-    def _get_logits_train(self, clf_out, knn_out, flag):
-        """
-        Logits_{EFF} = _0*SIG^{-1}(1-(1-P_{SVM})*(1-P_{KNN}))+_1*SIG^{-1}(P_{SVM}*P_{KNN})
-        """
-        if self.logit_type != -1:
-            _1 = flag
-            _0 = (1-flag)
-            _knn_out, _clf_out = self.rescale_logits(knn_out, clf_out)
-
-            if (clf_out != clf_out).any() or (knn_out != knn_out).any():
-                print("Bhaai ye kyun nhi chal rha")
-                print(clf_out[clf_out != clf_out], knn_out[knn_out != knn_out])
-                exit(0)
-
-            logits = (_0*self._get_negative_logits(_clf_out, _knn_out) +
-                      _1*self._get_positive_logits(_clf_out, _knn_out))
-
-            return logits
-        return clf_out
-
-    def _get_clf_wts(self):
-        _wts = self.classifier.weight.cpu.numpy()
-        _bias = self.classifier.bias.cpu.numpy()
+    def get_clf_weights(self):
+        _wts = self.classifier.weight.detach().cpu().numpy()
+        _bias = self.classifier.bias.detach().cpu().numpy()
         if self.label_padding_index is not None:
             _wts = _wts[:-1, :]
             _bias = _bias[:-1, :]
