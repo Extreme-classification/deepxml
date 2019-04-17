@@ -58,8 +58,8 @@ class DatasetBase(torch.utils.data.Dataset):
             Load features and labels from file in libsvm format
         """
         if data is not None:
-            features = data['X']
-            labels = data['Y']
+            features = data['features']
+            labels = data['labels']
             num_samples, num_features = self.features.shape
             num_labels = labels.shape[1]
         else:
@@ -95,6 +95,10 @@ class DatasetBase(torch.utils.data.Dataset):
             self._pad_seq(indices, values)
         return indices, values
 
+    def _get_label_freq(self):
+        # Can handle non-binary labels
+        return np.array(self.labels.astype(np.bool).sum(axis=0)).ravel()
+
     def _get_ext_head(self, freq, threshold):
         return np.where(freq >= threshold)[0]
 
@@ -113,7 +117,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self.num_labels = valid_labels.size
         print("Valid labels after processing: ", self.num_labels)
         if self.num_centroids != 1:
-            freq = np.array(self.labels.sum(axis=0)).ravel()
+            freq = self._get_label_freq()
             self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
             self.multiple_cent_mapping = np.arange(self.num_labels)
             for idx in self._ext_head:
@@ -132,7 +136,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self.labels = self.labels[:, valid_labels]
         self.num_labels = valid_labels.size
         if self.num_centroids != 1:
-            freq = np.array(self.labels.sum(axis=0)).ravel()
+            freq = self._get_label_freq()
             self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
             self.multiple_cent_mapping = np.arange(self.num_labels)
             for idx in self._ext_head:

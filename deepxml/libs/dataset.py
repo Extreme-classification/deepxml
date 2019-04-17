@@ -83,7 +83,7 @@ class DatasetDense(DatasetBase):
             return np.array(data.sum(axis=1)).ravel()
         freq = _compute_freq(self.features)
         indices_feat = np.where(freq > 0)[0]
-        freq = _compute_freq(self.labels)
+        freq = _compute_freq(self.labels.astype(np.bool))
         indices_labels = np.where(freq > 0)[0]
         indices = np.intersect1d(indices_feat, indices_labels)
         self.features = self.features[indices]
@@ -108,7 +108,7 @@ class DatasetDense(DatasetBase):
             shortlist = [0]*self.size_shortlist
             labels_mask = [0]*self.size_shortlist
             dist = [0]*self.size_shortlist
-        return self.features[index], [1], shortlist, labels_mask, dist
+        return self.features[index], shortlist, labels_mask, dist
 
     def _get_full(self, index):
         """
@@ -116,7 +116,7 @@ class DatasetDense(DatasetBase):
         """
         lb = np.array(self.labels[index, :].todense(),
                       dtype=np.float32).reshape(self.num_labels)
-        return self.features[index], [1], lb
+        return self.features[index], lb
 
     def __getitem__(self, index):
         """
@@ -182,7 +182,7 @@ class DatasetSparse(DatasetBase):
             return np.array(data.sum(axis=1)).ravel()
         freq = _compute_freq(self.features)
         indices_feat = np.where(freq > 0)[0]
-        freq = _compute_freq(self.labels)
+        freq = _compute_freq(self.labels.astype(np.bool))
         indices_labels = np.where(freq > 0)[0]
         indices = np.intersect1d(indices_feat, indices_labels)
         self.features = self.features[indices]
