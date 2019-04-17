@@ -25,8 +25,8 @@ class DatasetBase(torch.utils.data.Dataset):
         fname = os.path.join(data_dir, fname)
         self.features, self.labels, self.num_samples, \
             self.num_features, self.num_labels = self.load_data(fname, data)
-        self._sel_labels(label_indices)
         self._split = None
+        self._sel_labels(label_indices)
         self.mode = mode
         self._ext_head = None
         self.data_dir = data_dir
@@ -153,14 +153,14 @@ class DatasetBase(torch.utils.data.Dataset):
         self.labels = self.labels[:, valid_labels]
         self.num_labels = valid_labels.size
 
-    def _process_labels(self, data_dir, _ext_head_threshold=10000):
+    def _process_labels(self, model_dir, _ext_head_threshold=10000):
         """
             Process labels to handle labels without any training instance;
             Handle multiple centroids if required
         """
         data_obj = {}
         fname = os.path.join(
-            data_dir, 'labels_params.pkl' if self._split is None else "labels_params_split_{}.pkl".format(self._split))
+            model_dir, 'labels_params.pkl' if self._split is None else "labels_params_split_{}.pkl".format(self._split))
         if self.mode == 'train':
             self._process_labels_train(data_obj, _ext_head_threshold)
             pickle.dump(data_obj, open(fname, 'wb'))
