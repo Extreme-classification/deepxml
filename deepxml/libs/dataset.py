@@ -11,9 +11,15 @@ import xctools.data.data_utils as data_utils
 
 
 def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
-                      feature_indices=None, label_indices=None, normalize_features=True,
-                      keep_invalid=False, num_centroids=1, feature_type='sparse'):
-    # Construct dataset for dense data
+                      normalize_features=True, keep_invalid=False, num_centroids=1, 
+                      feature_type='sparse', **kwargs):
+    feature_indices, label_indices = None, None 
+    # FIXME: See if this can be done efficently
+    if 'feature_indices' in kwargs:
+        feature_indices = kwargs['feature_indices']
+    if 'label_indices' in kwargs:
+        label_indices = kwargs['label_indices']
+     # Construct dataset for dense data
     if feature_type == 'dense':
         return DatasetDense(data_dir, fname, data, model_dir, mode, size_shortlist,
                             feature_indices, label_indices, normalize_features, keep_invalid, num_centroids)
