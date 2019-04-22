@@ -35,6 +35,7 @@ def load_emeddings(params):
     else:
         fname = os.path.join(params.data_dir, params.dataset, params.embeddings)
         if Path(fname).is_file():
+            print("Loading embeddings from file: {}".format(fname))
             embeddings = np.load(fname)
         else:
             print("Loading random embeddings")

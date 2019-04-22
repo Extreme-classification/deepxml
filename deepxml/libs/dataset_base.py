@@ -1,12 +1,11 @@
 import torch
 import _pickle as pickle
 import os
-import pickle
 import sys
 from scipy.sparse import lil_matrix
 import numpy as np
 from sklearn.preprocessing import normalize
-import xctools.data.data_utils as data_utils
+import xclib.data.data_utils as data_utils
 
 
 class DatasetBase(torch.utils.data.Dataset):

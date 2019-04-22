@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-import xctools.data.data_utils as data_utils
+import xclib.data.data_utils as data_utils
 import numpy as np
 
 def _get_header(num_samples, embedding_dim, num_labels):

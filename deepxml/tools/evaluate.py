@@ -1,7 +1,7 @@
 # Example to evaluate
 import sys
-import xctools.evaluation.xc_metrics as xc_metrics
-import xctools.data.data_utils as data_utils
+import xclib.evaluation.xc_metrics as xc_metrics
+import xclib.data.data_utils as data_utils
 from scipy.io import loadmat,savemat
 from scipy.sparse import lil_matrix, load_npz, csr_matrix
 import scipy.sparse as sparse

@@ -1,4 +1,4 @@
-import xctools.data.data_utils as data_utils
+import xclib.data.data_utils as data_utils
 import sys
 import os
 from split_data_on_labels import splitData

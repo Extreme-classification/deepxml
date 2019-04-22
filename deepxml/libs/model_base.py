@@ -8,7 +8,7 @@ import sys
 import torch.utils.data
 from torch.utils.data import DataLoader
 import numpy as np
-import xctools.evaluation.xc_metrics as xc_metrics
+import xclib.evaluation.xc_metrics as xc_metrics
 import sys
 import libs.utils as utils
 from .dataset import construct_dataset, DatasetDense, DatasetSparse

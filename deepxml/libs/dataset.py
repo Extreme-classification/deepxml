@@ -1,13 +1,12 @@
 import torch
 import _pickle as pickle
 import os
-import pickle
 import sys
 from scipy.sparse import lil_matrix
 import numpy as np
 from sklearn.preprocessing import normalize
 from .dataset_base import DatasetBase
-import xctools.data.data_utils as data_utils
+import xclib.data.data_utils as data_utils
 
 
 def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,

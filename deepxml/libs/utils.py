@@ -3,8 +3,6 @@ import torch
 import json
 import os
 from scipy.sparse import csr_matrix, save_npz
-from xctools.data import data_utils
-import pdb
 
 def compute_svd(X, num_components):
     """

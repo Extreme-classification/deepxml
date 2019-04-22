@@ -1,13 +1,5 @@
 import torch
-import pickle
-import os
-import pickle
-import sys
-from scipy.sparse import lil_matrix
 import numpy as np
-from sklearn.preprocessing import normalize
-
-import xctools.data.data_utils as data_utils
 
 
 def construct_collate_fn(feature_type, use_shortlist=False, use_seq_features=False):

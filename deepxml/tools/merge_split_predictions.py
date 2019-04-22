@@ -1,5 +1,5 @@
 from scipy.sparse import lil_matrix, csr_matrix, hstack, load_npz, save_npz
-from xctools.data import data_utils
+from xclib.data import data_utils
 from scipy.io import loadmat, savemat
 import pickle
 import numpy as np

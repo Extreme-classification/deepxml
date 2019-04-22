@@ -2,7 +2,7 @@ import numpy as np
 import sys
 import _pickle as pickle
 import os
-import xctools.data.data_utils as du
+import xclib.data.data_utils as du
 # np.random.seed(42)
 data_dir = './'
 train_data = pickle.load(open(os.path.join(data_dir, 'train.pkl'), 'rb'))

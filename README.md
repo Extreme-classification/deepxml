@@ -11,7 +11,7 @@ Implementation of DeepXML
 - [ ] Integrate low rank factorization
 - [x] Remove logit
 - [x] Post-processing
-- [ ] Integrate xclib
+- [x] Integrate xclib
 - [ ] Fix run file
 - [ ] Parameters from json?
 
