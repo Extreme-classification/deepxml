@@ -20,8 +20,8 @@ def compute_svd(X, num_components):
 
 
 def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, _fnames=['knn', 'clf', 'combined']):
-    if isinstance(preds, tuple):
-        for _, (_pred, _fname) in enumerate(zip(preds, _fnames)):
+    if isinstance(preds, dict):
+        for _fname, _pred in preds.items():
             predicted_labels = map_to_original(
                 _pred, valid_labels, _shape=(num_samples, num_labels))
             save_npz(os.path.join(
