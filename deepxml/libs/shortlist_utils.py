@@ -20,7 +20,7 @@ def get_shortlist(document_embeddings, shorty):
 def update(data_loader, model, embedding_dim, shorty, flag=0):
     # 0: train and update, 1: train, 2: update
     num_centroids = data_loader.dataset.num_centroids
-    doc_embeddings = model.get_document_embeddings(data_loader)
+    doc_embeddings = model._document_embeddings(data_loader)
     # Do not normalize if kmeans clustering needs to be done!
     # doc_embeddings = normalize(doc_embeddings, copy=False)
     if flag == 0:
