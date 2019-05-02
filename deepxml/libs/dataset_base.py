@@ -6,6 +6,7 @@ from scipy.sparse import lil_matrix
 import numpy as np
 from sklearn.preprocessing import normalize
 import xclib.data.data_utils as data_utils
+import operator
 
 
 class DatasetBase(torch.utils.data.Dataset):
@@ -214,7 +215,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self.shortlist = _temp['shortlist']
         self.dist = _temp['dist']
 
-    def _adjust_shortlist(self, pos_labels, shortlist, dist):
+    def _adjust_shortlist(self, pos_labels, shortlist, dist, min_nneg=100):
         """
             Adjust shortlist for a instance
             Training: Add positive labels to the shortlist
@@ -222,6 +223,9 @@ class DatasetBase(torch.utils.data.Dataset):
         """
         if self.mode == 'train':
             # TODO: Adjust dist as well
+            if len(pos_labels) > self.size_shortlist: #If number of positives are more than shortlist_size
+                _ind = np.random.choice(len(pos_labels), size=self.size_shortlist-min_nneg, replace=False)
+                pos_labels = list(operator.itemgetter(*_ind)(pos_labels))
             neg_labels = list(
                 filter(lambda x: x not in set(pos_labels), shortlist))
             diff = self.size_shortlist - len(pos_labels)
