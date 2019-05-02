@@ -108,7 +108,7 @@ class ModelShortlist(ModelBase):
             data_loader.dataset.num_samples
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None, tr_fname='train.txt',
-            val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False, validate=False, beta=0.2,
+            val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False, beta=0.2,
             init_epoch=0, keep_invalid=False, **kwargs):
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
@@ -125,15 +125,17 @@ class ModelShortlist(ModelBase):
                                                 batch_size=batch_size,
                                                 num_workers=num_workers)
         self.logger.info("Loading validation data.")
-        validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                  fname=val_fname,
-                                                  data=data,
-                                                  mode='predict',
-                                                  keep_invalid=keep_invalid,
-                                                  **kwargs)
-        validation_loader = self._create_data_loader(validation_dataset,
-                                                     batch_size=batch_size,
-                                                     num_workers=num_workers)
+        validation_loader = None
+        if self._validate:
+            validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                    fname=val_fname,
+                                                    data=data,
+                                                    mode='predict',
+                                                    keep_invalid=keep_invalid,
+                                                    **kwargs)
+            validation_loader = self._create_data_loader(validation_dataset,
+                                                        batch_size=batch_size,
+                                                        num_workers=num_workers)
         for epoch in range(init_epoch, init_epoch+num_epochs):
             if epoch != 0 and self.dlr_step != -1 and epoch % self.dlr_step == 0:
                 self._adjust_parameters()
@@ -145,16 +147,22 @@ class ModelShortlist(ModelBase):
                 self.shorty.reset()
                 shortlist_utils.update(
                     train_loader, self, self.embedding_dims, self.shorty, flag=0)
-                shortlist_utils.update(
-                    validation_loader, self, self.embedding_dims, self.shorty, flag=2)
+                if self._validate:
+                    shortlist_utils.update(
+                        validation_loader, self, self.embedding_dims, self.shorty, flag=2)
                 shorty_end_t = time.time()
                 self.logger.info("ANN train time: {} sec".format(
                     shorty_end_t - shorty_start_t))
                 self.tracking.shortlist_time = self.tracking.shortlist_time + \
                     shorty_end_t - shorty_start_t
                 batch_train_start_time = time.time()
-                validation_loader.dataset.save_shortlist(
-                    self.model_dir+'/test_shorty.pkl')
+                if self._validate:
+                    try:
+                        _fname = kwargs['shorty_fname']
+                    except:
+                        _fname = 'validation_shortlist.pkl'
+                    validation_loader.dataset.save_shortlist(
+                        os.path.join(model_dir, _fname))
             tr_avg_loss = self._step(train_loader_shuffle, batch_div=True)
             self.tracking.mean_train_loss.append(tr_avg_loss)
             batch_train_end_time = time.time()
@@ -163,7 +171,7 @@ class ModelShortlist(ModelBase):
 
             self.logger.info("Epoch: {}, loss: {}, time: {} sec".format(
                 epoch, tr_avg_loss, batch_train_end_time - batch_train_start_time))
-            if self.validate and epoch % 2 == 0:
+            if self._validate and epoch % 2 == 0:
                 val_start_t = time.time()
                 predicted_labels, val_avg_loss = self.validate(
                     validation_loader)
@@ -202,9 +210,13 @@ class ModelShortlist(ModelBase):
             shortlist_utils.update(
                 data_loader, self, self.embedding_dims, self.shorty, flag=2)
         else:
-            print("Loading Pre-computer shortlist")
+            try:
+                _fname = kwargs['shorty_fname']
+            except:
+                _fname = 'validation_shortlist.pkl'
+            print("Loading Pre-computer shortlist from file: ", _fname)
             data_loader.dataset.load_shortlist(
-                self.model_dir+'/test_shorty.pkl')
+                os.path.join(self.model_dir, _fname))
 
         num_batches = data_loader.dataset.num_samples//data_loader.batch_size
 
