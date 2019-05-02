@@ -11,7 +11,7 @@ import xclib.data.data_utils as data_utils
 
 def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
                       normalize_features=True, keep_invalid=False, num_centroids=1, 
-                      feature_type='sparse', **kwargs):
+                      feature_type='sparse', nbn_rel=False, **kwargs):
     feature_indices, label_indices = None, None 
     # FIXME: See if this can be done efficently
     if 'feature_indices' in kwargs:
@@ -20,12 +20,12 @@ def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', si
         label_indices = kwargs['label_indices']
      # Construct dataset for dense data
     if feature_type == 'dense':
-        return DatasetDense(data_dir, fname, data, model_dir, mode, size_shortlist,
-                            feature_indices, label_indices, normalize_features, keep_invalid, num_centroids)
+        return DatasetDense(data_dir, fname, data, model_dir, mode, size_shortlist, feature_indices, 
+                            label_indices, normalize_features, keep_invalid, num_centroids, nbn_rel)
     elif feature_type == 'sparse':
        # Construct dataset for sparse data
-        return DatasetSparse(data_dir, fname, data, model_dir, mode, size_shortlist,
-                             feature_indices, label_indices, normalize_features, keep_invalid, num_centroids)
+        return DatasetSparse(data_dir, fname, data, model_dir, mode, size_shortlist, feature_indices, 
+                            label_indices, normalize_features, keep_invalid, num_centroids, nbn_rel)
     else:
         raise NotImplementedError(
             "Feature type: {}, not yet supported.".format(feature_type))
@@ -38,14 +38,15 @@ class DatasetDense(DatasetBase):
 
     def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', 
                  size_shortlist=-1, feature_indices=None, label_indices=None, 
-                 normalize_features=True, keep_invalid=False, num_centroids=1):
+                 normalize_features=True, keep_invalid=False, num_centroids=1, 
+                 nbn_rel=False):
         """
             Expects 'libsvm' format with header
             Args:
                 data_file: str: File name for the set
         """
         super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
-                         label_indices, keep_invalid, num_centroids)
+                         label_indices, keep_invalid, num_centroids, nbn_rel)
         self._split = None
         self.feature_type = 'dense'
         self._ext_head = None
@@ -140,14 +141,15 @@ class DatasetSparse(DatasetBase):
 
     def __init__(self, data_dir, fname, data=None, model_dir='', mode='train',
                  size_shortlist=-1, feature_indices=None, label_indices=None,
-                 normalize_features=True, keep_invalid=False, num_centroids=1):
+                 normalize_features=True, keep_invalid=False, num_centroids=1, 
+                 nbn_rel=False):
         """
             Expects 'libsvm' format with header
             Args:
                 data_file: str: File name for the set
         """
         super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
-                         label_indices, keep_invalid, num_centroids)
+                         label_indices, keep_invalid, num_centroids, nbn_rel)
         self._split = None
         self._ext_head = None
         if self.mode == 'train':

@@ -314,6 +314,10 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Normalize features or not!')
         self.parser.add_argument(
+            '--nbn_rel',
+            action='store_true',
+            help='Non binary label relevanxe')
+        self.parser.add_argument(
             '--use_sparse',
             action='store_true',
             help='Use Sparse Features')

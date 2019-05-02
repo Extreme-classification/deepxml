@@ -29,6 +29,8 @@ class ModelBase(object):
         self.optimizer = optimizer
         self.learning_rate = params.learning_rate
         self.current_epoch = 0
+        self.nbn_rel = params.nbn_rel
+        self.num_centroids = params.num_centroids
         self.last_saved_epoch = -1
         self.model_dir = params.model_dir
         self.label_padding_index = params.label_padding_index
@@ -96,6 +98,8 @@ class ModelBase(object):
                                      size_shortlist=self.shortlist_size,
                                      normalize_features=normalize_features,
                                      keep_invalid=keep_invalid, 
+                                     num_centroids=self.num_centroids,
+                                     nbn_rel=self.nbn_rel,
                                      **kwargs)
         return _dataset
 

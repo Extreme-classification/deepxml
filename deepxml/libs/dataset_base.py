@@ -14,7 +14,7 @@ class DatasetBase(torch.utils.data.Dataset):
     """
 
     def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
-                label_indices=None, keep_invalid=False, num_centroids=1):
+                label_indices=None, keep_invalid=False, num_centroids=1, nbn_rel=False):
         """
             Support pickle or libsvm file format
             Args:
@@ -27,6 +27,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self._split = None
         self._sel_labels(label_indices)
         self.mode = mode
+        self.nbn_rel = nbn_rel #non-binary label relevance
         self._ext_head = None
         self.data_dir = data_dir
         self.num_centroids = num_centroids  # Use multiple centroids for ext head labels
@@ -73,6 +74,13 @@ class DatasetBase(torch.utils.data.Dataset):
                 features, labels, num_samples, num_features, num_labels = data_utils.read_data(
                     fname)
                 labels = data_utils.binarize_labels(labels, num_labels)
+        if self.nbn_rel:
+            if self.mode == 'train': # Handle non-binary labels
+                print("Non-binary labels encountered; Normalizing...")
+                labels = normalize(labels, norm='max', copy=False)
+            else:
+                print("Non-binary labels encountered; Binarizing...")
+                labels = labels.astype(np.bool).astype(np.float32)
         return features, labels, num_samples, num_features, num_labels
 
     def get_stats(self):
