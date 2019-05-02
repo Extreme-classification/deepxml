@@ -54,18 +54,25 @@ class DatasetBase(torch.utils.data.Dataset):
 
     def load_data(self, fname, data):
         """
-            Load features and labels from file in libsvm format
+            Load features and labels from file in libsvm format or pickle
         """
         if data is not None:
-            features = data['features']
-            labels = data['labels']
+            features = data['X']
+            labels = data['Y']
             num_samples, num_features = self.features.shape
             num_labels = labels.shape[1]
         else:
-            # TODO: load data from pickle file
-            features, labels, num_samples, num_features, num_labels = data_utils.read_data(
-                fname)
-            labels = data_utils.binarize_labels(labels, num_labels)
+            _, ext = os.path.splitext(fname)
+            if ext == ".pkl":
+                _temp = pickle.load(open(fname, 'rb'))
+                features = _temp['X']
+                labels = _temp['Y']
+                num_samples, num_features = features.shape
+                num_labels = labels.shape[1]
+            else: #Assuming data is in plain text
+                features, labels, num_samples, num_features, num_labels = data_utils.read_data(
+                    fname)
+                labels = data_utils.binarize_labels(labels, num_labels)
         return features, labels, num_samples, num_features, num_labels
 
     def get_stats(self):
