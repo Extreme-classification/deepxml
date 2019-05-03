@@ -96,8 +96,8 @@ class DatasetDense(DatasetBase):
         """
         pos_labels = self.labels[index, :].indices.tolist()
         if self.shortlist is not None:
-            shortlist = self.shortlist[index].tolist()
-            dist = self.dist[index].tolist()
+            shortlist = self.shortlist.query(index).tolist()
+            dist = self.dist.query(index).tolist()
             # Remap to original labels if multiple centroids are used
             if self.num_centroids != 1:
                 shortlist, dist = self._remap_multiple_centroids(
@@ -199,8 +199,8 @@ class DatasetSparse(DatasetBase):
         feat = [item+1 for item in feat]  # Treat idx:0 as Padding
         pos_labels = self.labels[index, :].indices.tolist()
         if self.shortlist is not None:
-            shortlist = self.shortlist[index].tolist()
-            dist = self.dist[index].tolist()
+            shortlist = self.shortlist.query(index).tolist()
+            dist = self.dist.query(index).tolist()
             # Remap to original labels if multiple centroids are used
             if self.num_centroids != 1:
                 shortlist, dist = self._remap_multiple_centroids(

@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.preprocessing import normalize
 import xclib.data.data_utils as data_utils
 import operator
+import lookup
 
 
 class DatasetBase(torch.utils.data.Dataset):
@@ -28,13 +29,14 @@ class DatasetBase(torch.utils.data.Dataset):
         self._split = None
         self._sel_labels(label_indices)
         self.mode = mode
+        self.model_dir = model_dir
         self.nbn_rel = nbn_rel #non-binary label relevance
         self._ext_head = None
         self.data_dir = data_dir
         self.num_centroids = num_centroids  # Use multiple centroids for ext head labels
         self.multiple_cent_mapping = None
-        self.shortlist = None
-        self.dist = None
+        self.shortlist = lookup.Table(_type='memory')
+        self.dist = lookup.Table(_type='memory')
         self.size_shortlist = size_shortlist
         self.use_shortlist = True if self.size_shortlist > 0 else False
         if not keep_invalid:
@@ -193,27 +195,26 @@ class DatasetBase(torch.utils.data.Dataset):
         else:
             raise NotImplementedError("Unknown mode!")
 
-    def update_shortlist(self, shortlist, dist):
+    def update_shortlist(self, shortlist, dist, fname='shortlist'):
         """
             Update label shortlist for each instance
         """
-        self.shortlist = shortlist
-        self.dist = dist
+        self.shortlist.create(np.array(shortlist, dtype=np.int32), os.path.join(self.model_dir, fname+'shortlist.indices'))
+        self.dist.create(np.array(dist, dtype=np.float32), os.path.join(self.model_dir, fname+'shortlist.dist'))
 
     def save_shortlist(self, fname):
         """
             Save label shortlist and distance for each instance
         """
-        pickle.dump({"shortlist": self.shortlist,
-                     "dist": self.dist}, open(fname, 'wb'))
+        self.shortlist.save(os.path.join(self.model_dir, fname+'shortlist.indices'))
+        self.dist.save(os.path.join(self.model_dir, fname+'shortlist.dist'))
 
     def load_shortlist(self, fname):
         """
             Load label shortlist and distance for each instance
         """
-        _temp = pickle.load(open(fname, 'rb'))
-        self.shortlist = _temp['shortlist']
-        self.dist = _temp['dist']
+        self.shortlist.load(os.path.join(self.model_dir, fname+'shortlist.indices'))
+        self.dist.load(os.path.join(self.model_dir, fname+'shortlist.dist'))
 
     def _adjust_shortlist(self, pos_labels, shortlist, dist, min_nneg=100):
         """
