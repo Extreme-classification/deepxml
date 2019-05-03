@@ -95,7 +95,7 @@ class DatasetDense(DatasetBase):
             Get data for given index with shortlist
         """
         pos_labels = self.labels[index, :].indices.tolist()
-        if self.shortlist is not None:
+        if self.shortlist.data is not None:
             shortlist = self.shortlist.query(index).tolist()
             dist = self.dist.query(index).tolist()
             # Remap to original labels if multiple centroids are used
@@ -198,7 +198,7 @@ class DatasetSparse(DatasetBase):
         wt = self.features[index, feat].todense().tolist()[0]
         feat = [item+1 for item in feat]  # Treat idx:0 as Padding
         pos_labels = self.labels[index, :].indices.tolist()
-        if self.shortlist is not None:
+        if self.shortlist.data is not None:
             shortlist = self.shortlist.query(index).tolist()
             dist = self.dist.query(index).tolist()
             # Remap to original labels if multiple centroids are used
