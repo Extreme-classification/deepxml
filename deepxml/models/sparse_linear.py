@@ -113,6 +113,6 @@ class ParallelSparseLinear(nn.Module):
                 out: []: logits for each label
         """
         out = []
-        for idx in self.num_partitions:
+        for idx in range(self.num_partitions):
             out.append(self.classifier[idx](embed, shortlist[idx]))
         return out
