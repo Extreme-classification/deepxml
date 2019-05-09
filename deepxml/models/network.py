@@ -24,7 +24,7 @@ class DeepXML(nn.Module):
         self.embedding_dims = params.embedding_dims
         self.trans_method = params.trans_method
         self.dropout = params.dropout
-        self.num_clf_partitions = 2
+        self.num_clf_partitions = params.num_clf_partitions
         self.num_labels = params.num_labels
         self.use_hash_embeddings = params.use_hash_embeddings
         self.num_buckets = params.num_buckets

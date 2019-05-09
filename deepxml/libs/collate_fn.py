@@ -2,13 +2,13 @@ import torch
 import numpy as np
 
 
-def construct_collate_fn(feature_type, use_shortlist=False, use_seq_features=False):
+def construct_collate_fn(feature_type, use_shortlist=False, use_seq_features=False, num_partitions=1):
     def _collate_fn_dense_full(batch):
-        return collate_fn_dense_full(batch)
+        return collate_fn_dense_full(batch, num_partitions)
     def _collate_fn_dense_sl(batch):
         return collate_fn_dense_sl(batch)
     def _collate_fn_sparse_full(batch):
-        return collate_fn_sparse_full(batch)
+        return collate_fn_sparse_full(batch, num_partitions)
     def _collate_fn_sparse_sl(batch):
         return collate_fn_sparse_sl(batch)
     if feature_type=='dense':
@@ -73,11 +73,12 @@ def collate_fn_dense_sl(batch):
     return batch_data
 
 
-def collate_fn_dense_full(batch):
+def collate_fn_dense_full(batch, num_partitions):
     """
         Combine each sample in a batch
         For dense features
     """
+    _is_partitioned = True if num_partitions > 1 else False
     batch_data = {}
     batch_size = len(batch)
     emb_dims = batch[0][0].size
@@ -85,15 +86,21 @@ def collate_fn_dense_full(batch):
     for idx, _batch in enumerate(batch):
         batch_data['X'][idx, :] = _batch[0]
     batch_data['X'] = torch.from_numpy(batch_data['X']).type(torch.FloatTensor)
-    batch_data['Y'] = torch.stack([torch.from_numpy(x[1]) for x in batch], 0)
+    if _is_partitioned:
+        batch_data['Y'] = []
+        for idx in range(num_partitions):
+            batch_data['Y'].append(torch.stack([torch.from_numpy(x[1][idx]) for x in batch], 0))
+    else:
+        batch_data['Y'] = torch.stack([torch.from_numpy(x[1]) for x in batch], 0)
     return batch_data
 
 
-def collate_fn_sparse_full(batch):
+def collate_fn_sparse_full(batch, num_partitions):
     """
         Combine each sample in a batch
         For sparse features
     """
+    _is_partitioned = True if num_partitions > 1 else False
     batch_data = {}
     batch_size = len(batch)
     seq_lengths = [len(item[0]) for item in batch]
@@ -103,5 +110,10 @@ def collate_fn_sparse_full(batch):
     for idx, (seq, seqlen) in enumerate(zip(sequences, seq_lengths)):
         batch_data['X'][idx, :seqlen] = torch.LongTensor(seq)
         batch_data['X_w'][idx, :seqlen] = torch.FloatTensor(batch[idx][1])
-    batch_data['Y'] = torch.stack([torch.from_numpy(x[2]) for x in batch], 0)
+    if _is_partitioned:
+        batch_data['Y'] = []
+        for idx in range(num_partitions):
+            batch_data['Y'].append(torch.stack([torch.from_numpy(x[2][idx]) for x in batch], 0))
+    else:
+        batch_data['Y'] = torch.stack([torch.from_numpy(x[2]) for x in batch], 0)
     return batch_data

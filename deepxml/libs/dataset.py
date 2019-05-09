@@ -7,11 +7,12 @@ import numpy as np
 from sklearn.preprocessing import normalize
 from .dataset_base import DatasetBase
 import xclib.data.data_utils as data_utils
+from .dist_utils import Partitioner
 
 
 def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
                       normalize_features=True, keep_invalid=False, num_centroids=1, 
-                      feature_type='sparse', nbn_rel=False, **kwargs):
+                      feature_type='sparse', nbn_rel=False, num_clf_partitions=1, **kwargs):
     feature_indices, label_indices = None, None 
     # FIXME: See if this can be done efficently
     if 'feature_indices' in kwargs:
@@ -20,12 +21,16 @@ def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', si
         label_indices = kwargs['label_indices']
      # Construct dataset for dense data
     if feature_type == 'dense':
-        return DatasetDense(data_dir, fname, data, model_dir, mode, size_shortlist, feature_indices, 
-                            label_indices, normalize_features, keep_invalid, num_centroids, nbn_rel)
+        return DatasetDense(data_dir, fname, data, model_dir, mode, 
+                            size_shortlist, feature_indices, label_indices, 
+                            normalize_features, keep_invalid, num_centroids, 
+                            nbn_rel, num_clf_partitions)
     elif feature_type == 'sparse':
        # Construct dataset for sparse data
-        return DatasetSparse(data_dir, fname, data, model_dir, mode, size_shortlist, feature_indices, 
-                            label_indices, normalize_features, keep_invalid, num_centroids, nbn_rel)
+        return DatasetSparse(data_dir, fname, data, model_dir, mode, 
+                            size_shortlist, feature_indices, label_indices, 
+                            normalize_features, keep_invalid, num_centroids, 
+                            nbn_rel, num_clf_partitions)
     else:
         raise NotImplementedError(
             "Feature type: {}, not yet supported.".format(feature_type))
@@ -39,7 +44,7 @@ class DatasetDense(DatasetBase):
     def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', 
                  size_shortlist=-1, feature_indices=None, label_indices=None, 
                  normalize_features=True, keep_invalid=False, num_centroids=1, 
-                 nbn_rel=False):
+                 nbn_rel=False, num_clf_partitions=1):
         """
             Expects 'libsvm' format with header
             Args:
@@ -50,10 +55,15 @@ class DatasetDense(DatasetBase):
         self._split = None
         self.feature_type = 'dense'
         self._ext_head = None
-        if not keep_invalid:
-            self._process_labels(model_dir)
+        self.num_clf_partitions = num_clf_partitions
+        # if not keep_invalid: #Already done 
+        #     self._process_labels(model_dir)
         if self.mode == 'train':
             self._remove_samples_wo_features_and_labels()
+        self.partitioner = None
+        if self.num_clf_partitions > 1:
+            self.partitioner = Partitioner(
+                self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
         self.label_padding_index = self.num_labels
         self._sel_features(feature_indices)
         if normalize_features:
@@ -116,6 +126,8 @@ class DatasetDense(DatasetBase):
         """
         lb = np.array(self.labels[index, :].todense(),
                       dtype=np.float32).reshape(self.num_labels)
+        if self.partitioner is not None: #Split if required
+            lb = self.partitioner.split(lb)
         return self.features[index], lb
 
     def __getitem__(self, index):
@@ -142,7 +154,7 @@ class DatasetSparse(DatasetBase):
     def __init__(self, data_dir, fname, data=None, model_dir='', mode='train',
                  size_shortlist=-1, feature_indices=None, label_indices=None,
                  normalize_features=True, keep_invalid=False, num_centroids=1, 
-                 nbn_rel=False):
+                 nbn_rel=False, num_clf_partitions=1):
         """
             Expects 'libsvm' format with header
             Args:
@@ -152,8 +164,13 @@ class DatasetSparse(DatasetBase):
                          label_indices, keep_invalid, num_centroids, nbn_rel)
         self._split = None
         self._ext_head = None
+        self.num_clf_partitions = num_clf_partitions
         if self.mode == 'train':
             self._remove_samples_wo_features_and_labels()
+        self.partitioner = None
+        if self.num_clf_partitions > 1:
+            self.partitioner = Partitioner(
+                self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
         self.label_padding_index = self.num_labels
         self._sel_features(feature_indices)
         if normalize_features:
@@ -222,6 +239,8 @@ class DatasetSparse(DatasetBase):
         feat = [item+1 for item in feat]  # Treat idx:0 as Padding
         lb = np.array(self.labels[index, :].todense(),
                       dtype=np.float32).reshape(self.num_labels)
+        if self.partitioner is not None: #Split if required
+            lb = self.partitioner.split(lb)
         return feat, wt, lb
 
     def __getitem__(self, index):

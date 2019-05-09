@@ -62,6 +62,13 @@ class Parameters(ParametersBase):
             type=int,
             help='HSNW params')
         self.parser.add_argument(
+            '--num_clf_partitions',
+            dest='num_clf_partitions',
+            default=1,
+            action='store',
+            type=int,
+            help='#Partitioned classifier')
+        self.parser.add_argument(
             '--num_hashes',
             dest='num_hashes',
             default=-1,

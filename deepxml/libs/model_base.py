@@ -32,6 +32,7 @@ class ModelBase(object):
         self.nbn_rel = params.nbn_rel
         self.num_centroids = params.num_centroids
         self.last_saved_epoch = -1
+        self.num_clf_partitions = params.num_clf_partitions
         self.model_dir = params.model_dir
         self.label_padding_index = params.label_padding_index
         self._validate = params.validate
@@ -100,6 +101,7 @@ class ModelBase(object):
                                      keep_invalid=keep_invalid, 
                                      num_centroids=self.num_centroids,
                                      nbn_rel=self.nbn_rel,
+                                     num_clf_partitions=self.num_clf_partitions,
                                      **kwargs)
         return _dataset
 
@@ -119,7 +121,7 @@ class ModelBase(object):
                                batch_size=batch_size,
                                num_workers=num_workers,
                                collate_fn=construct_collate_fn(
-                                   feature_type, use_shortlist),
+                                   feature_type, use_shortlist, False, self.num_clf_partitions),
                                shuffle=shuffle)
         return dt_loader
 
@@ -143,14 +145,14 @@ class ModelBase(object):
         return self.criterion(
             _pred, self._to_device(_true))
 
-    def _compute_loss(self, out, batch_data, weightage=1.0):
+    def _compute_loss(self, out_ans, batch_data, weightage=1.0):
         # Support loss for parallel classifier as well
         # TODO: Integrate weightage
-        if isinstance(batch_data['Y'], list):
+        if self.num_clf_partitions > 1:
             out = []
-            for _, (_out, _batch_data) in zip((out, batch_data['Y'])):
+            for _, (_out, _batch_data) in enumerate(zip(out_ans, batch_data['Y'])):
                 out.append(self._compute_loss_one(_out, _batch_data))
-            return torch.stack(out).sum()
+            return torch.stack(out).mean()
         else:
             return self._compute_loss_one(out, batch_data['Y'])
 
@@ -179,6 +181,9 @@ class ModelBase(object):
             del batch_data
         return mean_loss / data_loader.dataset.num_samples
 
+    def _merge_part_predictions(self, out_ans):
+        return torch.stack(out_ans, axis=1)
+
     def validate(self, data_loader):
         self.net.eval()
         torch.set_grad_enabled(False)
@@ -190,9 +195,10 @@ class ModelBase(object):
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
             out_ans = self.net.forward(batch_data)
-            loss = self.criterion(
-                out_ans, self._to_device(batch_data['Y']))
+            loss = self._compute_loss(out_ans, batch_data)
             mean_loss += loss.item()*batch_size
+            if self.num_clf_partitions > 1:
+                out_ans = torch.cat(out_ans, dim=1)
             utils.update_predicted(
                 count, batch_size, out_ans.data, predicted_labels)
             count += batch_size

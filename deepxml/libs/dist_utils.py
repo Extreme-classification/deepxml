@@ -1,6 +1,8 @@
 import numpy as np
+import _pickle as pickle
 
-class Partitionar(object):
+
+class Partitioner(object):
     """
         Utility to distribute an array
         Supports: sparse or dense indices i.e. contiguous or otherwise (e.g. shortlist)
@@ -56,3 +58,9 @@ class Partitionar(object):
             return np.hstack(arrays)
         else:
             pass
+
+    def save(self, fname):
+        pickle.dump(self.__dict__, open(fname, 'wb'))
+
+    def load(self, fname):
+        self.__dict__ = pickle.load(open(fname, 'rb'))

@@ -92,7 +92,6 @@ class ParallelSparseLinear(nn.Module):
         super(ParallelSparseLinear, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
-        self.sparse = sparse
         self.devices = devices
         if devices is None:
             self.devices = ["cuda:{}".format(idx) for idx in num_partitions]

@@ -94,9 +94,9 @@ class Optimizer(object):
             for params in val.parameters():
                 if params.requires_grad:
                     if is_sparse:
-                        self.net_params['sparse'].append({"params":params,"lr":lr})
+                        self.net_params['sparse'].append({"params":params, "lr":lr})
                     else:
-                        self.net_params['dense'].append({"params":params,"lr":lr})
+                        self.net_params['dense'].append({"params":params, "lr":lr})
                 else:
                     self.net_params['no_grad'].append(params)
         return [self.net_params['sparse'], self.net_params['dense']], [True, False]
