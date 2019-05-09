@@ -138,6 +138,22 @@ class ModelBase(object):
         # FIXME: For now it assumes classifier is on last device
         return tensor.to(self.devices[index])
 
+    def _compute_loss_one(self, _pred, _true):
+        # Compute loss for one classifier
+        return self.criterion(
+            _pred, self._to_device(_true))
+
+    def _compute_loss(self, out, batch_data, weightage=1.0):
+        # Support loss for parallel classifier as well
+        # TODO: Integrate weightage
+        if isinstance(batch_data['Y'], list):
+            out = []
+            for _, (_out, _batch_data) in zip((out, batch_data['Y'])):
+                out.append(self._compute_loss_one(_out, _batch_data))
+            return torch.stack(out).sum()
+        else:
+            return self._compute_loss_one(out, batch_data['Y'])
+
     def _step(self, data_loader, batch_div=False):
         """
             Training step
@@ -150,8 +166,7 @@ class ModelBase(object):
             self.net.zero_grad()
             batch_size = batch_data['X'].size(0)
             out_ans = self.net.forward(batch_data)
-            loss = self.criterion(
-                out_ans, self._to_device(batch_data['Y']))
+            loss = self._compute_loss(out_ans, batch_data)
             if batch_div: # If loss is sum and average over samples is required
                 loss = loss/batch_size
             mean_loss += loss.item()*batch_size
