@@ -24,6 +24,7 @@ class DeepXML(nn.Module):
         self.embedding_dims = params.embedding_dims
         self.trans_method = params.trans_method
         self.dropout = params.dropout
+        self.num_clf_partitions = 2
         self.num_labels = params.num_labels
         self.use_hash_embeddings = params.use_hash_embeddings
         self.num_buckets = params.num_buckets
@@ -69,14 +70,30 @@ class DeepXML(nn.Module):
         if self.low_rank != -1:
             self.low_rank_layer = sparse_linear.SparseLinear(
                 self.repr_dims, self.low_rank, sparse=False, bias=False)
-        offset = 1 if self.label_padding_index is not None else 0
-        self.classifier = sparse_linear.SparseLinear(self.repr_dims if self.low_rank == -1 else self.low_rank,
-                                                     self.num_labels + offset,  # last one is padding index
-                                                     sparse=True if self.use_shortlist else False,
-                                                     low_rank=self.low_rank,
-                                                     padding_idx=self.label_padding_index)
-        self.device_embeddings = None
-        self.device_classifier = None
+        offset = self.num_clf_partitions if self.label_padding_index is not None else 0
+        if self.num_clf_partitions > 1: #Run the distributed version
+            #TODO: Label padding index
+            _sparse = [True if self.use_shortlist else False for _ in range(self.num_clf_partitions)]
+            _low_rank = [self.low_rank for _ in range(self.num_clf_partitions)] 
+            _num_labels = self.num_labels + offset # last one is padding index for each partition
+            _padding_idx = [None for _ in range(self.num_clf_partitions)]
+            _bias = [True for _ in range(self.num_clf_partitions)]
+            _clf_devices = ["cuda:0", "cuda:0"]
+            self.classifier = sparse_linear.ParallelSparseLinear(input_size=self.repr_dims if self.low_rank == -1 else self.low_rank,
+                                                        output_size = _num_labels, 
+                                                        sparse=_sparse,
+                                                        low_rank=_low_rank,
+                                                        bias=_bias,
+                                                        padding_idx=_padding_idx,
+                                                        num_partitions=self.num_clf_partitions,
+                                                        devices=_clf_devices)
+        else:
+            self.classifier = sparse_linear.SparseLinear(self.repr_dims if self.low_rank == -1 else self.low_rank,
+                                                        self.num_labels + offset,  # last one is padding index
+                                                        sparse=True if self.use_shortlist else False,
+                                                        low_rank=self.low_rank,
+                                                        padding_idx=self.label_padding_index)
+        self.device_embeddings = torch.device("cuda:0") # Keep embeddings on first device
 
     def _compute_rep_dims(self):
         pt_repr_dims = self.embedding_dims
@@ -108,14 +125,12 @@ class DeepXML(nn.Module):
         if return_embeddings:
             out = embed
         else:
-            batch_shortlist = None
             if self.low_rank != -1:
                 embed = self.low_rank_layer(embed)
+            batch_shortlist = None if self.num_clf_partitions==1 else [None]*self.num_clf_partitions
             if 'Y_s' in batch_data: # Use shortlist
-                batch_shortlist = batch_data['Y_s'].to(self.device_classifier)
-            out = self.classifier(
-                embed.to(self.device_classifier), batch_shortlist)
-            out = out.squeeze()
+                batch_shortlist = batch_data['Y_s']
+            out = self.classifier(embed, batch_shortlist)
         return out
 
     def initialize_embeddings(self, word_embeddings):
