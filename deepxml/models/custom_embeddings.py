@@ -10,7 +10,7 @@ class CustomEmbedding(torch.nn.Module):
 
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
                  max_norm=None, norm_type=2, scale_grad_by_freq=False,
-                 sparse=False):
+                 sparse=False, device="cuda:0"):
         """
             Args:
                 num_embeddings: int: vocalubary size
@@ -30,7 +30,7 @@ class CustomEmbedding(torch.nn.Module):
         self.scale_grad_by_freq = scale_grad_by_freq
         self.weight = Parameter(torch.Tensor(num_embeddings, embedding_dim))
         self.sparse = sparse
-
+        self.device = torch.device(device)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -40,6 +40,9 @@ class CustomEmbedding(torch.nn.Module):
         self.weight.data.normal_(0, 1)
         if self.padding_idx is not None:
             self.weight.data[self.padding_idx].fill_(0)
+
+    def to_device(self):
+        self.to(self.device)
 
     def forward(self, features, weights, _div=False):
         """
@@ -76,7 +79,7 @@ class CustomEmbedding(torch.nn.Module):
         return self.weight.detach().cpu().numpy()[1:, :]
 
     def __repr__(self):
-        s = '{name}({num_embeddings}, {embedding_dim}'
+        s = '{name}({num_embeddings}, {embedding_dim}, {device}'
         if self.padding_idx is not None:
             s += ', padding_idx={padding_idx}'
         if self.max_norm is not None:
