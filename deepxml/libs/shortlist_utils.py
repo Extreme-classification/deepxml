@@ -17,7 +17,20 @@ def get_shortlist(document_embeddings, shorty):
     return short, distances
 
 
-def update(data_loader, model, embedding_dim, shorty, flag=0):
+def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
+    # Compute label embeddings for single or multiple graphs
+    if num_graphs == 1:
+        return utils.get_label_embeddings(
+            doc_embeddings, data_loader.dataset.labels)
+    else: 
+        out = []
+        for idx in range(num_graphs):
+            _l_indices = data_loader.dataset.partitioner.get_indices(idx)
+            out.append(utils.get_label_embeddings(
+                doc_embeddings, data_loader.dataset.labels[_l_indices]))
+
+
+def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
     # 0: train and update, 1: train, 2: update
     num_centroids = data_loader.dataset.num_centroids
     doc_embeddings = model._document_embeddings(data_loader)
@@ -25,9 +38,9 @@ def update(data_loader, model, embedding_dim, shorty, flag=0):
     # doc_embeddings = normalize(doc_embeddings, copy=False)
     if flag == 0:
         # train and update shortlist
-        label_embeddings = utils.get_label_embeddings(
-            doc_embeddings, data_loader.dataset.labels)
-        if num_centroids != 1:
+        label_embeddings = compute_label_embeddings(
+            doc_embeddings, data_loader, num_graphs)
+        if num_centroids != 1: # Multiple centroid not supported for multiple-graphs
             extra_label_embeddings = get_multiple_centroids(
                 data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels)
             label_embeddings = np.vstack([label_embeddings, extra_label_embeddings])
@@ -38,9 +51,9 @@ def update(data_loader, model, embedding_dim, shorty, flag=0):
         data_loader.dataset.update_shortlist(short, dist)
     elif flag == 1:
         # train and don't get shortlist
-        label_embeddings = utils.get_label_embeddings(
-            doc_embeddings, data_loader.dataset.labels)
-        if num_centroids != 1:
+        label_embeddings = compute_label_embeddings(
+            doc_embeddings, data_loader, num_graphs)
+        if num_centroids != 1: # Multiple centroid not supported for multiple-graphs
             print("Clustering labels!")
             extra_label_embeddings = get_multiple_centroids(
                 data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels)
