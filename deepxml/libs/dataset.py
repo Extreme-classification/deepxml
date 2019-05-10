@@ -51,19 +51,24 @@ class DatasetDense(DatasetBase):
                 data_file: str: File name for the set
         """
         super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
-                         label_indices, keep_invalid, num_centroids, nbn_rel)
+                         label_indices, keep_invalid, num_centroids, nbn_rel, num_clf_partitions)
         self._split = None
         self.feature_type = 'dense'
         self._ext_head = None
-        self.num_clf_partitions = num_clf_partitions
         # if not keep_invalid: #Already done 
         #     self._process_labels(model_dir)
+        self.partitioner = None
         if self.mode == 'train':
             self._remove_samples_wo_features_and_labels()
-        self.partitioner = None
-        if self.num_clf_partitions > 1:
-            self.partitioner = Partitioner(
-                self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+            if self.num_clf_partitions > 1:
+                self.partitioner = Partitioner(
+                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+                self.partitioner.save(os.path.join(self.model_dir, 'partitionar.pkl'))
+        else:
+            if self.num_clf_partitions > 1:
+                self.partitioner = Partitioner(
+                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+                self.partitioner.load(os.path.join(self.model_dir, 'partitionar.pkl'))
         self.label_padding_index = self.num_labels
         self._sel_features(feature_indices)
         if normalize_features:
@@ -161,16 +166,21 @@ class DatasetSparse(DatasetBase):
                 data_file: str: File name for the set
         """
         super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
-                         label_indices, keep_invalid, num_centroids, nbn_rel)
+                         label_indices, keep_invalid, num_centroids, nbn_rel, num_clf_partitions)
         self._split = None
         self._ext_head = None
-        self.num_clf_partitions = num_clf_partitions
+        self.partitioner = None
         if self.mode == 'train':
             self._remove_samples_wo_features_and_labels()
-        self.partitioner = None
-        if self.num_clf_partitions > 1:
-            self.partitioner = Partitioner(
-                self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+            if self.num_clf_partitions > 1:
+                self.partitioner = Partitioner(
+                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+                self.partitioner.save(os.path.join(self.model_dir, 'partitionar.pkl'))
+        else:
+            if self.num_clf_partitions > 1:
+                self.partitioner = Partitioner(
+                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+                self.partitioner.load(os.path.join(self.model_dir, 'partitionar.pkl'))
         self.label_padding_index = self.num_labels
         self._sel_features(feature_indices)
         if normalize_features:
@@ -207,13 +217,14 @@ class DatasetSparse(DatasetBase):
         self.labels = self.labels[indices]
         self.num_samples = indices.size
 
-    def _get_sl(self, index):
-        """
-            Get data with shortlist for given data index
-        """
+    def _get_feat(self, index):
         feat = self.features[index, :].nonzero()[1].tolist()
         wt = self.features[index, feat].todense().tolist()[0]
         feat = [item+1 for item in feat]  # Treat idx:0 as Padding
+        return feat, wt
+
+    def _get_sl_one(self, index):
+        feat, wt = self._get_feat(index)
         pos_labels = self.labels[index, :].indices.tolist()
         if self.shortlist.data is not None:
             shortlist = self.shortlist.query(index).tolist()
@@ -229,6 +240,31 @@ class DatasetSparse(DatasetBase):
             labels_mask = [0]*self.size_shortlist
             dist = [0]*self.size_shortlist
         return feat, wt, shortlist, labels_mask, dist
+
+    def _get_sl_partitioned(self, index):
+        feat, wt = self._get_feat(index)
+        pos_labels = self.labels[index, :].indices.tolist()
+        if self.shortlist.data is not None:
+            shortlist = self.shortlist.query(index).tolist()
+            dist = self.dist.query(index).tolist()
+            # Remap to original labels if multiple centroids are used
+            shortlist, labels_mask, dist = self._adjust_shortlist(
+                pos_labels, shortlist, dist)
+        else:
+            shortlist = [0]*self.size_shortlist
+            labels_mask = [0]*self.size_shortlist
+            dist = [0]*self.size_shortlist
+        return feat, wt, shortlist, labels_mask, dist
+
+
+    def _get_sl(self, index):
+        """
+            Get data with shortlist for given data index
+        """
+        if self.num_clf_partitions > 1:
+            pass
+        else:
+            return self._get_sl_one(index)
 
     def _get_full(self, index):
         """

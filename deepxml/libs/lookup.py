@@ -6,9 +6,9 @@ class Table(object):
         Maintain a lookup table
         Supports in-memory and memmap file
     """
-    def __init__(self, _type='memory'):
+    def __init__(self, _type='memory', _dtype=np.float32):
         self._type = _type
-        self._dtype = None
+        self._dtype = _dtype
         self._shape = None
         self.data = None
 
@@ -24,12 +24,11 @@ class Table(object):
             Will copy data
         """
         self._shape = _data.shape
-        self._dtype = _data.dtype
         if self._type == 'memory':
-            self.data = _data.copy()
+            self.data = np.array(_data, dtype=self._dtype)
         elif self._type == 'memmap':
             data = np.memmap(self._get_fname(_fname), dtype=self._dtype, mode='w+', shape=self._shape)
-            data[:] = _data[:]
+            data[:] = np.array(_data, dtype=self._dtype)[:]
             del data  # Save to disk and delete object in write mode
             self.data = np.memmap(self._get_fname(_fname), dtype=self._dtype, shape=self._shape, mode='r')  # Open in read mode
         elif self._type == 'hdf5':
@@ -73,30 +72,34 @@ class PartitionedTable(object):
         Maintain a lookup table
         Supports in-memory and memmap file
     """
-    def __init__(self, num_tables=1, _type='memory'):
-        self.num_tables = num_tables
+    def __init__(self, num_partitions=1, _type='memory', _dtype=np.float32):
+        self.num_partitions = num_partitions
         self.data = []
-        for _ in range(self.num_tables):
-            self.data.append(Table(_type))
+        for _ in range(self.num_partitions):
+            self.data.append(Table(_type, _dtype))
 
     def create(self, _data, _fname):
         """
             Create a file
             Will copy data
         """
-        for idx in range(self.num_tables):
+        for idx in range(self.num_partitions):
             self.data[idx].create(_data[idx], _fname + ".{}".format(idx))
 
     def query(self, indices):
+        """
+            Query indices will be fine as per each table
+            No need to re-map here
+        """
         out = []
-        for idx in range(self.num_tables):
-            out.append(self.data[idx].query(indices[idx]))
+        for idx in range(self.num_partitions):
+            out.append(self.data[idx].query(indices))
         return out
 
     def save(self, _fname):
-        for idx in range(self.num_tables):
+        for idx in range(self.num_partitions):
             self.data[idx].save(_fname + ".{}".format(idx))
 
     def load(self, _fname):
-        for idx in range(self.num_tables):
+        for idx in range(self.num_partitions):
             self.data[idx].load(_fname + ".{}".format(idx))

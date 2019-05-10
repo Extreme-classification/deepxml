@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.preprocessing import normalize
 import xclib.data.data_utils as data_utils
 import operator
-from .lookup import Table
+from .lookup import Table, PartitionedTable
 
 
 class DatasetBase(torch.utils.data.Dataset):
@@ -16,7 +16,7 @@ class DatasetBase(torch.utils.data.Dataset):
     """
 
     def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
-                label_indices=None, keep_invalid=False, num_centroids=1, nbn_rel=False):
+                label_indices=None, keep_invalid=False, num_centroids=1, nbn_rel=False, num_clf_partitions=1):
         """
             Support pickle or libsvm file format
             Args:
@@ -28,6 +28,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self.features, self.labels, self.num_samples, \
             self.num_features, self.num_labels = self.load_data(fname, data)
         self._split = None
+        self.num_clf_partitions = num_clf_partitions
         self._sel_labels(label_indices)
         self.mode = mode
         self.model_dir = model_dir
@@ -35,8 +36,12 @@ class DatasetBase(torch.utils.data.Dataset):
         self.data_dir = data_dir
         self.num_centroids = num_centroids  # Use multiple centroids for ext head labels
         self.multiple_cent_mapping = None
-        self.shortlist = Table(_type='memory')
-        self.dist = Table(_type='memory')
+        if self.num_clf_partitions > 1:
+            self.shortlist = PartitionedTable(num_partitions=num_clf_partitions, _type='memory', _dtype=np.int)
+            self.dist = PartitionedTable(num_partitions=num_clf_partitions, _type='memory', _dtype=np.float32)
+        else:
+            self.shortlist = Table(_type='memory', _dtype=np.int)
+            self.dist = Table(_type='memory', _dtype=np.float32)
         self.size_shortlist = size_shortlist
         self.use_shortlist = True if self.size_shortlist > 0 else False
         if not keep_invalid:
@@ -79,10 +84,10 @@ class DatasetBase(torch.utils.data.Dataset):
                 labels = data_utils.binarize_labels(labels, num_labels)
         if self.nbn_rel:
             if self.mode == 'train': # Handle non-binary labels
-                print("Non-binary labels encountered; Normalizing...")
+                print("Non-binary labels encountered in train; Normalizing...")
                 labels = normalize(labels, norm='max', copy=False)
             else:
-                print("Non-binary labels encountered; Binarizing...")
+                print("Non-binary labels encountered in test/val; Binarizing...")
                 labels = labels.astype(np.bool).astype(np.float32)
         return features, labels, num_samples, num_features, num_labels
 
@@ -199,8 +204,9 @@ class DatasetBase(torch.utils.data.Dataset):
         """
             Update label shortlist for each instance
         """
-        self.shortlist.create(np.array(shortlist, dtype=np.int32), os.path.join(self.model_dir, fname+'shortlist.indices'))
-        self.dist.create(np.array(dist, dtype=np.float32), os.path.join(self.model_dir, fname+'shortlist.dist'))
+        self.shortlist.create(shortlist, os.path.join(self.model_dir, fname+'shortlist.indices'))
+        self.dist.create(dist, os.path.join(self.model_dir, fname+'shortlist.dist'))
+        del dist, shortlist
 
     def save_shortlist(self, fname):
         """
