@@ -66,3 +66,37 @@ class Table(object):
 
     def __del__(self):
         del self.data
+
+
+class PartitionedTable(object):
+    """
+        Maintain a lookup table
+        Supports in-memory and memmap file
+    """
+    def __init__(self, num_tables=1, _type='memory'):
+        self.num_tables = num_tables
+        self.data = []
+        for _ in range(self.num_tables):
+            self.data.append(Table(_type))
+
+    def create(self, _data, _fname):
+        """
+            Create a file
+            Will copy data
+        """
+        for idx in range(self.num_tables):
+            self.data[idx].create(_data[idx], _fname + ".{}".format(idx))
+
+    def query(self, indices):
+        out = []
+        for idx in range(self.num_tables):
+            out.append(self.data[idx].query(indices[idx]))
+        return out
+
+    def save(self, _fname):
+        for idx in range(self.num_tables):
+            self.data[idx].save(_fname + ".{}".format(idx))
+
+    def load(self, _fname):
+        for idx in range(self.num_tables):
+            self.data[idx].load(_fname + ".{}".format(idx))
