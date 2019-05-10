@@ -75,6 +75,18 @@ class SparseLinear(nn.Module):
             self.input_size, self.output_size, True, self.sparse, self.padding_idx, self.device
         )
 
+    def to_device(self):
+        self.to(self.device)
+
+    def get_weights(self):
+        _wts = self.weight.detach().cpu().numpy()
+        _bias = self.bias.detach().cpu().numpy()
+        if self.padding_idx is not None:
+            _wts = _wts[:-1, :]
+            _bias = _bias[:-1, :]
+        return np.hstack([_wts, _bias])
+
+
 class ParallelSparseLinear(nn.Module):
     """
         Distributed version of Sparse Linear linear with support for sparse gradients
@@ -115,3 +127,11 @@ class ParallelSparseLinear(nn.Module):
         for idx in range(self.num_partitions):
             out.append(self.classifier[idx](embed, shortlist[idx]))
         return out
+
+    def to_device(self):
+        for item in self.classifier:
+            item.to_device()
+
+    def get_weights(self):
+        out = [item.get_weights() for item in self.classifier]
+        return np.vstack(out)

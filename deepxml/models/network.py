@@ -152,9 +152,9 @@ class DeepXML(nn.Module):
             torch.from_numpy(clf_weights[:, -1]).view(-1, 1))
 
     def get_clf_weights(self):
-        _wts = self.classifier.weight.detach().cpu().numpy()
-        _bias = self.classifier.bias.detach().cpu().numpy()
-        if self.label_padding_index is not None:
-            _wts = _wts[:-1, :]
-            _bias = _bias[:-1, :]
-        return np.hstack([_wts, _bias])
+        self.classifier.get_weights()
+
+    def to_device(self):
+        self.embeddings.to_device()
+        self.transform.to_device()
+        self.classifier.to_device()

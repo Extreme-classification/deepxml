@@ -10,7 +10,7 @@ class Transform(nn.Module):
         Transform document representation!
     """
 
-    def __init__(self, hidden_dims, embedding_dims, trans_method, dropout, use_residual, res_init, use_shortlist):
+    def __init__(self, hidden_dims, embedding_dims, trans_method, dropout, use_residual, res_init, use_shortlist, device="cuda:0"):
         super(Transform, self).__init__()
         self.hidden_dims = hidden_dims
         self.embedding_dims = embedding_dims
@@ -18,6 +18,7 @@ class Transform(nn.Module):
         self.dropout = dropout
         self.use_residual = use_residual
         self.res_init = res_init
+        self.device = torch.device(device)
         self.use_shortlist = use_shortlist
         modules = []
         if self.trans_method == 'linear':
@@ -60,3 +61,6 @@ class Transform(nn.Module):
                 embed: torch.Tensor: transformed document representation
         """
         return self.transform(embed)
+
+    def to_device(self):
+        self.to(self.device)

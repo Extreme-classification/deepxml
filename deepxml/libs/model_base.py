@@ -48,6 +48,9 @@ class ModelBase(object):
         self.tracking = Tracking()
         self.model_fname = params.model_fname
 
+    def transfer_to_devices(self):
+        self.net.to_device()
+
     def _create_devices(self, _devices):
         if len(_devices) < 2: # Repeat devices if required
             _devices = _devices*2
@@ -56,35 +59,7 @@ class ModelBase(object):
         for item in _devices:
             devices.append(torch.device(
                 item if torch.cuda.is_available() else "cpu"))
-        self.net.device_embeddings = devices[0] 
-        self.net.device_classifier = devices[1]
-        # self.net.devices['embedding'] = devices[0]
-        # self.net.devices['classifier'] = devices[1]
         return devices
-
-    def transfer_to_devices(self):
-        self.device_embeddings = torch.device("cuda:0") 
-        self.device_classifier = torch.device("cuda:0") 
-        self.net.embeddings.to(self.device_embeddings)
-        self.net.transform.to(self.device_embeddings)
-        self.net.classifier.to(self.device_classifier)
-        if self.net.low_rank != -1:
-            self.net.low_rank_layer.to(self.device_classifier)
-        if self.criterion:
-            self.criterion.to(self.device_classifier)
-        self.net.device_embeddings = self.device_embeddings
-        self.net.device_classifier = self.device_classifier
-
-    # def transfer_to_devices(self):
-    #     _param_groups = self.net._parameter_groups()
-    #     for _pg, _dev in zip(_param_groups, self.devices):
-    #         if isinstance(_pg, list) or isinstance(_pg, tuple):
-    #             for _p in _pg:
-    #                 _p.to(_dev)
-    #         else:
-    #             _pg.to(_dev)
-    #     if self.criterion: #Assumpion/ Use dict for more general?
-    #         self.criterion.to(self.devices[-1])
 
     def _create_dataset(self, data_dir, fname, data, mode='predict', normalize_features=True,
                         keep_invalid=False, **kwargs):
@@ -154,7 +129,7 @@ class ModelBase(object):
                 out.append(self._compute_loss_one(_out, _batch_data))
             return torch.stack(out).mean()
         else:
-            return self._compute_loss_one(out, batch_data['Y'])
+            return self._compute_loss_one(out_ans, batch_data['Y'])
 
     def _step(self, data_loader, batch_div=False):
         """
@@ -312,6 +287,8 @@ class ModelBase(object):
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
             out_ans = self.net.forward(batch_data)
+            if self.num_clf_partitions > 1:
+                out_ans = torch.cat(out_ans, dim=1)
             utils.update_predicted(
                 count, batch_size, out_ans.data, predicted_labels)
             count += batch_size
