@@ -99,6 +99,7 @@ def save_parameters(fname, params):
                'ann_method': params.ann_method,
                'num_nbrs': params.num_nbrs,
                'embedding_dims': params.embedding_dims,
+               'num_clf_partitions': params.num_clf_partitions,
                'label_padding_index': params.label_padding_index,
                'hidden_dims': params.hidden_dims,
                'use_hash_embeddings': params.use_hash_embeddings,
@@ -120,6 +121,7 @@ def load_parameters(fname, params):
     params.ann_method = temp['ann_method']
     params.num_hashes = temp['num_hashes']
     params.num_buckets = temp['num_buckets']
+    params.num_clf_partitions = temp['num_clf_partitions']
     params.label_padding_index = temp['label_padding_index']
     params.use_hash_embeddings = temp['use_hash_embeddings'] 
     params.ann_method = temp['ann_method']
