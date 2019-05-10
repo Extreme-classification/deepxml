@@ -5,11 +5,10 @@ import _pickle as pickle
 class Partitioner(object):
     """
         Utility to distribute an array
-        Supports: sparse or dense indices i.e. contiguous or otherwise (e.g. shortlist)
+        Indices support: contiguous or otherwise (e.g. shortlist)
     """
-    def __init__(self, size, num_patitions, padding=False, contiguous=False):
+    def __init__(self, size, num_patitions, padding=False, contiguous=True):
         #TODO: Handle padding
-        #TODO: Test non-contiguous
         self.num_patitions = num_patitions
         self.size = size
         self.contiguous = contiguous
@@ -20,6 +19,9 @@ class Partitioner(object):
         self.partition_boundaries = self._create_partition_boundaries()
 
     def _create_partition_boundaries(self):
+        """
+            Split array at these points
+        """
         _last = 0
         partition_boundaries = []
         for item in self._partitions[:-1]:
@@ -28,9 +30,15 @@ class Partitioner(object):
         return partition_boundaries
 
     def _create_partitions(self):
+        """
+            Create partitions
+        """
         return np.array_split(np.arange(self.size), self.num_patitions)
 
     def _create_mapping(self):
+        """
+            Mapping to map indices original<->partitioned
+        """
         mapping_to_original = []
         mapping_to_partition = []
         for _, _partition in enumerate(self._partitions):
@@ -47,7 +55,34 @@ class Partitioner(object):
     def map_to_partition(self, array):
         return self.map(array, self.fun_map_to_partition)
 
-    def split(self, array):
+    def get_partition_index(self, index):
+        """
+            In which partition this index falls into?
+        """
+        _last = 0
+        for idx, _current in enumerate(self.partition_boundaries):
+            if index >= _last and index < _current:
+                return idx
+        return self.num_patitions-1
+
+    def split_indices(self, indices, data):
+        """
+            Split given indices and data (Shortlist)
+            i.e. get the partition and map them accordingly
+        """
+        out_ind = [[] for _ in range(self.num_patitions)]
+        out_vals = [[] for _ in range(self.num_patitions)]
+        for key, val in zip(indices, data):
+            part = self.get_partition_index(key)
+            ind = self.mapping_to_partition[part][key]
+            out_ind[part].append(ind)
+            out_vals[part].append(val)
+        return out_ind, out_vals
+
+    def split(self, array): #Split as per bondaries
+        """
+            Split given array in partitions (For contiguous indices)
+        """
         if self.contiguous:
             return np.hsplit(array, self.partition_boundaries)
         else:
@@ -64,3 +99,10 @@ class Partitioner(object):
 
     def load(self, fname):
         self.__dict__ = pickle.load(open(fname, 'rb'))
+
+    def get_indices(self, part):
+        # Indices for given partition
+        return self._partitions[part]
+
+    def __repr__(self):
+        return "({}) #Size: {}, #partitions: {}".format(self.__class__.__name__, self.size, self.num_patitions)
