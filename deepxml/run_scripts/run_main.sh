@@ -17,7 +17,7 @@ create_splits () {
     # $2: train_fname
     # $3: num_splits
     echo "Creating data splits.."
-    python3 DeepXML/tools/run_split_data_on_freq.py $1 $2 $3
+    python3 ../tools/run_split_data_on_freq.py $1 $2 $3
 }
 
 merge_split_predictions () {
@@ -26,7 +26,7 @@ merge_split_predictions () {
     # $3: num_labels
     # $4: out_fname 
     echo "Merging predictions.."
-    python3 DeepXML/tools/merge_split_predictions.py $1 $2 $3 $4
+    python3 ../tools/merge_split_predictions.py $1 $2 $3 $4
 }
 
 run_beta(){
@@ -42,7 +42,7 @@ run_beta(){
     fi
 }
 
-work_dir="/mnt/Workspace"
+work_dir="/home/t-kudahi/Workspace"
 dataset=$1
 version=$2
 use_post=$3

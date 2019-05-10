@@ -6,17 +6,16 @@
 # source activate xmc-dev
 
 dataset=$1
-TYPE=$2
-dir_version=$3
-version=$4
-use_post=$5
-learning_rate=${6}
-embedding_dims=$7
-num_epochs=$8
-dlr_factor=$9
-dlr_step=${10}
-batch_size=${11}
-work_dir=${12}
+dir_version=$2
+version=$3
+use_post=$4
+learning_rate=${5}
+embedding_dims=$6
+num_epochs=$7
+dlr_factor=$8
+dlr_step=${9}
+batch_size=${10}
+work_dir=${11}
 use_head_embeddings=1
 
 if [ $use_head_embeddings -eq 1 ]

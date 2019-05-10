@@ -74,6 +74,7 @@ then
                 --freeze_embeddings \
                 --efC 300 \
                 --efS 300 \
+                --num_clf_partitions 2\
                 --num_centroids 1 \
 		        --use_residual \
                 --lr $learning_rate \
