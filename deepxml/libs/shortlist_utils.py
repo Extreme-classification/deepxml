@@ -28,7 +28,7 @@ def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
             _l_indices = data_loader.dataset.partitioner.get_indices(idx)
             out.append(utils.get_label_embeddings(
                 doc_embeddings, data_loader.dataset.labels[_l_indices]))
-
+        return out
 
 def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
     # 0: train and update, 1: train, 2: update
@@ -44,7 +44,6 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
             extra_label_embeddings = get_multiple_centroids(
                 data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels)
             label_embeddings = np.vstack([label_embeddings, extra_label_embeddings])
-        print("Label embedding shape: ", label_embeddings.shape)
         # label_embeddings = normalize(label_embeddings, copy=False)
         shorty.train(label_embeddings)
         short, dist = get_shortlist(doc_embeddings, shorty)

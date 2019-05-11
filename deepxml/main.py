@@ -212,8 +212,12 @@ def main(params):
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
         if params.use_shortlist:
-            shorty = shortlist.Shortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            if params.num_clf_partitions > 1:
+                shorty = shortlist.ParallelShortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
+            else:
+                shorty = shortlist.Shortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
             model = model_utils.ModelShortlist(params, net, criterion, optimizer, shorty)
         else:
             model = model_utils.ModelFull(params, net, criterion, optimizer)
