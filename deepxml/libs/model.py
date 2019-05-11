@@ -85,10 +85,12 @@ class ModelShortlist(ModelBase):
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
             out_ans = self.net.forward(batch_data)
-            loss = self.criterion(
-                out_ans, self._to_device(batch_data['Y']))/batch_size
-            out_ans = out_ans.cpu()
+            loss = self._compute_loss(out_ans, batch_data)
             mean_loss += loss.item()*batch_size
+            # loss = self.criterion(
+            #     out_ans, self._to_device(batch_data['Y']))/batch_size
+            out_ans = out_ans.cpu()
+            # mean_loss += loss.item()*batch_size
             scores = self._combine_scores(
                 out_ans.data, batch_data['Y_d'].data, beta)
             batch_shortlist = batch_data['Y_s'].numpy()
@@ -146,10 +148,10 @@ class ModelShortlist(ModelBase):
                 shorty_start_t = time.time()
                 self.shorty.reset()
                 shortlist_utils.update(
-                    train_loader, self, self.embedding_dims, self.shorty, flag=0)
+                    train_loader, self, self.embedding_dims, self.shorty, flag=0, num_graphs=self.num_clf_partitions)
                 if self._validate:
                     shortlist_utils.update(
-                        validation_loader, self, self.embedding_dims, self.shorty, flag=2)
+                        validation_loader, self, self.embedding_dims, self.shorty, flag=2, num_graphs=self.num_clf_partitions)
                 shorty_end_t = time.time()
                 self.logger.info("ANN train time: {} sec".format(
                     shorty_end_t - shorty_start_t))

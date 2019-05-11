@@ -61,14 +61,19 @@ class ParallelShortlist(object):
         for _ in range(num_graphs):
             self.index.append(Shortlist(method, num_neighbours, M, efC, efS, num_threads))
 
+    def train_one(self, data, idx):
+        self.index[idx].train(data)
+
     def train(self, data):
-        processes = []
-        for idx in range(0, self.num_graphs):
-            p = mp.Process(target=self.index[idx].train, args=(data[idx],))
-            processes.append(p)
-            p.start()       
-        for process in processes:
-            process.join()
+        with mp.Pool(self.num_graphs) as p:
+            p.map(self.train_one, data)
+        # processes = []
+        # for idx in range(0, self.num_graphs):
+        #     p = mp.Process(target=self.index[idx].train, args=(data[idx],))
+        #     processes.append(p)
+        #     p.start()       
+        # for process in processes:
+        #     process.join()
 
         
     def query(self, data):

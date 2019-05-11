@@ -49,6 +49,7 @@ TRAIN_PARAMS="--lr $learning_rate \
             --dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
             --batch_size $batch_size \
+            --num_clf_partitions 2\
             --dataset ${dataset} \
             --data_dir=${work_dir}/data \
             --num_labels ${num_labels} \
