@@ -14,9 +14,12 @@ class Partitioner(object):
         self.contiguous = contiguous
         self._partitions = self._create_partitions()
         self.mapping_to_original, self.mapping_to_partition = self._create_mapping()
-        self.fun_map_to_original = lambda x: self.mapping_to_original[x]
-        self.fun_map_to_partition = lambda x: self.mapping_to_partition[x]
+        #self.fun_map_to_original = lambda x: self.mapping_to_original[x]
+        #self.fun_map_to_partition = lambda x: self.mapping_to_partition[x]
         self.partition_boundaries = self._create_partition_boundaries()
+
+    def get_padding_indices(self):
+        return [item.size for item in self._partitions]
 
     def _create_partition_boundaries(self):
         """
@@ -46,14 +49,14 @@ class Partitioner(object):
             mapping_to_partition.append(dict(zip(_partition, np.arange(_partition.size))))
         return mapping_to_original, mapping_to_partition
 
-    def map(self, array, fun_map):
-        return np.array(map(fun_map, array))
+    # def map(self, array, fun_map):
+    #     return np.array(map(fun_map, array))
 
-    def map_to_original(self, array):
-        return self.map(array, self.fun_map_to_original)
+    # def map_to_original(self, array):
+    #     return self.map(array, self.fun_map_to_original)
 
-    def map_to_partition(self, array):
-        return self.map(array, self.fun_map_to_partition)
+    # def map_to_partition(self, array):
+    #     return self.map(array, self.fun_map_to_partition)
 
     def get_partition_index(self, index):
         """
@@ -65,7 +68,7 @@ class Partitioner(object):
                 return idx
         return self.num_patitions-1
 
-    def split_indices(self, indices, data):
+    def split_indices_with_data(self, indices, data):
         """
             Split given indices and data (Shortlist)
             i.e. get the partition and map them accordingly
@@ -78,6 +81,18 @@ class Partitioner(object):
             out_ind[part].append(ind)
             out_vals[part].append(val)
         return out_ind, out_vals
+
+    def split_indices(self, indices):
+        """
+            Split given indices (Shortlist)
+            i.e. get the partition and map them accordingly
+        """
+        out_ind = [[] for _ in range(self.num_patitions)]
+        for key in indices:
+            part = self.get_partition_index(key)
+            ind = self.mapping_to_partition[part][key]
+            out_ind[part].append(ind)
+        return out_ind
 
     def split(self, array): #Split as per bondaries
         """
