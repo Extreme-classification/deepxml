@@ -11,6 +11,7 @@ class Table(object):
         self._dtype = _dtype
         self._shape = None
         self.data = None
+        self.data_init = False
 
     def _get_fname(self, fname, mode='data'):
         if mode == 'data':
@@ -37,6 +38,7 @@ class Table(object):
             pass
         else:
             raise NotImplementedError("Unknown type!")
+        self.data_init = True
 
     def query(self, indices):
         return self.data[indices]
@@ -75,6 +77,7 @@ class PartitionedTable(object):
     def __init__(self, num_partitions=1, _type='memory', _dtype=np.float32):
         self.num_partitions = num_partitions
         self.data = []
+        self.data_init = False
         for _ in range(self.num_partitions):
             self.data.append(Table(_type, _dtype))
 
@@ -85,6 +88,7 @@ class PartitionedTable(object):
         """
         for idx in range(self.num_partitions):
             self.data[idx].create(_data[idx], _fname + ".{}".format(idx))
+        self.data_init = True
 
     def query(self, indices):
         """
