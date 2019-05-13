@@ -56,8 +56,17 @@ class ModelShortlist(ModelBase):
         self.retrain_hnsw_after = params.retrain_hnsw_after
         self.update_shortlist = params.update_shortlist
 
-    def _combine_scores(self, out_logits, batch_dist, beta):
+    def _combine_scores_one(self, out_logits, batch_dist, beta):
         return beta*torch.sigmoid(out_logits) + (1-beta)*torch.sigmoid(1-batch_dist)
+
+    def _combine_scores(self, out_logits, batch_dist, beta):
+        if isinstance(out_logits, list): #For distributed classifier
+            out = []
+            for _, (_out_logits, _batch_dist) in enumerate(zip(out_logits, batch_dist)):
+                out.append(self._combine_scores_one(_out_logits.data.cpu(), _batch_dist.data, beta))
+            return out
+        else:
+            return self._combine_scores_one(out_logits.data.cpu(), batch_dist.data, beta)
 
     def _strip_padding_label(self, mat, num_labels):
         stripped_vals = {}
@@ -65,6 +74,26 @@ class ModelShortlist(ModelBase):
             stripped_vals[key] = val[:, :num_labels].tocsr()
             del val
         return stripped_vals
+
+    def _update_predicted_shortlist(self, count, batch_size, predicted_labels, batch_out, batch_data, beta):
+        _score = self._combine_scores(batch_out, batch_data['Y_d'], beta)
+        if 'Y_m' in batch_data: # IF rev mapping exist; case of distributed classifier
+            batch_shortlist = batch_data['Y_m'].numpy()
+            _knn_score = 1 - torch.cat(batch_data['Y_d'], 1) # Send this as merged?
+            _clf_score = torch.cat(batch_out, 1).data
+            _score = torch.cat(_score, 1)
+        else:
+            batch_shortlist = batch_data['Y_s'].numpy()
+            _knn_score = 1-batch_data['Y_d']
+            _clf_score = batch_out.data
+        utils.update_predicted_shortlist(
+            count, batch_size, _clf_score, predicted_labels['clf'], batch_shortlist, top_k=50)
+        utils.update_predicted_shortlist(
+            count, batch_size, _knn_score, predicted_labels['knn'],
+            batch_shortlist, top_k=50)
+        utils.update_predicted_shortlist(
+            count, batch_size, _score, predicted_labels['combined'], batch_shortlist, top_k=50)
+
 
     def validate(self, data_loader, beta=0.2):
         self.net.eval()
@@ -85,23 +114,9 @@ class ModelShortlist(ModelBase):
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
             out_ans = self.net.forward(batch_data)
-            loss = self._compute_loss(out_ans, batch_data)
+            loss = self._compute_loss(out_ans, batch_data)/batch_size
             mean_loss += loss.item()*batch_size
-            # loss = self.criterion(
-            #     out_ans, self._to_device(batch_data['Y']))/batch_size
-            out_ans = out_ans.cpu()
-            # mean_loss += loss.item()*batch_size
-            scores = self._combine_scores(
-                out_ans.data, batch_data['Y_d'].data, beta)
-            batch_shortlist = batch_data['Y_s'].numpy()
-            utils.update_predicted_shortlist(
-                count, batch_size, out_ans.data, predicted_labels['clf'], batch_shortlist)
-            utils.update_predicted_shortlist(
-                count, batch_size, 1 -
-                batch_data['Y_d'], predicted_labels['knn'],
-                batch_shortlist, top_k=self.shortlist_size)
-            utils.update_predicted_shortlist(
-                count, batch_size, scores, predicted_labels['combined'], batch_shortlist)
+            self._update_predicted_shortlist(count, batch_size, predicted_labels, out_ans, batch_data, beta)
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(
@@ -162,7 +177,7 @@ class ModelShortlist(ModelBase):
                     try:
                         _fname = kwargs['shorty_fname']
                     except:
-                        _fname = 'validation_shortlist.pkl'
+                        _fname = 'validation'
                     validation_loader.dataset.save_shortlist(
                         os.path.join(model_dir, _fname))
             tr_avg_loss = self._step(train_loader_shuffle, batch_div=True)
@@ -210,12 +225,12 @@ class ModelShortlist(ModelBase):
         # TODO Add flag for loading or training
         if self.update_shortlist:
             shortlist_utils.update(
-                data_loader, self, self.embedding_dims, self.shorty, flag=2)
+                data_loader, self, self.embedding_dims, self.shorty, flag=2, num_graphs=self.num_clf_partitions)
         else:
             try:
                 _fname = kwargs['shorty_fname']
             except:
-                _fname = 'validation_shortlist.pkl'
+                _fname = 'validation'
             print("Loading Pre-computer shortlist from file: ", _fname)
             data_loader.dataset.load_shortlist(
                 os.path.join(self.model_dir, _fname))
@@ -233,25 +248,14 @@ class ModelShortlist(ModelBase):
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
-            out_ans = self.net.forward(batch_data).cpu()
-            scores = self._combine_scores(
-                out_ans.data, batch_data['Y_d'].data, beta)
-            batch_shortlist = batch_data['Y_s'].numpy()
-
-            utils.update_predicted_shortlist(
-                count, batch_size, scores, predicted_labels['combined'], batch_shortlist)
-            utils.update_predicted_shortlist(
-                count, batch_size, out_ans.data, predicted_labels[
-                    'clf'], batch_shortlist, top_k=self.shortlist_size)
-            utils.update_predicted_shortlist(
-                count, batch_size, 1 -
-                batch_data['Y_d'], predicted_labels['knn'],
-                batch_shortlist, top_k=self.shortlist_size)
-
+            out_ans = self.net.forward(batch_data)
+            self._update_predicted_shortlist(
+                count, batch_size, predicted_labels, out_ans, batch_data, beta)
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(
                     "Prediction progress: [{}/{}]".format(batch_idx, num_batches))
+            del batch_data
         return self._strip_padding_label(predicted_labels, num_labels)
 
     def save_checkpoint(self, model_dir, epoch):
