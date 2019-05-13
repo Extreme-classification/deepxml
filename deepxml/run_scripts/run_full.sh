@@ -55,6 +55,7 @@ TRAIN_PARAMS="--dataset ${dataset} \
                 --batch_size $batch_size \
                 --num_nbrs 300 \
                 --M 100 \
+                --normalize \
                 --validate \
                 --val_fname test.txt \
                 --ann_threads 12\
@@ -87,6 +88,7 @@ then
                 --num_nbrs 300 \
                 --M 100 \
                 --use_shortlist \
+                --normalize \
                 --validate \
                 --val_fname test.txt \
                 --ann_threads 12\
@@ -100,6 +102,7 @@ then
                     --num_centroids 1 \
                     --num_nbrs 300 \
                     --ann_threads 12 \
+                    --normalize \
                     --use_shortlist \
                     --model_fname ${MODEL_NAME} \
                     --batch_size 256 \
@@ -108,6 +111,7 @@ then
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
+                    --normalize \
                     --use_shortlist \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512${splits}"
@@ -117,6 +121,7 @@ else
                     --data_dir=${work_dir}/data \
                     --ts_fname test.txt \
                     --efS 300 \
+                    --normalize \
                     --num_nbrs 300 \
                     --ann_threads 12\
                     --model_fname ${MODEL_NAME}\
@@ -126,6 +131,7 @@ else
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
+                    --normalize \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512${splits}"
 

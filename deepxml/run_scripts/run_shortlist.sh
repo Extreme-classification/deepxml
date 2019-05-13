@@ -59,6 +59,7 @@ TRAIN_PARAMS="--lr $learning_rate \
             --optim Adam \
             --low_rank -1 \
             --efS 300 \
+            --normalize \
             --num_nbrs 300 \
             --efC 300 \
             --M 100 \
@@ -77,6 +78,7 @@ PREDICT_PARAMS="--dataset ${dataset} \
                 --efS 300 \
                 --num_nbrs 300 \
                 --ann_threads 12\
+                --normalize \
                 --use_shortlist \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 256 \
@@ -87,6 +89,7 @@ PREDICT_PARAMS="--dataset ${dataset} \
 EXTRACT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --use_shortlist \
+                --normalize \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${splits}"
 
