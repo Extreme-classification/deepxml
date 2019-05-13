@@ -14,8 +14,6 @@ class Partitioner(object):
         self.contiguous = contiguous
         self._partitions = self._create_partitions()
         self.mapping_to_original, self.mapping_to_partition = self._create_mapping()
-        #self.fun_map_to_original = lambda x: self.mapping_to_original[x]
-        #self.fun_map_to_partition = lambda x: self.mapping_to_partition[x]
         self.partition_boundaries = self._create_partition_boundaries()
 
     def get_padding_indices(self):
@@ -49,11 +47,11 @@ class Partitioner(object):
             mapping_to_partition.append(dict(zip(_partition, np.arange(_partition.size))))
         return mapping_to_original, mapping_to_partition
 
-    # def map(self, array, fun_map):
-    #     return np.array(map(fun_map, array))
+    def _map(self, fun, array):
+        return list(map(fun, array))
 
-    # def map_to_original(self, array):
-    #     return self.map(array, self.fun_map_to_original)
+    def map_to_original(self, array, idx=None):
+        return self._map(self.mapping_to_original[idx].get, array)
 
     # def map_to_partition(self, array):
     #     return self.map(array, self.fun_map_to_partition)
