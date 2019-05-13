@@ -79,9 +79,11 @@ class DatasetBase(torch.utils.data.Dataset):
                 num_samples, num_features = features.shape
                 num_labels = labels.shape[1]
             else: #Assuming data is in plain text
+                # Deal in 32-bits
                 features, labels, num_samples, num_features, num_labels = data_utils.read_data(
                     fname)
-                labels = data_utils.binarize_labels(labels, num_labels)
+                features = features.astype(np.float32)
+                labels = data_utils.binarize_labels(labels, num_labels).astype(np.float32)
         if self.nbn_rel:
             if self.mode == 'train': # Handle non-binary labels
                 print("Non-binary labels encountered in train; Normalizing...")
@@ -212,15 +214,15 @@ class DatasetBase(torch.utils.data.Dataset):
         """
             Save label shortlist and distance for each instance
         """
-        self.shortlist.save(os.path.join(self.model_dir, fname+'shortlist.indices'))
-        self.dist.save(os.path.join(self.model_dir, fname+'shortlist.dist'))
+        self.shortlist.save(os.path.join(self.model_dir, fname+'.shortlist.indices'))
+        self.dist.save(os.path.join(self.model_dir, fname+'.shortlist.dist'))
 
     def load_shortlist(self, fname):
         """
             Load label shortlist and distance for each instance
         """
-        self.shortlist.load(os.path.join(self.model_dir, fname+'shortlist.indices'))
-        self.dist.load(os.path.join(self.model_dir, fname+'shortlist.dist'))
+        self.shortlist.load(os.path.join(self.model_dir, fname+'.shortlist.indices'))
+        self.dist.load(os.path.join(self.model_dir, fname+'.shortlist.dist'))
 
     def _adjust_shortlist(self, pos_labels, shortlist, dist, min_nneg=100):
         """

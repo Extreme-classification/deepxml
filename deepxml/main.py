@@ -78,6 +78,7 @@ def train(model, params):
               val_fname=params.val_fname,
               batch_size=params.batch_size,
               num_workers=4,
+              normalize_features=params.normalize,
               shuffle=params.shuffle,
               validate=params.validate,
               beta=params.beta,
@@ -102,6 +103,7 @@ def get_document_embeddings(model, params, _save=True):
                                                    data=None,
                                                    keep_invalid=params.keep_invalid,
                                                    batch_size=params.batch_size,
+                                                   normalize_features=params.normalize,
                                                    num_workers=4,
                                                    feature_indices=params.feature_indices,
                                                    label_indices=params.label_indices)
@@ -165,6 +167,7 @@ def inference(model, params):
     predicted_labels = model.predict(data_dir=params.data_dir,
                                      dataset=params.dataset,
                                      ts_fname=params.ts_fname,
+                                     normalize_features=params.normalize,
                                      beta=params.beta,
                                      keep_invalid=params.keep_invalid,
                                      feature_indices=params.feature_indices,
@@ -231,8 +234,12 @@ def main(params):
         utils.load_parameters(fname, params)
         net = network.DeepXML(params)
         if params.use_shortlist:
-            shorty = shortlist.Shortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            if params.num_clf_partitions > 1:
+                shorty = shortlist.ParallelShortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
+            else:
+                shorty = shortlist.Shortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
         optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
                                               learning_rate=params.learning_rate,
                                               momentum=params.momentum,
@@ -256,20 +263,24 @@ def main(params):
         train(model, params)
 
     elif params.mode == 'predict':
-        print("Model parameters: ", params)
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
         net = network.DeepXML(params)
+        print("Model parameters: ", params)
+        print("\nModel configuration: ", net)
         shorty = None
         if params.use_shortlist:
-            shorty = shortlist.Shortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            if params.num_clf_partitions > 1:
+                shorty = shortlist.ParallelShortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
+            else:
+                shorty = shortlist.Shortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
             model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
         else:
             model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
         model.transfer_to_devices()
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
-        print("\nModel configuration: ", net)
         inference(model, params)
 
     elif params.mode == 'retrain_w_shorty':
@@ -283,8 +294,12 @@ def main(params):
         print("\nModel configuration: ", net)
         shorty = None
         if params.use_shortlist:
-            shorty = shortlist.Shortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            if params.num_clf_partitions > 1:
+                shorty = shortlist.ParallelShortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
+            else:
+                shorty = shortlist.Shortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
         model = model_utils.ModelFull(params, net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
         model.transfer_to_devices()
@@ -298,8 +313,12 @@ def main(params):
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         if params.use_shortlist:
-            shorty = shortlist.Shortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+            if params.num_clf_partitions > 1:
+                shorty = shortlist.ParallelShortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
+            else:
+                shorty = shortlist.Shortlist(
+                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
             model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
         else:
             model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
