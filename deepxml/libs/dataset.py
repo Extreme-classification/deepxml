@@ -249,9 +249,9 @@ class DatasetSparse(DatasetBase):
         # Partition labels
         pos_labels = self.partitioner.split_indices(pos_labels)
         if self.shortlist.data_init:
-            _shortlist = self.shortlist.query(index).tolist()
-            _dist = self.dist.query(index).tolist()
-            shortlist, labels_mask, dist = [], [], []
+            _shortlist = self.shortlist.query(index)
+            _dist = self.dist.query(index)
+            shortlist, labels_mask, dist, rev_map = [], [], [], []
             # Get shortlist for each classifier
             for idx in range(self.num_clf_partitions):
                 __shortlist, __labels_mask, __dist = self._adjust_shortlist(
@@ -259,13 +259,15 @@ class DatasetSparse(DatasetBase):
                 shortlist.append(__shortlist)
                 labels_mask.append(__labels_mask)
                 dist.append(__dist)
+                rev_map += self.partitioner.map_to_original(__shortlist, idx)
         else:
             shortlist, labels_mask, dist = [], [], []
             for idx in range(self.num_clf_partitions):
                 shortlist.append([0]*self.size_shortlist)
                 labels_mask.append([0]*self.size_shortlist)
                 dist.append([0]*self.size_shortlist)
-        return feat, wt, shortlist, labels_mask, dist
+            rev_map = [0]*self.size_shortlist*self.num_clf_partitions # Dummy
+        return feat, wt, shortlist, labels_mask, dist, rev_map
 
 
     def _get_sl(self, index):
@@ -273,7 +275,7 @@ class DatasetSparse(DatasetBase):
             Get data with shortlist for given data index
         """
         if self.num_clf_partitions > 1:
-            return _get_sl_partitioned(index)
+            return self._get_sl_partitioned(index)
         else:
             return self._get_sl_one(index)
 
