@@ -24,13 +24,14 @@ class Table(object):
             Create a file
             Will copy data
         """
+        _data = np.array(_data, dtype=self._dtype)
         self._shape = _data.shape
         if self._type == 'memory':
-            self.data = np.array(_data, dtype=self._dtype)
+            self.data = _data
         elif self._type == 'memmap':
             data = np.memmap(self._get_fname(_fname), dtype=self._dtype, mode='w+', shape=self._shape)
-            data[:] = np.array(_data, dtype=self._dtype)[:]
-            del data  # Save to disk and delete object in write mode
+            data[:] = _data[:]
+            del data, _data  # Save to disk and delete object in write mode
             self.data = np.memmap(self._get_fname(_fname), dtype=self._dtype, shape=self._shape, mode='r')  # Open in read mode
         elif self._type == 'hdf5':
             pass
@@ -64,6 +65,7 @@ class Table(object):
             pass
         else:
             raise NotImplementedError("Unknown type!")
+        self.data_init = True
 
     def __del__(self):
         del self.data
@@ -101,9 +103,12 @@ class PartitionedTable(object):
         return out
 
     def save(self, _fname):
+        pickle.dump({'num_partitions': self.num_partitions}, open(_fname+".metadata", "wb"))
         for idx in range(self.num_partitions):
             self.data[idx].save(_fname + ".{}".format(idx))
 
     def load(self, _fname):
+        self.num_partitions = pickle.load(open(_fname+".metadata", "rb"))['num_partitions']
         for idx in range(self.num_partitions):
             self.data[idx].load(_fname + ".{}".format(idx))
+        self.data_init = True
