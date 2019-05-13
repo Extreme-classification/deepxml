@@ -104,14 +104,15 @@ class ParallelSparseLinear(nn.Module):
         super(ParallelSparseLinear, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
+        self._output_sizes = []
         self.sparse = sparse
         self.devices = devices
         if devices is None:
             self.devices = ["cuda:{}".format(idx) for idx in num_partitions]
         self.num_partitions = num_partitions
-        self._num_labels_per_split = [item.size for item in np.array_split(np.arange(self.output_size), self.num_partitions)]
+        self._output_sizes = [item.size for item in np.array_split(np.arange(self.output_size), self.num_partitions)]
         self.classifier = nn.ModuleList()
-        for _, (_output_size, _padding_index, _sparse, _low_rank, _bias, _dev) in enumerate(zip(self._num_labels_per_split, padding_idx, sparse, low_rank, bias, self.devices)):
+        for _, (_output_size, _padding_index, _sparse, _low_rank, _bias, _dev) in enumerate(zip(self._output_sizes, padding_idx, sparse, low_rank, bias, self.devices)):
             self.classifier.append(SparseLinear(
                 self.input_size, _output_size, _padding_index, _sparse, _low_rank, _bias, _dev))
 

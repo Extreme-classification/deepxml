@@ -370,8 +370,12 @@ class ModelBase(object):
         state_dict = torch.load(
             os.path.join(model_dir, model_dir, fname_net))
         # Append Padding classifier if shapes do not match.
+        # Distributed classifier not tested for now
+        _output_size = self.net.classifier.output_size
+        if self.num_clf_partitions > 1:
+            _output_size = self.net.classifier._output_sizes
         self.logger.info(utils.append_padding_classifier(
-            state_dict, self.net.classifier.output_size))
+            state_dict, _output_size))
         self.net.load_state_dict(state_dict)
 
     def purge(self, model_dir):

@@ -37,20 +37,28 @@ def adjust_for_low_rank(state_dict, rank):
     state_dict['classifier.weight'] = V
     state_dict['low_rank_layer.weight'] = U.t()
 
-
-def append_padding_classifier(net, num_labels):
-    _num_labels, dims = net['classifier.weight'].size()
+def append_padding_classifier_one(classifier, num_labels, key_w='classifier.weight', key_b='classifier.bias'):
+    _num_labels, dims = classifier[key_w].size()
     if _num_labels != num_labels:
         status = "Appended padding classifier."
-        _device = net['classifier.weight'].device
-        net['classifier.weight'] = torch.cat(
-            [net['classifier.weight'], torch.zeros(1, dims).to(_device)], 0)
-        net['classifier.bias'] = torch.cat(
-            [net['classifier.bias'], -1e5*torch.ones(1, 1).to(_device)], 0)
+        _device = classifier[key_w].device
+        classifier[key_w] = torch.cat(
+            [classifier[key_w], torch.zeros(1, dims).to(_device)], 0)
+        classifier[key_b] = torch.cat(
+            [classifier[key_b], -1e5*torch.ones(1, 1).to(_device)], 0)
     else:
         status = "Shapes are fine, Not padding again."
     return status
 
+def append_padding_classifier(net, num_labels):
+    if isinstance(num_labels, list):
+        status = []
+        for idx, item in enumerate(num_labels):
+            status.append(append_padding_classifier_one(net, item, 'classifier.classifier.{}.weight'.format(
+                idx), 'classifier.classifier.{}.bias'.format(idx)))
+        print("Padding not implemented for distributed classifier for now!")
+    else:
+        return append_padding_classifier_one(net, num_labels)
 
 def append_padding_embedding(embeddings):
     """
