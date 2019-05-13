@@ -41,12 +41,12 @@ class HNSW(object):
         self.efS = efS
         self.num_neighbours = num_neighbours
 
-    def fit(self, data):
+    def fit(self, data, print_progress=True):
         self.index.addDataPointBatch(data)
         self.index.createIndex({'M': self.M, 
                                 'indexThreadQty': self.num_threads, 
                                 'efConstruction': self.efC},
-                                print_progress=True
+                                print_progress=print_progress
                             )
 
     def _filter(self, output):
