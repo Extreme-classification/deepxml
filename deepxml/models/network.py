@@ -73,7 +73,7 @@ class DeepXML(nn.Module):
         offset = self.num_clf_partitions if self.label_padding_index is not None else 0
         if self.num_clf_partitions > 1: #Run the distributed version
             #TODO: Label padding index
-            _sparse = [True if self.use_shortlist else False for _ in range(self.num_clf_partitions)]
+            _sparse = True if self.use_shortlist else False
             _low_rank = [self.low_rank for _ in range(self.num_clf_partitions)] 
             _num_labels = self.num_labels + offset # last one is padding index for each partition
             _padding_idx = [None for _ in range(self.num_clf_partitions)]

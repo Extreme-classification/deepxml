@@ -110,6 +110,7 @@ class ParallelSparseLinear(nn.Module):
         if devices is None:
             self.devices = ["cuda:{}".format(idx) for idx in num_partitions]
         self.num_partitions = num_partitions
+        sparse = [sparse]*self.num_partitions
         self._output_sizes = [item.size for item in np.array_split(np.arange(self.output_size), self.num_partitions)]
         self.classifier = nn.ModuleList()
         for _, (_output_size, _padding_index, _sparse, _low_rank, _bias, _dev) in enumerate(zip(self._output_sizes, padding_idx, sparse, low_rank, bias, self.devices)):

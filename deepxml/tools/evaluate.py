@@ -15,14 +15,12 @@ def sigmoid(mat):
     mat.__dict__['data'] = 1/(np.exp(-mat.__dict__['data'])+1.0)
     return mat
 
-
 def normalize(mat):
     mat.__dict__['data'] = np.exp(mat.__dict__['data'])
     _max = mat.max(axis=1).toarray().ravel()
     _max[_max == 0] = 1.0
     _norm = sparse.diags(1.0/_max)
     return _norm.dot(mat).tocsr()
-
 
 def main(targets_file, train_file, predictions_file, A, B, betas, _type):
     _, te_labels, _, _, te_num_labels = data_utils.read_data(targets_file)
