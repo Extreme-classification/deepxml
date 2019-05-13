@@ -27,7 +27,7 @@ def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
         for idx in range(num_graphs):
             _l_indices = data_loader.dataset.partitioner.get_indices(idx)
             out.append(utils.get_label_embeddings(
-                doc_embeddings, data_loader.dataset.labels[_l_indices]))
+                doc_embeddings, data_loader.dataset.labels[:, _l_indices]))
         return out
 
 def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
