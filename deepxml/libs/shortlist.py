@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import multiprocessing as mp
 import libs.ANN as ANN
+import _pickle as pickle
 
 
 class Shortlist(object):
@@ -61,15 +62,18 @@ class ParallelShortlist(object):
         for _ in range(num_graphs):
             self.index.append(Shortlist(method, num_neighbours, M, efC, efS, num_threads))
 
-    def train_one(self, data, idx):
-        self.index[idx].train(data)
+    # def train_one(self, data, data):
+    #     self.index[idx].train(data)
 
     def train(self, data):
-        with mp.Pool(self.num_graphs) as p:
-            p.map(self.train_one, data)
+        # Sequential for now; Shit happends in parallel
+        for idx in range(self.num_graphs):
+            self.index[idx].train(data[idx])
+        # with mp.Pool(self.num_graphs) as p:
+        #     p.starmap(self.train_one, zip(print(self.num_graphs), data))
         # processes = []
         # for idx in range(0, self.num_graphs):
-        #     p = mp.Process(target=self.index[idx].train, args=(data[idx],))
+        #     p = mp.Process(target=self.train_one, args=(data, idx))
         #     processes.append(p)
         #     p.start()       
         # for process in processes:
@@ -88,10 +92,12 @@ class ParallelShortlist(object):
         return indices, distances
 
     def save(self, fname):
+        pickle.dump({'num_graphs': self.num_graphs}, open(fname+".metadata", "wb"))
         for idx in range(self.num_graphs):
             self.index[idx].save(fname+".{}".format(idx))
 
     def load(self, fname):
+        self.num_graphs = pickle.load(open(fname+".metadata", "rb"))['num_graphs']
         for idx in range(self.num_graphs):
             self.index[idx].load(fname+".{}".format(idx))
 
