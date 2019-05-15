@@ -117,8 +117,8 @@ class ModelBase(object):
 
     def _compute_loss_one(self, _pred, _true):
         # Compute loss for one classifier
-        return self.criterion(
-            _pred, self._to_device(_true))
+        _true = _true.to(_pred.get_device())
+        return self.criterion(_pred, _true).to(self.devices[-1])
 
     def _compute_loss(self, out_ans, batch_data, weightage=1.0):
         # Support loss for parallel classifier as well

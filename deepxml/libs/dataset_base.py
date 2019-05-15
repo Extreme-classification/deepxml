@@ -25,12 +25,12 @@ class DatasetBase(torch.utils.data.Dataset):
         self.data_dir = data_dir
         self.nbn_rel = nbn_rel #non-binary label relevance
         fname = os.path.join(data_dir, fname)
+        self.mode = mode
         self.features, self.labels, self.num_samples, \
             self.num_features, self.num_labels = self.load_data(fname, data)
         self._split = None
         self.num_clf_partitions = num_clf_partitions
         self._sel_labels(label_indices)
-        self.mode = mode
         self.model_dir = model_dir
         self._ext_head = None
         self.data_dir = data_dir
