@@ -40,7 +40,7 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
         # train and update shortlist
         label_embeddings = compute_label_embeddings(
             doc_embeddings, data_loader, num_graphs)
-        if num_centroids != 1: # Multiple centroid not supported for multiple-graphs
+        if num_centroids != 1 and data_loader.dataset._ext_head is not None: # Multiple centroid not supported for multiple-graphs
             extra_label_embeddings = get_multiple_centroids(
                 data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels)
             label_embeddings = np.vstack([label_embeddings, extra_label_embeddings])
@@ -52,7 +52,7 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
         # train and don't get shortlist
         label_embeddings = compute_label_embeddings(
             doc_embeddings, data_loader, num_graphs)
-        if num_centroids != 1: # Multiple centroid not supported for multiple-graphs
+        if num_centroids != 1 and data_loader.dataset._ext_head is not None: # Multiple centroid not supported for multiple-graphs
             print("Clustering labels!")
             extra_label_embeddings = get_multiple_centroids(
                 data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels)
