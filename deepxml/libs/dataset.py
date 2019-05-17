@@ -54,9 +54,6 @@ class DatasetDense(DatasetBase):
                          label_indices, keep_invalid, num_centroids, nbn_rel, num_clf_partitions)
         self._split = None
         self.feature_type = 'dense'
-        self._ext_head = None
-        # if not keep_invalid: #Already done 
-        #     self._process_labels(model_dir)
         self.partitioner = None
         if self.mode == 'train':
             self._remove_samples_wo_features_and_labels()
@@ -168,7 +165,6 @@ class DatasetSparse(DatasetBase):
         super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
                          label_indices, keep_invalid, num_centroids, nbn_rel, num_clf_partitions)
         self._split = None
-        self._ext_head = None
         self.partitioner = None
         if self.mode == 'train':
             self._remove_samples_wo_features_and_labels()
