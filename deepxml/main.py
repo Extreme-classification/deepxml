@@ -173,8 +173,9 @@ def inference(model, params):
                                      feature_indices=params.feature_indices,
                                      label_indices=params.label_indices)
     # Real number of labels
-    num_samples, _, num_labels = utils.get_data_header(
-        os.path.join(params.data_dir, params.dataset, params.ts_fname))
+    key = ("n_{}_samples".format(params.ts_fname.split(".")[0]), 'n_labels')
+    num_samples, num_labels = utils.get_data_stats(
+        os.path.join(params.data_dir, params.dataset, 'stats.json'), key)
     label_mapping = None
     if not params.keep_invalid:
         _split = None

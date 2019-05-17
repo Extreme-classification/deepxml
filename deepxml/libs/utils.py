@@ -80,15 +80,18 @@ def get_scores(out_ans, batch_dist, beta):
     return beta*torch.sigmoid(out_ans) + (1-beta)*torch.sigmoid(1-batch_dist)
 
 
-def get_data_header(fname):
-    with open(fname, 'r') as fp:
-        header = fp.readline()
-        try:
-            num_samples, num_features, num_labels = header.split(" ")
-        except Exception as e:
-            print("Error: FTF")
-            exit()
-    return int(num_samples), int(num_features), int(num_labels)
+def get_data_stats(fname, key):
+    def get(fname, key):
+        with open(fname, 'r') as fp:
+            val = json.load(fp)[key]
+        return val
+    if isinstance(key, tuple):
+        out = []
+        for _key in key:
+            out.append(get(fname, _key))
+        return tuple(out)
+    else:
+        return get(fname, key)
 
 
 def map_to_original(mat, mapping, _shape, axis=1):
