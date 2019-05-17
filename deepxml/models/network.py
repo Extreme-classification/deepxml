@@ -78,7 +78,7 @@ class DeepXML(nn.Module):
             _num_labels = self.num_labels + offset # last one is padding index for each partition
             _padding_idx = [None for _ in range(self.num_clf_partitions)]
             _bias = [True for _ in range(self.num_clf_partitions)]
-            _clf_devices = ["cuda:0", "cuda:0"]
+            _clf_devices = ["cuda:{}".format(idx) for idx in range(self.num_clf_partitions)]
             self.classifier = sparse_linear.ParallelSparseLinear(input_size=self.repr_dims if self.low_rank == -1 else self.low_rank,
                                                         output_size = _num_labels, 
                                                         sparse=_sparse,
