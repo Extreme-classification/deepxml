@@ -13,6 +13,8 @@ def get_multiple_centroids(_ext_indices, num_centroids, features, labels):
 
 
 def get_and_update_shortlist(document_embeddings, shorty, data_loader, _save_mem=True):
+    if not hasattr(shorty, 'num_graphs'):
+        _save_mem = False
     if _save_mem: #Fetch one-by-one; save to disk and delete
         for idx in range(shorty.num_graphs):
             short, distances  = shorty.query(document_embeddings, idx)
