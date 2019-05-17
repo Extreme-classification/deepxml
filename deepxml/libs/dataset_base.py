@@ -202,12 +202,13 @@ class DatasetBase(torch.utils.data.Dataset):
         else:
             raise NotImplementedError("Unknown mode!")
 
-    def update_shortlist(self, shortlist, dist, fname='shortlist'):
+    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
         """
             Update label shortlist for each instance
         """
-        self.shortlist.create(shortlist, os.path.join(self.model_dir, fname+'shortlist.indices'))
-        self.dist.create(dist, os.path.join(self.model_dir, fname+'shortlist.dist'))
+        prefix = 'train' if self.mode == 'train' else 'test'
+        self.shortlist.create(shortlist, os.path.join(self.model_dir, '{}.{}.shortlist.indices'.format(fname, prefix)), idx)
+        self.dist.create(dist, os.path.join(self.model_dir, '{}.{}.shortlist.dist'.format(fname, prefix)), idx)
         del dist, shortlist
 
     def save_shortlist(self, fname):
