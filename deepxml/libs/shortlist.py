@@ -34,8 +34,8 @@ class Shortlist(object):
 
     def train(self, data):
         self.index.fit(data)
-        
-    def query(self, data):
+
+    def query(self, data, *args, **kwargs):
         indices, distances = self.index.predict(data)
         return indices, distances
 
@@ -62,33 +62,26 @@ class ParallelShortlist(object):
         for _ in range(num_graphs):
             self.index.append(Shortlist(method, num_neighbours, M, efC, efS, num_threads))
 
-    # def train_one(self, data, data):
-    #     self.index[idx].train(data)
-
     def train(self, data):
         # Sequential for now; Shit happends in parallel
         for idx in range(self.num_graphs):
             self.index[idx].train(data[idx])
-        # with mp.Pool(self.num_graphs) as p:
-        #     p.starmap(self.train_one, zip(print(self.num_graphs), data))
-        # processes = []
-        # for idx in range(0, self.num_graphs):
-        #     p = mp.Process(target=self.train_one, args=(data, idx))
-        #     processes.append(p)
-        #     p.start()       
-        # for process in processes:
-        #     process.join()
 
-        
-    def query(self, data):
+    def _query(self, idx, data):    
+        return self.index[idx].query(data)
+    
+    def query(self, data, idx=-1):
         # Sequential for now
         # Parallelize with return values?
         # Data is same for everyone 
-        indices, distances = [], []
-        for idx in range(self.num_graphs):
-            _indices, _distances = self.index[idx].query(data)
-            indices.append(_indices)
-            distances.append(_distances)
+        if idx != -1: # Query from particular graph only
+            indices, distances = self._query(idx, data)
+        else:
+            indices, distances = [], []
+            for idx in range(self.num_graphs):
+                _indices, _distances = self._query(idx, data)
+                indices.append(_indices)
+                distances.append(_distances)
         return indices, distances
 
     def save(self, fname):

@@ -12,9 +12,16 @@ def get_multiple_centroids(_ext_indices, num_centroids, features, labels):
     return _cluster_obj.predict()
 
 
-def get_shortlist(document_embeddings, shorty):
-    short, distances = shorty.query(document_embeddings)
-    return short, distances
+def get_and_update_shortlist(document_embeddings, shorty, data_loader, _save_mem=True):
+    if _save_mem: #Fetch one-by-one; save to disk and delete
+        for idx in range(shorty.num_graphs):
+            short, distances  = shorty.query(document_embeddings, idx)
+            data_loader.dataset.update_shortlist(short, distances, idx=idx)
+        data_loader.dataset.shortlist.set_status(True)
+        data_loader.dataset.dist.set_status(True)
+    else: #Fetch shortlist at once
+        short, distances = shorty.query(document_embeddings)
+        data_loader.dataset.update_shortlist(short, distances)
 
 
 def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
@@ -29,6 +36,7 @@ def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
             out.append(utils.get_label_embeddings(
                 doc_embeddings, data_loader.dataset.labels[:, _l_indices]))
         return out
+
 
 def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
     # 0: train and update, 1: train, 2: update
@@ -46,8 +54,7 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
             label_embeddings = np.vstack([label_embeddings, extra_label_embeddings])
         # label_embeddings = normalize(label_embeddings, copy=False)
         shorty.train(label_embeddings)
-        short, dist = get_shortlist(doc_embeddings, shorty)
-        data_loader.dataset.update_shortlist(short, dist)
+        get_and_update_shortlist(doc_embeddings, shorty, data_loader)
     elif flag == 1:
         # train and don't get shortlist
         label_embeddings = compute_label_embeddings(
@@ -62,6 +69,5 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
         shorty.train(label_embeddings)
     else:
         # get shortlist
-        short, dist = get_shortlist(doc_embeddings, shorty)
-        data_loader.dataset.update_shortlist(short, dist)
+        get_and_update_shortlist(doc_embeddings, shorty, data_loader)
     return doc_embeddings
