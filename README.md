@@ -12,8 +12,16 @@ Implementation of DeepXML
 - [x] Remove logit
 - [x] Post-processing
 - [x] Integrate xclib
-- [ ] Fix run file
+- [x] Fix run file
+- [x] Different class for features/labels
+- [x] Different class for shortlist
 - [ ] Parameters from json?
+- [ ] Remove dependence on labels in prediction?/get_document_embeddings?
+- [ ] Shortlist with NS
+- [ ] Support for dynamic shortlist
+- [ ] Support for on-disk document embeddings (i.e. a large number of documents)
+- [ ] Support for novel documents i.e. w/o saving shortlist
+
 
 # Testing
 

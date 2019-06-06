@@ -326,16 +326,18 @@ class ModelBase(object):
         torch.cuda.empty_cache()
         return embeddings.numpy()
 
-    def get_document_embeddings(self, data_dir, dataset, fname_features, 
+    def get_document_embeddings(self, data_dir, dataset, fname_features, fname_labels=None,
                                 data=None, keep_invalid=False, batch_size=128, 
                                 num_workers=4, data_loader=None, normalize_features=True, 
                                 feature_indices=None):
         """
             Get document embeddings
         """
+        print(fname_features, fname_labels)
         if data_loader is None:
             dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                            fname_features=fname_features,
+                                           fname_labels=fname_labels,
                                            data=data,
                                            mode='predict',
                                            keep_invalid=keep_invalid,

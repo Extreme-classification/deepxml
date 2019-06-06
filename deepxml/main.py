@@ -104,7 +104,8 @@ def get_document_embeddings(model, params, _save=True):
     doc_embeddings = model.get_document_embeddings(data_dir=params.data_dir,
                                                    dataset=params.dataset,
                                                    fname_features=params.ts_feat_fname,
-                                                   data=None,
+                                                   fname_labels=params.ts_label_fname,
+                                                   data={'X': None, 'Y': None},
                                                    keep_invalid=params.keep_invalid,
                                                    batch_size=params.batch_size,
                                                    normalize_features=params.normalize,
@@ -330,7 +331,7 @@ def main(params):
             model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
-        if params.ts_fname == "0":
+        if params.tr_feat_fname == "0":
             get_word_embeddings(model, params)
             get_classifier_wts(model, params)
         else:

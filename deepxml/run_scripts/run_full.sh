@@ -144,27 +144,25 @@ fi
 docs=("trn" "tst")
 cwd=$(pwd)
 
-./run_base.sh "train" $dataset $work_dir $dir_version/$version "${TRAIN_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$version "${PREDICT_PARAMS}"
-exit()
-cp $work_dir/models/deep-xml/${dataset}/v_${dir_version}/${version}/${MODEL_NAME}_network.pkl $work_dir/models/deep-xml/${dataset}/v_${dir_version}/${version}/${MODEL_NAME}_network_bak.pkl
+# ./run_base.sh "train" $dataset $work_dir $dir_version/$version "${TRAIN_PARAMS}"
+# ./run_base.sh "predict" $dataset $work_dir $dir_version/$version "${PREDICT_PARAMS}"
 
-if [ $use_post -eq 1 ]
-then
-    echo "Retraining with shortlist.."
-   ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$version "${TRAIN_PARAMS_post}"
-fi
+# if [ $use_post -eq 1 ]
+# then
+#     echo "Retraining with shortlist.."
+#    ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$version "${TRAIN_PARAMS_post}"
+# fi
 
-./run_base.sh "predict" $dataset $work_dir $dir_version/$version "${PREDICT_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_fname 0 --out_fname export/wrd_emb"
-if [ $version -gt -1 ]
-then
-    echo "Generating Head Embeddings"
-    ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$version "export/wrd_emb.npy" $version $embedding_dims
-fi
+# ./run_base.sh "predict" $dataset $work_dir $dir_version/$version "${PREDICT_PARAMS}"
+# ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_fname 0 --out_fname export/wrd_emb"
+# if [ $version -gt -1 ]
+# then
+#     echo "Generating Head Embeddings"
+#     ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$version "export/wrd_emb.npy" $version $embedding_dims
+# fi
 
 for doc in ${docs[*]} 
 do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --out_fname export/${doc}_emb"
+    ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
 done
