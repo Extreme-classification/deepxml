@@ -20,7 +20,6 @@ def get_and_update_shortlist(document_embeddings, shorty, data_loader, _save_mem
             short, distances  = shorty.query(document_embeddings, idx)
             data_loader.dataset.update_shortlist(short, distances, idx=idx)
         data_loader.dataset.shortlist.set_status(True)
-        data_loader.dataset.dist.set_status(True)
     else: #Fetch shortlist at once
         short, distances = shorty.query(document_embeddings)
         data_loader.dataset.update_shortlist(short, distances)
@@ -34,9 +33,10 @@ def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
     else: 
         out = []
         for idx in range(num_graphs):
-            _l_indices = data_loader.dataset.partitioner.get_indices(idx)
+            _l_indices = data_loader.dataset.shortlist.get_partition_indices(idx)
+            #TODO: See if there is some better way to handle this
             out.append(utils.get_label_embeddings(
-                doc_embeddings, data_loader.dataset.labels[:, _l_indices]))
+                doc_embeddings, data_loader.dataset.labels.Y[:, _l_indices]))
         return out
 
 
