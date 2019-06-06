@@ -1,7 +1,17 @@
-import sklearn.preprocessing.normalize as scale
+from sklearn.preprocessing import normalize as scale
 import numpy as np
 import _pickle as pickle
 from xclib.data import data_utils
+import os
+
+
+def construct(data_dir, fname, Y=None, normalize=False, _type='sparse'):
+    if _type == 'sparse':
+        return SparseLabels(data_dir, fname, Y, normalize)
+    elif _type == 'dense':
+        return DenseLabels(data_dir, fname, Y, normalize)
+    else:
+        raise NotImplementedError("Unknown label type")
 
 
 class LabelsBase(object):
@@ -22,27 +32,34 @@ class LabelsBase(object):
     def _select_labels(self, indices):
         self.Y = self.Y[:, indices]
 
+    def normalize(self, norm='max', copy=False):
+        self.Y = scale(self.Y, copy=copy, norm=norm)
+
     def load(self, data_dir, fname, Y):
+        fname = os.path.join(data_dir, fname)
         if Y is not None:
             return Y
         else:
             if fname.lower().endswith('.pkl'):
                 return pickle.load(open(fname, 'rb'))['Y']
             elif fname.lower().endswith('.txt'):
-                return data_utils.read_sparse_file(fname, dtype=np.float32)
+                return data_utils.read_sparse_file(fname, dtype=np.float32, force_header=True)
             else:
                 raise NotImplementedError("Unknown file extension")
 
     def get_invalid(self, axis=0):
-        return np.where(self.frequency(axis)==0)[1]
+        return np.where(self.frequency(axis)==0)[0]
 
     def get_valid(self, axis=0):
-        return np.where(self.frequency(axis)>0)[1]
+        return np.where(self.frequency(axis)>0)[0]
 
     def remove_invalid(self, axis=0):
         indices = self.get_valid(axis)
         self.index_select(indices)
         return indices
+
+    def binarize(self):
+        self.Y.data[:] = 1.0
 
     def index_select(self, indices, axis=1, fname=None):
         """
@@ -60,6 +77,12 @@ class LabelsBase(object):
     def frequency(self, axis=0):
         return np.array(self.Y.astype(np.bool).sum(axis=axis)).ravel()
 
+    def transpose(self):
+        return self.Y.transpose()
+
+    def shape(self):
+        return (self.num_instances, self.num_labels)
+
     def __getitem__(self, index):
         return self.Y[index]
 
@@ -75,9 +98,6 @@ class DenseLabels(LabelsBase):
     """
     def __init__(self, data_dir, fname, Y=None, normalize=False):
         super().__init__(data_dir, fname, Y)
-
-    def normalize(self, norm='l2', copy=False):
-        self.Y = scale(self.Y, copy=copy, norm=norm)
 
     def __getitem__(self, index):
         return np.array(super().__getitem__(index).todense(),
@@ -95,11 +115,8 @@ class SparseLabels(LabelsBase):
     def __init__(self, data_dir, fname, Y=None, normalize=False):
         super().__init__(data_dir, fname, Y)
 
-    def normalize(self, norm='l2', copy=False):
-        self.Y = scale(self.Y, copy=copy, norm=norm)
-
     def __getitem__(self, index):
-        y = self.Y[index].indices
-        w = self.Y[index].data
+        y = self.Y[index].indices.tolist()
+        w = self.Y[index].data.tolist()
         return y, w
 

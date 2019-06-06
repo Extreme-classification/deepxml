@@ -8,129 +8,69 @@ from sklearn.preprocessing import normalize
 from .dataset_base import DatasetBase
 import xclib.data.data_utils as data_utils
 from .dist_utils import Partitioner
+import operator
+from .lookup import Table, PartitionedTable
+from .shortlist import ShortlistHandler
 
 
-def construct_dataset(data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
-                      normalize_features=True, keep_invalid=False, num_centroids=1, 
-                      feature_type='sparse', nbn_rel=False, num_clf_partitions=1, **kwargs):
-    feature_indices, label_indices = None, None 
-    # FIXME: See if this can be done efficently
-    if 'feature_indices' in kwargs:
-        feature_indices = kwargs['feature_indices']
-    if 'label_indices' in kwargs:
-        label_indices = kwargs['label_indices']
-     # Construct dataset for dense data
-    if feature_type == 'dense':
-        return DatasetDense(data_dir, fname, data, model_dir, mode, 
-                            size_shortlist, feature_indices, label_indices, 
-                            normalize_features, keep_invalid, num_centroids, 
-                            nbn_rel, num_clf_partitions)
-    elif feature_type == 'sparse':
-       # Construct dataset for sparse data
-        return DatasetSparse(data_dir, fname, data, model_dir, mode, 
-                            size_shortlist, feature_indices, label_indices, 
-                            normalize_features, keep_invalid, num_centroids, 
-                            nbn_rel, num_clf_partitions)
+def construct_dataset(data_dir, fname_features, fname_labels, data=None, model_dir='',
+                      mode='train', size_shortlist=-1, normalize_features=True,
+                      normalize_labels=True, keep_invalid=False, num_centroids=1,
+                      feature_type='sparse', num_clf_partitions=1, feature_indices=None,
+                      label_indices=None):
+    if size_shortlist == -1:
+        return DatasetDense(data_dir, fname_features, fname_labels, data, model_dir, mode,
+                            feature_indices, label_indices, keep_invalid, normalize_features,
+                            normalize_labels, num_clf_partitions, feature_type)
     else:
-        raise NotImplementedError(
-            "Feature type: {}, not yet supported.".format(feature_type))
+       # Construct dataset for sparse data
+        return DatasetSparse(data_dir, fname_features, fname_labels, data, model_dir,
+                             mode, feature_indices, label_indices, keep_invalid,
+                             normalize_features, normalize_labels, num_clf_partitions,
+                             size_shortlist, num_centroids, feature_type)
 
 
 class DatasetDense(DatasetBase):
     """
-        Dataset to load and use dense XML-Datasets
+        Dataset to load and use XML-Datasets with full output space only
     """
 
-    def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', 
-                 size_shortlist=-1, feature_indices=None, label_indices=None, 
-                 normalize_features=True, keep_invalid=False, num_centroids=1, 
-                 nbn_rel=False, num_clf_partitions=1):
+    def __init__(self, data_dir, fname_features, fname_labels, data=None, model_dir='',
+                 mode='train', feature_indices=None, label_indices=None, keep_invalid=False,
+                 normalize_features=True, normalize_labels=False, num_clf_partitions=1, 
+                 feature_type='sparse', label_type='dense'):
         """
             Expects 'libsvm' format with header
             Args:
                 data_file: str: File name for the set
         """
-        super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
-                         label_indices, keep_invalid, num_centroids, nbn_rel, num_clf_partitions)
-        self._split = None
-        self.feature_type = 'dense'
-        self.partitioner = None
+        super().__init__(data_dir, fname_features, fname_labels, data, model_dir, 
+                         mode, feature_indices, label_indices, keep_invalid, 
+                         normalize_features, normalize_labels, feature_type, label_type)
+        if not keep_invalid:
+            # Remove labels w/o any positive instance
+            self._process_labels(model_dir)
         if self.mode == 'train':
+            # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
+        self.feature_type = feature_type
+        self.partitioner = None
+        self.num_clf_partitions = num_clf_partitions
+        if self.mode == 'train':
             if self.num_clf_partitions > 1:
                 self.partitioner = Partitioner(
                     self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
-                self.partitioner.save(os.path.join(self.model_dir, 'partitionar.pkl'))
+                self.partitioner.save(os.path.join(
+                    self.model_dir, 'partitionar.pkl'))
         else:
             if self.num_clf_partitions > 1:
                 self.partitioner = Partitioner(
                     self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
-                self.partitioner.load(os.path.join(self.model_dir, 'partitionar.pkl'))
+                self.partitioner.load(os.path.join(
+                    self.model_dir, 'partitionar.pkl'))
+
+        #TODO Take care of this select and padding index
         self.label_padding_index = self.num_labels
-        self._sel_features(feature_indices)
-        if normalize_features:
-            self.features = self._normalize(self.features)
-
-    def _sel_features(self, feature_indices):
-        """
-            Train only for given features
-        """
-        def _get_split_id(fname):
-            idx = fname.split("_")[-1].split(".")[0]
-            return idx
-        if feature_indices is not None:
-            self._split = _get_split_id(feature_indices)
-            feature_indices = np.loadtxt(feature_indices, dtype=np.int32)
-            self.features = self.features[:, feature_indices]
-            self.num_samples, self.num_features = self.features.shape
-
-    def _normalize(self, data):
-        return normalize(data, copy=False)
-
-    def _remove_samples_wo_features_and_labels(self):
-        """
-            Remove instances if they don't have any feature or label
-        """
-        def _compute_freq(data):
-            return np.array(data.sum(axis=1)).ravel()
-        freq = _compute_freq(self.features)
-        indices_feat = np.where(freq > 0)[0]
-        freq = _compute_freq(self.labels.astype(np.bool))
-        indices_labels = np.where(freq > 0)[0]
-        indices = np.intersect1d(indices_feat, indices_labels)
-        self.features = self.features[indices]
-        self.labels = self.labels[indices]
-        self.num_samples = indices.size
-
-    def _get_sl(self, index):
-        """
-            Get data for given index with shortlist
-        """
-        pos_labels = self.labels[index, :].indices.tolist()
-        if self.shortlist.data is not None:
-            shortlist = self.shortlist.query(index).tolist()
-            dist = self.dist.query(index).tolist()
-            # Remap to original labels if multiple centroids are used
-            if self.num_centroids != 1:
-                shortlist, dist = self._remap_multiple_centroids(
-                    shortlist, dist)
-            shortlist, labels_mask, dist = self._adjust_shortlist(
-                pos_labels, shortlist, dist)
-        else:
-            shortlist = [0]*self.size_shortlist
-            labels_mask = [0]*self.size_shortlist
-            dist = [0]*self.size_shortlist
-        return self.features[index], shortlist, labels_mask, dist
-
-    def _get_full(self, index):
-        """
-            Get data for given index
-        """
-        lb = np.array(self.labels[index, :].todense(),
-                      dtype=np.float32).reshape(self.num_labels)
-        if self.partitioner is not None: #Split if required
-            lb = self.partitioner.split(lb)
-        return self.features[index], lb
 
     def __getitem__(self, index):
         """
@@ -142,151 +82,121 @@ class DatasetDense(DatasetBase):
                 labels: : numpy array
 
         """
-        if self.use_shortlist:
-            return self._get_sl(index)
-        else:
-            return self._get_full(index)
+        x = self.features[index]
+        y = self.labels[index]
+        if self.partitioner is not None:  # Split if required
+            y = self.partitioner.split(y)
+        return x, y
 
 
 class DatasetSparse(DatasetBase):
     """
-        Dataset to load and use XML-Dataset with sparse features
+        Dataset to load and use XML-Dataset with shortlist
     """
 
-    def __init__(self, data_dir, fname, data=None, model_dir='', mode='train',
-                 size_shortlist=-1, feature_indices=None, label_indices=None,
-                 normalize_features=True, keep_invalid=False, num_centroids=1, 
-                 nbn_rel=False, num_clf_partitions=1):
+    def __init__(self, data_dir, fname_features, fname_labels, data=None, model_dir='',
+                 mode='train', feature_indices=None, label_indices=None, keep_invalid=False,
+                 normalize_features=True, normalize_labels=False, num_clf_partitions=1,
+                 size_shortlist=-1, num_centroids=1, feature_type='sparse', label_type='sparse', 
+                 shortlist_in_memory=True):
         """
             Expects 'libsvm' format with header
             Args:
                 data_file: str: File name for the set
         """
-        super().__init__(data_dir, fname, data, model_dir, mode, size_shortlist,
-                         label_indices, keep_invalid, num_centroids, nbn_rel, num_clf_partitions)
-        self._split = None
-        self.partitioner = None
+        super().__init__(data_dir, fname_features, fname_labels, data, model_dir, mode, 
+                         feature_indices, label_indices, keep_invalid, normalize_features, 
+                         normalize_labels, feature_type, label_type)
+        self.feature_type = feature_type
+        self.num_centroids = num_centroids
+        self.num_clf_partitions = num_clf_partitions
+        self.shortlist_in_memory = shortlist_in_memory
+        self.size_shortlist = size_shortlist
+        self.multiple_cent_mapping = None
+        if not keep_invalid:
+            # Remove labels w/o any positive instance
+            self._process_labels(model_dir)
         if self.mode == 'train':
+            # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
-            if self.num_clf_partitions > 1:
-                self.partitioner = Partitioner(
-                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
-                self.partitioner.save(os.path.join(self.model_dir, 'partitionar.pkl'))
-        else:
-            if self.num_clf_partitions > 1:
-                self.partitioner = Partitioner(
-                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
-                self.partitioner.load(os.path.join(self.model_dir, 'partitionar.pkl'))
+        self.shortlist = ShortlistHandler(self.num_labels, model_dir, num_clf_partitions, 
+                                          mode, size_shortlist, num_centroids, 
+                                          shortlist_in_memory, self.multiple_cent_mapping)
+        self.use_shortlist = True if self.size_shortlist > 0 else False
         self.label_padding_index = self.num_labels
-        if self.num_clf_partitions > 1:
-            self.label_padding_index = self.partitioner.get_padding_indices()
-        self._sel_features(feature_indices)
-        if normalize_features:
-            self.features = self._normalize(self.features)
 
-    def _sel_features(self, feature_indices):
+    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
         """
-            Train only for given features
+            Update label shortlist for each instance
         """
-        def _get_split_id(fname):
-            idx = fname.split("_")[-1].split(".")[0]
-            return idx
-        if feature_indices is not None:
-            self._split = _get_split_id(feature_indices)
-            feature_indices = np.loadtxt(feature_indices, dtype=np.int32)
-            self.features = self.features[:, feature_indices]
-            self.num_samples, self.num_features = self.features.shape
+        self.shortlist.update_shortlist(shortlist, dist, fname, idx)
 
-    def _normalize(self, data):
-        return normalize(data, copy=False)
-
-    def _remove_samples_wo_features_and_labels(self):
+    def save_shortlist(self, fname):
         """
-            Remove instances if they don't have any feature or label
+            Save label shortlist and distance for each instance
         """
-        def _compute_freq(data):
-            return np.array(data.sum(axis=1)).ravel()
-        freq = _compute_freq(self.features)
-        indices_feat = np.where(freq > 0)[0]
-        freq = _compute_freq(self.labels.astype(np.bool))
-        indices_labels = np.where(freq > 0)[0]
-        indices = np.intersect1d(indices_feat, indices_labels)
-        self.features = self.features[indices]
-        self.labels = self.labels[indices]
-        self.num_samples = indices.size
+        self.shortlist.save_shortlist(fname)
 
-    def _get_feat(self, index):
-        feat = self.features[index, :].nonzero()[1].tolist()
-        wt = self.features[index, feat].todense().tolist()[0]
-        feat = [item+1 for item in feat]  # Treat idx:0 as Padding
-        return feat, wt
+    def load_shortlist(self, fname):
+        """
+            Load label shortlist and distance for each instance
+        """
+        self.shortlist.load_shortlist(fname)
 
-    def _get_sl_one(self, index):
-        feat, wt = self._get_feat(index)
-        pos_labels = self.labels[index, :].indices.tolist()
-        if self.shortlist.data_init:
-            shortlist = self.shortlist.query(index).tolist()
-            dist = self.dist.query(index).tolist()
-            # Remap to original labels if multiple centroids are used
-            if self.num_centroids != 1:
-                shortlist, dist = self._remap_multiple_centroids(
-                    shortlist, dist)
-            shortlist, labels_mask, dist = self._adjust_shortlist(
-                pos_labels, shortlist, dist)
+    def _get_ext_head(self, freq, threshold):
+        return np.where(freq >= threshold)[0]
+
+    def _process_labels_train(self, data_obj, _ext_head_threshold):
+        """
+            Process labels for train data
+            - Remove labels without any training instance
+            - Handle multiple centroids
+        """
+        super()._process_labels_train(data_obj)
+        data_obj['ext_head'] = None
+        data_obj['multiple_cent_mapping'] = None
+        print("Valid labels after processing: ", self.num_labels)
+        if self.num_centroids != 1:
+            freq = self.labels.frequency()
+            self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
+            self.multiple_cent_mapping = np.arange(self.num_labels)
+            for idx in self._ext_head:
+                self.multiple_cent_mapping = np.append(
+                    self.multiple_cent_mapping, [idx]*self.num_centroids)
+            data_obj['ext_head'] = self._ext_head
+            data_obj['multiple_cent_mapping'] = self.multiple_cent_mapping
+
+    def _process_labels_predict(self, data_obj):
+        """
+            Process labels for predict data
+            - Load stats from train set
+        """
+        super()._process_labels_predict(data_obj)
+        self._ext_head = data_obj['ext_head']
+        self.multiple_cent_mapping = data_obj['multiple_cent_mapping']
+
+    def _process_labels(self, model_dir, _ext_head_threshold=10000):
+        """
+            Process labels to handle labels without any training instance;
+            Handle multiple centroids if required
+        """
+        data_obj = {}
+        fname = os.path.join(
+            model_dir, 'labels_params.pkl' if self._split is None else \
+                "labels_params_split_{}.pkl".format(self._split))
+        if self.mode == 'train':
+            self._process_labels_train(data_obj, _ext_head_threshold)
+            pickle.dump(data_obj, open(fname, 'wb'))
         else:
-            shortlist = [0]*self.size_shortlist
-            labels_mask = [0]*self.size_shortlist
-            dist = [0]*self.size_shortlist
-        return feat, wt, shortlist, labels_mask, dist
+            data_obj = pickle.load(open(fname, 'rb'))
+            self._process_labels_predict(data_obj)
 
-    def _get_sl_partitioned(self, index):
-        feat, wt = self._get_feat(index)
-        pos_labels = self.labels[index, :].indices.tolist()
-        # Partition labels
-        pos_labels = self.partitioner.split_indices(pos_labels)
-        if self.shortlist.data_init:
-            _shortlist = self.shortlist.query(index)
-            _dist = self.dist.query(index)
-            shortlist, labels_mask, dist, rev_map = [], [], [], []
-            # Get shortlist for each classifier
-            for idx in range(self.num_clf_partitions):
-                __shortlist, __labels_mask, __dist = self._adjust_shortlist(
-                    pos_labels[idx], _shortlist[idx].tolist(), _dist[idx].tolist())
-                shortlist.append(__shortlist)
-                labels_mask.append(__labels_mask)
-                dist.append(__dist)
-                rev_map += self.partitioner.map_to_original(__shortlist, idx)
-        else:
-            shortlist, labels_mask, dist = [], [], []
-            for idx in range(self.num_clf_partitions):
-                shortlist.append([0]*self.size_shortlist)
-                labels_mask.append([0]*self.size_shortlist)
-                dist.append([0]*self.size_shortlist)
-            rev_map = [0]*self.size_shortlist*self.num_clf_partitions # Dummy
-        return feat, wt, shortlist, labels_mask, dist, rev_map
-
-
-    def _get_sl(self, index):
+    def get_shortlist(self, index):
         """
             Get data with shortlist for given data index
         """
-        if self.num_clf_partitions > 1:
-            return self._get_sl_partitioned(index)
-        else:
-            return self._get_sl_one(index)
-
-    def _get_full(self, index):
-        """
-            Get data for given data index
-        """
-        feat = self.features[index, :].nonzero()[1].tolist()
-        wt = self.features[index, feat].todense().tolist()[0]
-        feat = [item+1 for item in feat]  # Treat idx:0 as Padding
-        lb = np.array(self.labels[index, :].todense(),
-                      dtype=np.float32).reshape(self.num_labels)
-        if self.partitioner is not None: #Split if required
-            lb = self.partitioner.split(lb)
-        return feat, wt, lb
+        pos_labels, _ =  self.labels[index]
+        return self.shortlist.get_shortlist(index, pos_labels)
 
     def __getitem__(self, index):
         """
@@ -294,11 +204,9 @@ class DatasetSparse(DatasetBase):
             Args:
                 index: for this sample
             Returns:
-                features: : non zero entries
-                labels: : numpy array
-
+                x: 
+                y: 
         """
-        if self.use_shortlist:
-            return self._get_sl(index)
-        else:
-            return self._get_full(index)
+        x = self.features[index]
+        y = self.get_shortlist(index)
+        return x, y

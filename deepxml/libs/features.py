@@ -1,7 +1,19 @@
-import sklearn.preprocessing.normalize as scale
+from sklearn.preprocessing import normalize as scale
 import numpy as np
 import _pickle as pickle
 from xclib.data import data_utils
+import os
+
+
+def construct(data_dir, fname, X=None, normalize=False, _type='sparse'):
+    if _type == 'sparse':
+        return SparseFeatures(data_dir, fname, X, normalize)
+    elif _type == 'dense':
+        return DenseFeatures(data_dir, fname, X, normalize)
+    elif _type == 'sequential':
+        return SequentialFeatures(data_dir, fname, X)
+    else:
+        raise NotImplementedError("Unknown feature type")
 
 
 class FeaturesBase(object):
@@ -15,6 +27,20 @@ class FeaturesBase(object):
     def __init__(self, data_dir, fname, X=None):
         self.X = self.load(data_dir, fname, X)
         self.num_instances, self.num_features = self.X.shape
+
+    def frequency(self, axis=0):
+        return np.array(self.X.sum(axis=axis)).ravel()
+
+    def get_invalid(self, axis=0):
+        return np.where(self.frequency(axis)==0)[0]
+
+    def get_valid(self, axis=0):
+        return np.where(self.frequency(axis)>0)[0]
+
+    def remove_invalid(self, axis=0):
+        indices = self.get_valid(axis)
+        self.index_select(indices)
+        return indices
 
     def _select_instances(self, indices):
         self.X = self.X[indices]
@@ -37,13 +63,14 @@ class FeaturesBase(object):
         self.num_instances, self.num_features = self.X.shape
 
     def load(self, data_dir, fname, X):
+        fname = os.path.join(data_dir, fname)
         if X is not None:
             return X
         else:
             if fname.lower().endswith('.pkl'):
                 return pickle.load(open(fname, 'rb'))['X']
             elif fname.lower().endswith('.txt'):
-                return data_utils.read_sparse_file(fname, dtype=np.float32)
+                return data_utils.read_sparse_file(fname, dtype=np.float32, force_header=True)
             else:
                 raise NotImplementedError("Unknown file extension")
 
@@ -82,6 +109,8 @@ class SparseFeatures(FeaturesBase):
     """
     def __init__(self, data_dir, fname, X=None, normalize=False):
         super().__init__(data_dir, fname, X)
+        if normalize:
+            self.normalize()
 
     def normalize(self, norm='l2', copy=False):
         self.X = scale(self.X, copy=copy, norm=norm)
@@ -93,9 +122,8 @@ class SparseFeatures(FeaturesBase):
         return np.array(self.X.astype(np.bool).sum(axis=axis)).ravel()
 
     def __getitem__(self, index):
-        x = self.X[index].indices
-        w = self.X[index].data
-        x = list(map(lambda item: item+1, x))  # Treat idx:0 as Padding
+        x = list(map(lambda item: item+1, self.X[index, :].indices)) # Treat idx:0 as Padding
+        w = self.X[index, :].data.tolist()
         return x, w
 
 
