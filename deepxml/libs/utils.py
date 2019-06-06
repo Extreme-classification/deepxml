@@ -80,6 +80,12 @@ def get_scores(out_ans, batch_dist, beta):
     return beta*torch.sigmoid(out_ans) + (1-beta)*torch.sigmoid(1-batch_dist)
 
 
+def get_header(fname):
+    with open(fname, 'r') as fp:
+        line = fp.readline()
+    return list(map(int, line.split(" ")))
+
+
 def get_data_stats(fname, key):
     def get(fname, key):
         with open(fname, 'r') as fp:

@@ -8,6 +8,8 @@ from sklearn.preprocessing import normalize
 import xclib.data.data_utils as data_utils
 import operator
 from .lookup import Table, PartitionedTable
+from .features import construct as construct_f
+from .labels import construct as construct_l
 
 
 class DatasetBase(torch.utils.data.Dataset):
@@ -15,38 +17,58 @@ class DatasetBase(torch.utils.data.Dataset):
         Dataset to load and use XML-Datasets
     """
 
-    def __init__(self, data_dir, fname, data=None, model_dir='', mode='train', size_shortlist=-1,
-                label_indices=None, keep_invalid=False, num_centroids=1, nbn_rel=False, num_clf_partitions=1):
+    def __init__(self, data_dir, fname_features, fname_labels, data=None, model_dir='', 
+                mode='train', feature_indices=None, label_indices=None, keep_invalid=False, 
+                 normalize_features=True, normalize_lables=False, feature_type='sparse', label_type='dense'):
         """
             Support pickle or libsvm file format
             Args:
                 data_file: str: File name for the set
         """
         self.data_dir = data_dir
-        self.nbn_rel = nbn_rel #non-binary label relevance
-        fname = os.path.join(data_dir, fname)
         self.mode = mode
         self.features, self.labels, self.num_samples, \
-            self.num_features, self.num_labels = self.load_data(fname, data)
+            self.num_features, self.num_labels = self.load_data(
+                data_dir, fname_features, fname_labels, data, normalize_features, 
+                normalize_lables, feature_type, label_type)
         self._split = None
-        self.num_clf_partitions = num_clf_partitions
-        self._sel_labels(label_indices)
+        self.index_select(feature_indices, label_indices)
         self.model_dir = model_dir
-        self._ext_head = None
         self.data_dir = data_dir
-        self.num_centroids = num_centroids  # Use multiple centroids for ext head labels
-        self.multiple_cent_mapping = None
-        if self.num_clf_partitions > 1:
-            self.shortlist = PartitionedTable(num_partitions=num_clf_partitions, _type='memory', _dtype=np.int)
-            self.dist = PartitionedTable(num_partitions=num_clf_partitions, _type='memory', _dtype=np.float32)
-        else:
-            self.shortlist = Table(_type='memory', _dtype=np.int)
-            self.dist = Table(_type='memory', _dtype=np.float32)
-        self.size_shortlist = size_shortlist
-        self.use_shortlist = True if self.size_shortlist > 0 else False
-        if not keep_invalid:
-            self._process_labels(model_dir)
         self.label_padding_index = self.num_labels
+
+    def _remove_samples_wo_features_and_labels(self):
+        """
+            Remove instances if they don't have any feature or label
+        """
+        indices_feat = self.features.get_valid(axis=1)
+        indices_labels = self.labels.get_valid(axis=1)
+        indices = np.intersect1d(indices_feat, indices_labels)
+        self.features.index_select(indices, axis=0)
+        self.labels.index_select(indices, axis=0)
+        self.update_data_stats()
+
+    def index_select(self, feature_indices, label_indices):
+        def _get_split_id(fname):
+            idx = fname.split("_")[-1].split(".")[0]
+            return idx
+        if label_indices is not None:
+            self._split = _get_split_id(label_indices)
+            label_indices = np.loadtxt(label_indices, dtype=np.int32)
+            self.labels.index_select(label_indices, axis=1)
+        if feature_indices is not None:
+            self._split = _get_split_id(feature_indices)
+            feature_indices = np.loadtxt(feature_indices, dtype=np.int32)
+            self.features.index_select(feature_indices, axis=1)
+        self.update_data_stats()
+
+    def update_data_stats(self):
+        """
+            Update num_samples, num_features, num_labels
+        """
+        self.num_samples = self.features.num_instances
+        self.num_features = self.features.num_features
+        self.num_labels = self.labels.num_labels
 
     def _sel_labels(self, label_indices):
         """
@@ -61,36 +83,25 @@ class DatasetBase(torch.utils.data.Dataset):
             self.labels = self.labels[:, label_indices]
             self.num_labels = self.labels.shape[1]
 
-    def load_data(self, fname, data):
+    def load_data(self, data_dir, fname_f, fname_l, data, 
+                  normalize_features=True, normalize_labels=False,
+                  feature_type='sparse', label_type='dense'):
         """
             Load features and labels from file in libsvm format or pickle
         """
-        if data is not None:
-            features = data['X']
-            labels = data['Y']
-            num_samples, num_features = self.features.shape
-            num_labels = labels.shape[1]
-        else:
-            _, ext = os.path.splitext(fname)
-            if ext == ".pkl":
-                _temp = pickle.load(open(fname, 'rb'))
-                features = _temp['X']
-                labels = _temp['Y']
-                num_samples, num_features = features.shape
-                num_labels = labels.shape[1]
-            else: #Assuming data is in plain text
-                # Deal in 32-bits
-                features, labels, num_samples, num_features, num_labels = data_utils.read_data(
-                    fname)
-                features = features.astype(np.float32)
-                labels = data_utils.binarize_labels(labels, num_labels).astype(np.float32)
-        if self.nbn_rel:
+        features = construct_f(data_dir, fname_f, data['X'], normalize_features, feature_type)
+        labels = construct_l(data_dir, fname_l, data['Y'], normalize_labels, label_type) # Pass dummy labels if required
+        if normalize_labels:
             if self.mode == 'train': # Handle non-binary labels
                 print("Non-binary labels encountered in train; Normalizing...")
-                labels = normalize(labels, norm='max', copy=False)
+                labels.normalize(norm='max', copy=False)
             else:
                 print("Non-binary labels encountered in test/val; Binarizing...")
-                labels = labels.astype(np.bool).astype(np.float32)
+                labels.binarize()
+        assert features.num_instances == labels.num_instances
+        num_samples = features.num_instances
+        num_features = features.num_features
+        num_labels = labels.num_labels
         return features, labels, num_samples, num_features, num_labels
 
     def get_stats(self):
@@ -99,158 +110,56 @@ class DatasetBase(torch.utils.data.Dataset):
         """
         return self.num_samples, self.num_features, self.num_labels
 
-    def _pad_seq(self, indices, dist):
-        _pad_length = self.size_shortlist - len(indices)
-        indices.extend([self.label_padding_index]*_pad_length)
-        dist.extend([100]*_pad_length)
-
-    def _remap_multiple_centroids(self, indices, vals, _func=min, _limit=1e5):
-        """
-            Remap multiple centroids to original labels
-        """
-        indices = np.asarray(
-            list(map(lambda x: self.multiple_cent_mapping[x], indices)))
-        _dict = dict({})
-        for id, ind in enumerate(indices):
-            _dict[ind] = _func(_dict.get(ind, _limit), vals[id])
-        indices, values = zip(*_dict.items())
-        indices, values = list(indices), list(values)
-        if len(indices) < self.size_shortlist:
-            self._pad_seq(indices, values)
-        return indices, values
-
-    def _get_label_freq(self):
-        # Can handle non-binary labels
-        return np.array(self.labels.astype(np.bool).sum(axis=0)).ravel()
-
-    def _get_ext_head(self, freq, threshold):
-        return np.where(freq >= threshold)[0]
-
-    def _process_labels_train(self, data_obj, _ext_head_threshold):
+    def _process_labels_train(self, data_obj):
         """
             Process labels for train data
             - Remove labels without any training instance
             - Handle multiple centroids
         """
-        valid_labels = np.where(np.array(self.labels.sum(axis=0)) != 0)[1]
+        valid_labels = self.labels.remove_invalid()
         data_obj['valid_labels'] = valid_labels
         data_obj['num_labels'] = self.num_labels
-        data_obj['ext_head'] = None
-        data_obj['multiple_cent_mapping'] = None
-        self.labels = self.labels[:, valid_labels]
-        self.num_labels = valid_labels.size
-        print("Valid labels after processing: ", self.num_labels)
-        if self.num_centroids != 1:
-            freq = self._get_label_freq()
-            self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
-            self.multiple_cent_mapping = np.arange(self.num_labels)
-            for idx in self._ext_head:
-                self.multiple_cent_mapping = np.append(
-                    self.multiple_cent_mapping, [idx]*self.num_centroids)
-            data_obj['ext_head'] = self._ext_head
-            data_obj['multiple_cent_mapping'] = self.multiple_cent_mapping
-
-    def _process_labels_retrain(self, data_obj, _ext_head_threshold):
+        self.update_data_stats()
+        
+    def _process_labels_predict(self, data_obj):
         """
             Process labels for re-train data
             - Remove labels without any training instance
             - Handle multiple centroids
         """
         valid_labels = data_obj['valid_labels']
-        self.labels = self.labels[:, valid_labels]
-        self.num_labels = valid_labels.size
-        if self.num_centroids != 1:
-            freq = self._get_label_freq()
-            self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
-            self.multiple_cent_mapping = np.arange(self.num_labels)
-            for idx in self._ext_head:
-                self.multiple_cent_mapping = np.append(
-                    self.multiple_cent_mapping, [idx]*self.num_centroids)
-            data_obj['ext_head'] = self._ext_head
-            data_obj['multiple_cent_mapping'] = self.multiple_cent_mapping
-            print("Ext labels: ", self._ext_head)
+        self.labels.index_select(valid_labels)
+        self.update_data_stats()
 
-    def _process_labels_predict(self, data_obj):
-        """
-            Process labels for predict data
-            - Load stats from train set
-        """
-        self._ext_head = data_obj['ext_head']
-        self.multiple_cent_mapping = data_obj['multiple_cent_mapping']
-        valid_labels = data_obj['valid_labels']
-        self.labels = self.labels[:, valid_labels]
-        self.num_labels = valid_labels.size
-
-    def _process_labels(self, model_dir, _ext_head_threshold=10000):
+    def _process_labels(self, model_dir):
         """
             Process labels to handle labels without any training instance;
             Handle multiple centroids if required
         """
         data_obj = {}
         fname = os.path.join(
-            model_dir, 'labels_params.pkl' if self._split is None else "labels_params_split_{}.pkl".format(self._split))
+            model_dir, 'labels_params.pkl' if self._split is None else \
+                "labels_params_split_{}.pkl".format(self._split))
         if self.mode == 'train':
-            self._process_labels_train(data_obj, _ext_head_threshold)
+            self._process_labels_train(data_obj)
             pickle.dump(data_obj, open(fname, 'wb'))
-        elif self.mode == 'retrain_w_shorty':
-            data_obj = pickle.load(open(fname, 'rb'))
-            self._process_labels_retrain(data_obj, _ext_head_threshold)
-            pickle.dump(data_obj, open(fname, 'wb'))
-        elif self.mode == 'predict':
+        else:
             data_obj = pickle.load(open(fname, 'rb'))
             self._process_labels_predict(data_obj)
-        else:
-            raise NotImplementedError("Unknown mode!")
-
-    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
-        """
-            Update label shortlist for each instance
-        """
-        prefix = 'train' if self.mode == 'train' else 'test'
-        self.shortlist.create(shortlist, os.path.join(self.model_dir, '{}.{}.shortlist.indices'.format(fname, prefix)), idx)
-        self.dist.create(dist, os.path.join(self.model_dir, '{}.{}.shortlist.dist'.format(fname, prefix)), idx)
-        del dist, shortlist
-
-    def save_shortlist(self, fname):
-        """
-            Save label shortlist and distance for each instance
-        """
-        self.shortlist.save(os.path.join(self.model_dir, fname+'.shortlist.indices'))
-        self.dist.save(os.path.join(self.model_dir, fname+'.shortlist.dist'))
-
-    def load_shortlist(self, fname):
-        """
-            Load label shortlist and distance for each instance
-        """
-        self.shortlist.load(os.path.join(self.model_dir, fname+'.shortlist.indices'))
-        self.dist.load(os.path.join(self.model_dir, fname+'.shortlist.dist'))
-
-    def _adjust_shortlist(self, pos_labels, shortlist, dist, min_nneg=100):
-        """
-            Adjust shortlist for a instance
-            Training: Add positive labels to the shortlist
-            Inference: Return shortlist with label mask
-        """
-        if self.mode == 'train':
-            # TODO: Adjust dist as well
-            if len(pos_labels) > self.size_shortlist: #If number of positives are more than shortlist_size
-                _ind = np.random.choice(len(pos_labels), size=self.size_shortlist-min_nneg, replace=False)
-                pos_labels = list(operator.itemgetter(*_ind)(pos_labels))
-            neg_labels = list(
-                filter(lambda x: x not in set(pos_labels), shortlist))
-            diff = self.size_shortlist - len(pos_labels)
-            labels_mask = [1]*len(pos_labels)
-            dist = [2]*len(pos_labels) + dist[:diff]
-            shortlist = pos_labels + neg_labels[:diff]
-            labels_mask = labels_mask + [0]*diff
-        else:
-            labels_mask = [0]*self.size_shortlist
-            pos_labels = set(pos_labels)
-            for idx, item in enumerate(shortlist):
-                if item in pos_labels:
-                    labels_mask[idx] = 1
-        return shortlist, labels_mask, dist
 
     def __len__(self):
         return self.num_samples
 
+    def __getitem__(self, index):
+        """
+            Get features and labels for index
+            Args:
+                index: for this sample
+            Returns:
+                features: : non zero entries
+                labels: : numpy array
+
+        """
+        x = self.features[index]
+        y = self.labels[index]
+        return x, y

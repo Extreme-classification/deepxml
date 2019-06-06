@@ -72,13 +72,17 @@ def train(model, params):
               model_dir=params.model_dir,
               result_dir=params.result_dir,
               dataset=params.dataset,
+              data={'X': None, 'Y': None},
               learning_rate=params.learning_rate,
               num_epochs=params.num_epochs,
-              tr_fname=params.tr_fname,
-              val_fname=params.val_fname,
+              tr_feat_fname=params.tr_feat_fname,
+              val_feat_fname=params.val_feat_fname,
+              tr_label_fname=params.tr_label_fname,
+              val_label_fname=params.val_label_fname,
               batch_size=params.batch_size,
               num_workers=4,
               normalize_features=params.normalize,
+              normalize_labels=params.nbn_rel,
               shuffle=params.shuffle,
               validate=params.validate,
               beta=params.beta,
@@ -99,14 +103,13 @@ def get_document_embeddings(model, params, _save=True):
     """
     doc_embeddings = model.get_document_embeddings(data_dir=params.data_dir,
                                                    dataset=params.dataset,
-                                                   fname=params.ts_fname,
+                                                   fname_features=params.ts_feat_fname,
                                                    data=None,
                                                    keep_invalid=params.keep_invalid,
                                                    batch_size=params.batch_size,
                                                    normalize_features=params.normalize,
                                                    num_workers=4,
-                                                   feature_indices=params.feature_indices,
-                                                   label_indices=params.label_indices)
+                                                   feature_indices=params.feature_indices)
     fname = os.path.join(params.result_dir, params.out_fname)
     if _save:
         np.save(fname, doc_embeddings)
@@ -166,16 +169,18 @@ def inference(model, params):
     """
     predicted_labels = model.predict(data_dir=params.data_dir,
                                      dataset=params.dataset,
-                                     ts_fname=params.ts_fname,
+                                     ts_label_fname=params.ts_label_fname,
+                                     ts_feat_fname=params.ts_feat_fname,
                                      normalize_features=params.normalize,
+                                     normalize_labels=params.nbn_rel,
                                      beta=params.beta,
+                                     data={'X': None, 'Y': None},
                                      keep_invalid=params.keep_invalid,
-                                     feature_indices=params.feature_indices,
-                                     label_indices=params.label_indices)
+                                     feature_indices=params.feature_indices
+                                     )
     # Real number of labels
-    key = ("n_{}_samples".format(params.ts_fname.split(".")[0]), 'n_labels')
-    num_samples, num_labels = utils.get_data_stats(
-        os.path.join(params.data_dir, params.dataset, 'stats.json'), key)
+    num_samples, num_labels = utils.get_header(
+        os.path.join(params.data_dir, params.dataset, params.ts_label_fname))
     label_mapping = None
     if not params.keep_invalid:
         _split = None

@@ -42,6 +42,7 @@ class ModelFull(ModelBase):
             data_loader, self, self.embedding_dims, shorty, flag=1)
         return shorty
 
+
 class ModelShortlist(ModelBase):
     """
         Models with label shortlist
@@ -75,7 +76,7 @@ class ModelShortlist(ModelBase):
             del val
         return stripped_vals
 
-    def _update_predicted_shortlist(self, count, batch_size, predicted_labels, batch_out, batch_data, beta):
+    def _update_predicted_shortlist(self, count, batch_size, predicted_labels, batch_out, batch_data, beta, top_k=50):
         _score = self._combine_scores(batch_out, batch_data['Y_d'], beta)
         if 'Y_m' in batch_data: # IF rev mapping exist; case of distributed classifier
             batch_shortlist = batch_data['Y_m'].numpy()
@@ -87,15 +88,15 @@ class ModelShortlist(ModelBase):
             _knn_score = 1-batch_data['Y_d']
             _clf_score = batch_out.data
         utils.update_predicted_shortlist(
-            count, batch_size, _clf_score, predicted_labels['clf'], batch_shortlist, top_k=50)
+            count, batch_size, _clf_score, predicted_labels['clf'], batch_shortlist, top_k)
         utils.update_predicted_shortlist(
             count, batch_size, _knn_score, predicted_labels['knn'],
-            batch_shortlist, top_k=50)
+            batch_shortlist, top_k)
         utils.update_predicted_shortlist(
-            count, batch_size, _score, predicted_labels['combined'], batch_shortlist, top_k=50)
+            count, batch_size, _score, predicted_labels['combined'], batch_shortlist, top_k)
 
 
-    def validate(self, data_loader, beta=0.2):
+    def _validate(self, data_loader, beta=0.2):
         self.net.eval()
         torch.set_grad_enabled(False)
         num_labels = data_loader.dataset.num_labels
@@ -124,35 +125,7 @@ class ModelShortlist(ModelBase):
         return self._strip_padding_label(predicted_labels, num_labels), mean_loss / \
             data_loader.dataset.num_samples
 
-    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None, tr_fname='train.txt',
-            val_fname='test.txt', batch_size=128, num_workers=4, shuffle=False, beta=0.2,
-            init_epoch=0, keep_invalid=False, **kwargs):
-        self.logger.info("Loading training data.")
-        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                             fname=tr_fname,
-                                             data=data,
-                                             mode='train',
-                                             keep_invalid=keep_invalid,
-                                             **kwargs)
-        train_loader_shuffle = self._create_data_loader(train_dataset,
-                                                        batch_size=batch_size,
-                                                        num_workers=num_workers,
-                                                        shuffle=shuffle)
-        train_loader = self._create_data_loader(train_dataset,
-                                                batch_size=batch_size,
-                                                num_workers=num_workers)
-        self.logger.info("Loading validation data.")
-        validation_loader = None
-        if self._validate:
-            validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                    fname=val_fname,
-                                                    data=data,
-                                                    mode='predict',
-                                                    keep_invalid=keep_invalid,
-                                                    **kwargs)
-            validation_loader = self._create_data_loader(validation_dataset,
-                                                        batch_size=batch_size,
-                                                        num_workers=num_workers)
+    def _fit(self, train_loader, train_loader_shuffle, validation_loader, model_dir, result_dir, init_epoch, num_epochs, beta):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             if epoch != 0 and self.dlr_step != -1 and epoch % self.dlr_step == 0:
                 self._adjust_parameters()
@@ -164,7 +137,7 @@ class ModelShortlist(ModelBase):
                 self.shorty.reset()
                 shortlist_utils.update(
                     train_loader, self, self.embedding_dims, self.shorty, flag=0, num_graphs=self.num_clf_partitions)
-                if self._validate:
+                if validation_loader is not None:
                     shortlist_utils.update(
                         validation_loader, self, self.embedding_dims, self.shorty, flag=2, num_graphs=self.num_clf_partitions)
                 shorty_end_t = time.time()
@@ -173,7 +146,7 @@ class ModelShortlist(ModelBase):
                 self.tracking.shortlist_time = self.tracking.shortlist_time + \
                     shorty_end_t - shorty_start_t
                 batch_train_start_time = time.time()
-                if self._validate:
+                if validation_loader is not None:
                     try:
                         _fname = kwargs['shorty_fname']
                     except:
@@ -188,31 +161,74 @@ class ModelShortlist(ModelBase):
 
             self.logger.info("Epoch: {}, loss: {}, time: {} sec".format(
                 epoch, tr_avg_loss, batch_train_end_time - batch_train_start_time))
-            if self._validate and epoch % 2 == 0:
+            if validation_loader is not None and epoch % 2 == 0:
                 val_start_t = time.time()
-                predicted_labels, val_avg_loss = self.validate(
-                    validation_loader)
-                _acc = self.evaluate(
-                    validation_loader.dataset.labels, predicted_labels)
-                self.logger.info("clf: {}, knn: {}".format(
-                    _acc['clf'][0]*100, _acc['knn'][0]*100))
+                predicted_labels, val_avg_loss = self._validate(
+                    validation_loader, beta)
                 val_end_t = time.time()
-                self.tracking.validation_time = self.tracking.validation_time + val_end_t - val_start_t
                 _acc = self.evaluate(
-                    validation_loader.dataset.labels, predicted_labels)
+                    validation_loader.dataset.labels.Y, predicted_labels)
+                self.tracking.validation_time = self.tracking.validation_time + val_end_t - val_start_t
                 self.tracking.val_precision.append(_acc['combined'][0])
                 self.tracking.val_ndcg.append(_acc['combined'][1])
                 self.logger.info("Model saved after epoch: {}".format(epoch))
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
-                self.logger.info("P@1: {}, loss: {}, time: {} sec".format(
-                    _acc['combined'][0][0]*100, val_avg_loss, val_end_t-val_start_t))
+                self.logger.info("P@1 (combined): {}, P@1 (knn): {}, P@1 (clf): {}, loss: {}, time: {} sec".format(
+                    _acc['combined'][0][0]*100, _acc['knn'][0][0]*100, _acc['clf'][0][0]*100, val_avg_loss, val_end_t-val_start_t))
             self.tracking.last_epoch += 1
 
         self.save_checkpoint(model_dir, epoch+1)
         self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
         self.logger.info("Training time: {} sec, Validation time: {} sec, Shortlist time: {} sec".format(
             self.tracking.train_time, self.tracking.validation_time, self.tracking.shortlist_time))
+
+
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
+            tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
+            val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
+            init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
+            normalize_features=True, normalize_labels=False, validate=False, beta=0.2):
+        self.logger.info("Loading training data.")
+
+        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                             fname_features=tr_feat_fname,
+                                             fname_labels=tr_label_fname,
+                                             data=data,
+                                             mode='train',
+                                             keep_invalid=keep_invalid,
+                                             normalize_features=normalize_features,
+                                             normalize_labels=normalize_labels,
+                                             feature_indices=feature_indices,
+                                             label_indices=label_indices)
+        train_loader = self._create_data_loader(train_dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers,
+                                                shuffle=False)
+        train_loader_shuffle = self._create_data_loader(train_dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers,
+                                                shuffle=shuffle)
+        self.logger.info("Loading validation data.")
+        print("Loading validation data.", val_feat_fname, val_label_fname)
+        validation_loader = None
+        if validate:
+            validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                      fname_features=val_feat_fname,
+                                                      fname_labels=val_label_fname,
+                                                      data=data,
+                                                      mode='predict',
+                                                      keep_invalid=keep_invalid,
+                                                      normalize_features=normalize_features,
+                                                      normalize_labels=normalize_labels,
+                                                      feature_indices=feature_indices,
+                                                      label_indices=label_indices)
+            validation_loader = self._create_data_loader(validation_dataset,
+                                                         batch_size=batch_size,
+                                                         num_workers=num_workers)
+        self._fit(train_loader, train_loader_shuffle, validation_loader,
+                  model_dir, result_dir, init_epoch, num_epochs, beta)
+
 
     def _predict(self, data_loader, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5

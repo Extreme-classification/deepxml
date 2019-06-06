@@ -51,26 +51,47 @@ class ParametersBase():
             type=str,
             help='prediction file name')
         self.parser.add_argument(
-            '--tr_fname',
-            dest='tr_fname',
-            default='train.txt',
+            '--tr_feat_fname',
+            dest='tr_feat_fname',
+            default='trn_X_Xf.txt',
             action='store',
             type=str,
-            help='training file name')
+            help='training feature file name')
         self.parser.add_argument(
-            '--val_fname',
-            dest='val_fname',
-            default='val.txt',
+            '--val_feat_fname',
+            dest='val_feat_fname',
+            default='tst_X_Xf.txt',
             action='store',
             type=str,
-            help='validation file name')
+            help='validation feature file name')
         self.parser.add_argument(
-            '--ts_fname',
-            dest='ts_fname',
-            default='test.txt',
+            '--ts_feat_fname',
+            dest='ts_feat_fname',
+            default='tst_X_Xf.txt',
             action='store',
             type=str,
-            help='test file name')
+            help='test feature file name')
+        self.parser.add_argument(
+            '--tr_label_fname',
+            dest='tr_label_fname',
+            default='trn_X_Y.txt',
+            action='store',
+            type=str,
+            help='training label file name')
+        self.parser.add_argument(
+            '--val_label_fname',
+            dest='val_label_fname',
+            default='tst_X_Y.txt',
+            action='store',
+            type=str,
+            help='validation label file name')
+        self.parser.add_argument(
+            '--ts_label_fname',
+            dest='ts_label_fname',
+            default='tst_X_Y.txt',
+            action='store',
+            type=str,
+            help='test label file name')
 
     def parse_args(self):
         self.params = self.parser.parse_args()
