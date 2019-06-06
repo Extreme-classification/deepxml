@@ -8,7 +8,7 @@
 # $nargs Version to run on each split
 
 #activate_anaconda
-#export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=2,3
 # cd $HOME/scratch/lab/xctools
 # python setup.py install --user
 # exit
@@ -42,7 +42,7 @@ run_beta(){
     fi
 }
 
-work_dir="/home/t-kudahi/Workspace"
+work_dir="/mnt/XC"
 dataset=$1
 version=$2
 use_post=$3

@@ -16,7 +16,7 @@ dlr_factor=$8
 dlr_step=${9}
 batch_size=${10}
 work_dir=${11}
-use_head_embeddings=1
+use_head_embeddings=0
 
 if [ $use_head_embeddings -eq 1 ]
 then
@@ -65,16 +65,20 @@ TRAIN_PARAMS="--lr $learning_rate \
             --M 100 \
             --use_shortlist \
             --validate \
-            --val_fname test.txt \
+		    --val_feat_fname tst_X_Xf.txt \
+            --val_label_fname tst_X_Y.txt \
             --ann_threads 12 \
             --beta 0.5 \
+            --update_shortlist \
             --model_fname ${MODEL_NAME} ${splits} \
-            --retrain_hnsw_after $(($num_epochs+3))"
+            --retrain_hnsw_after 5"
+            # --retrain_hnsw_after $(($num_epochs+3))"
             # --retrain_hnsw_after 5"
 
 PREDICT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
-                --ts_fname test.txt \
+    		    --ts_feat_fname tst_X_Xf.txt \
+                --ts_label_fname tst_X_Y.txt \
                 --efS 300 \
                 --num_nbrs 300 \
                 --ann_threads 12\
@@ -93,15 +97,15 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${splits}"
 
-docs=("test" "train")
+docs=("trn" "tst")
 cwd=$(pwd)
 ./run_base.sh "train" $dataset $work_dir $dir_version/$version "${TRAIN_PARAMS}"
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$version "${PREDICT_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_fname 0 --out_fname export/wrd_emb"
-for doc in ${docs[*]}
-do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_fname ${doc}.txt --out_fname export/${doc}_emb"
-    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
-done
+# ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_fname 0 --out_fname export/wrd_emb"
+# for doc in ${docs[*]}
+# do 
+#     ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --out_fname export/${doc}_emb"
+#     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
+# done
 
 # source deactivate

@@ -27,6 +27,7 @@ stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[2]}
+#num_labels=3993
 MODEL_NAME="deepxml_model"
 # source activate xmc-dev
 embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
@@ -45,6 +46,7 @@ TRAIN_PARAMS="--dataset ${dataset} \
                 --low_rank -1 \
                 --efC 300 \
                 --efS 300 \
+                --num_clf_partitions 2\
                 --lr $learning_rate \
                 --use_residual \
                 --embeddings $embedding_file \
@@ -57,7 +59,8 @@ TRAIN_PARAMS="--dataset ${dataset} \
                 --M 100 \
                 --normalize \
                 --validate \
-                --val_fname test.txt \
+		        --val_feat_fname tst_X_Xf.txt \
+                --val_label_fname tst_X_Y.txt \
                 --ann_threads 12\
                 --beta 0.5\
                 --model_fname ${MODEL_NAME}${splits}"
@@ -90,14 +93,15 @@ then
                 --use_shortlist \
                 --normalize \
                 --validate \
-                --val_fname test.txt \
+                --val_feat_fname tst_X_Xf.txt \
+                --val_label_fname tst_X_Y.txt \
                 --ann_threads 12\
                 --beta 0.5\
                 --model_fname ${MODEL_NAME}${splits}"
 
     PREDICT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
-                    --ts_fname test.txt \
+                    --ts_feat_fname tst_X_Xf.txt \
                     --efS 300 \
                     --num_centroids 1 \
                     --num_nbrs 300 \
@@ -119,7 +123,8 @@ then
 else
     PREDICT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
-                    --ts_fname test.txt \
+                    --ts_feat_fname tst_X_Xf.txt \
+                    --ts_label_fname tst_X_Y.txt \
                     --efS 300 \
                     --normalize \
                     --num_nbrs 300 \
@@ -136,10 +141,12 @@ else
                     --batch_size 512${splits}"
 
 fi
-docs=("test" "train")
+docs=("trn" "tst")
 cwd=$(pwd)
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$version "${TRAIN_PARAMS}"
+./run_base.sh "predict" $dataset $work_dir $dir_version/$version "${PREDICT_PARAMS}"
+exit()
 cp $work_dir/models/deep-xml/${dataset}/v_${dir_version}/${version}/${MODEL_NAME}_network.pkl $work_dir/models/deep-xml/${dataset}/v_${dir_version}/${version}/${MODEL_NAME}_network_bak.pkl
 
 if [ $use_post -eq 1 ]
@@ -158,6 +165,6 @@ fi
 
 for doc in ${docs[*]} 
 do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_fname ${doc}.txt --out_fname export/${doc}_emb"
+    ./run_base.sh "extract" $dataset $work_dir $dir_version/$version "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --out_fname export/${doc}_emb"
     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
 done
