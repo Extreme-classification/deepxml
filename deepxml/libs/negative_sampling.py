@@ -1,0 +1,66 @@
+import numpy as np
+import _pickle as pickle
+from functools import partial
+
+
+class NegativeSamplerBase(object):
+    """
+        Base class for negative sampling
+    """
+    def __init__(self, num_labels, num_negatives):
+        self.num_labels = num_labels
+        self.num_negatives = num_negatives
+        self.index = None
+
+    def _construct(self):
+        """
+            Create a partial function with given parameters
+            Index should take one argument i.e. size during querying
+        """
+        self.index = partial(np.random.randint, low=0, high=self.num_labels)
+
+    def _query(self):
+        """
+            Query for one sample
+        """
+        return self.index(size=self.num_negatives)
+
+    def query(self, num_samples, *args, **kwargs):
+        """
+            Query shortlist for one or more samples
+        """
+        if num_samples == 1:
+            return self._query()
+        else:
+            out = [self._query() for _ in range(num_samples)]
+            return out
+
+    def save(self, fname):
+        """
+            Save object
+        """
+        state = self.__dict__
+        pickle.dump(state, open(fname, 'wb'))
+
+    def load(self, fname):
+        """ 
+            Load object
+        """
+        self = pickle.load(open(fname, 'rb'))
+
+
+class NegativeSampler(NegativeSamplerBase):
+    """
+        Negative sampler with support for sampling from multinomial distribution
+    """
+    def __init__(self, num_labels, num_negatives, prob=None, replace=False):
+        self.prob = prob
+        self.replace = replace
+        super().__init__(num_labels, num_negatives)
+        self._construct()
+
+    def _construct(self):
+        if self.prob is not None:
+            self.index = partial(np.random.choice, a=self.num_labels, replace=self.replace, p=self.prob)
+        else:
+            super()._construct()
