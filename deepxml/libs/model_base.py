@@ -312,24 +312,30 @@ class ModelBase(object):
                     "Prediction progress: [{}/{}]".format(batch_idx, num_batches))
         return predicted_labels
 
-    def _document_embeddings(self, data_loader):
+    def _document_embeddings(self, data_loader, fname_out=None, _dtype='float32'):
         self.net.eval()
         torch.set_grad_enabled(False)
-        embeddings = torch.zeros(
-            data_loader.dataset.num_samples, self.net.repr_dims)
+        if fname_out is not None: # Save to disk
+            embeddings = np.memmap(fname_out, dtype=_dtype, mode='w+',
+                                   shape=(data_loader.dataset.num_samples, self.net.repr_dims))
+        else:  # Keep in memory
+            embeddings = np.zeros((
+                data_loader.dataset.num_samples, self.net.repr_dims), dtype=_dtype)
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
             out_ans = self.net.forward(batch_data, return_embeddings=True)
-            embeddings[count:count+batch_size, :] = out_ans.detach().cpu()
+            embeddings[count:count+batch_size, :] = out_ans.detach().cpu().numpy()
             count += batch_size
         torch.cuda.empty_cache()
-        return embeddings.numpy()
+        if fname_out is not None: # Flush all changes to disk
+            embeddings.flush()
+        return embeddings
 
     def get_document_embeddings(self, data_dir, dataset, fname_features, fname_labels=None,
                                 data=None, keep_invalid=False, batch_size=128, 
                                 num_workers=4, data_loader=None, normalize_features=True, 
-                                feature_indices=None):
+                                feature_indices=None, fname_out=None):
         """
             Get document embeddings
         """
@@ -346,7 +352,7 @@ class ModelBase(object):
             data_loader = self._create_data_loader(dataset,
                                                    batch_size=batch_size,
                                                    num_workers=num_workers)
-        return self._document_embeddings(data_loader)
+        return self._document_embeddings(data_loader, fname_out)
 
     def _adjust_parameters(self):
         self.optimizer.adjust_lr(self.dlr_factor)
