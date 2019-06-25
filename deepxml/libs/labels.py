@@ -6,12 +6,15 @@ import os
 
 
 def construct(data_dir, fname, Y=None, normalize=False, _type='sparse'):
-    if _type == 'sparse':
-        return SparseLabels(data_dir, fname, Y, normalize)
-    elif _type == 'dense':
-        return DenseLabels(data_dir, fname, Y, normalize)
+    if fname is None and Y is None: # No labels are provided
+        return LabelsBase(data_dir, fname, Y)
     else:
-        raise NotImplementedError("Unknown label type")
+        if _type == 'sparse':
+            return SparseLabels(data_dir, fname, Y, normalize)
+        elif _type == 'dense':
+            return DenseLabels(data_dir, fname, Y, normalize)
+        else:
+            raise NotImplementedError("Unknown label type")
 
 
 class LabelsBase(object):
@@ -24,21 +27,22 @@ class LabelsBase(object):
     """
     def __init__(self, data_dir, fname, Y=None):
         self.Y = self.load(data_dir, fname, Y)
-        self.num_instances, self.num_labels = self.Y.shape
 
     def _select_instances(self, indices):
-        self.Y = self.Y[indices]
+        self.Y = self.Y[indices] if self._valid else None
 
     def _select_labels(self, indices):
-        self.Y = self.Y[:, indices]
+        self.Y = self.Y[:, indices] if self._valid else None
 
     def normalize(self, norm='max', copy=False):
-        self.Y = scale(self.Y, copy=copy, norm=norm)
+        self.Y = scale(self.Y, copy=copy, norm=norm) if self._valid else None
 
     def load(self, data_dir, fname, Y):
         fname = os.path.join(data_dir, fname)
         if Y is not None:
             return Y
+        elif fname is None:
+            return None
         else:
             if fname.lower().endswith('.pkl'):
                 return pickle.load(open(fname, 'rb'))['Y']
@@ -48,10 +52,10 @@ class LabelsBase(object):
                 raise NotImplementedError("Unknown file extension")
 
     def get_invalid(self, axis=0):
-        return np.where(self.frequency(axis)==0)[0]
+        return np.where(self.frequency(axis)==0)[0] if self._valid else None
 
     def get_valid(self, axis=0):
-        return np.where(self.frequency(axis)>0)[0]
+        return np.where(self.frequency(axis)>0)[0] if self._valid else None
 
     def remove_invalid(self, axis=0):
         indices = self.get_valid(axis)
@@ -59,7 +63,8 @@ class LabelsBase(object):
         return indices
 
     def binarize(self):
-        self.Y.data[:] = 1.0
+        if self._valid:
+            self.Y.data[:] = 1.0
 
     def index_select(self, indices, axis=1, fname=None):
         """
@@ -72,19 +77,31 @@ class LabelsBase(object):
             self._select_labels(indices)
         else:
             NotImplementedError("Unknown Axis.")
-        self.num_instances, self.num_labels = self.Y.shape
 
     def frequency(self, axis=0):
-        return np.array(self.Y.astype(np.bool).sum(axis=axis)).ravel()
+        return np.array(self.Y.astype(np.bool).sum(axis=axis)).ravel() if self._valid else None
 
     def transpose(self):
-        return self.Y.transpose()
+        return self.Y.transpose() if self._valid else None
 
+    @property
+    def _valid(self):
+        return self.Y is not None
+
+    @property
+    def num_instances(self):
+        return self.Y.shape[0] if self._valid else -1
+
+    @property
+    def num_labels(self):
+        return self.Y.shape[1] if self._valid else -1
+
+    @property
     def shape(self):
         return (self.num_instances, self.num_labels)
 
     def __getitem__(self, index):
-        return self.Y[index]
+        return self.Y[index] if self._valid else None
 
 
 class DenseLabels(LabelsBase):
