@@ -12,10 +12,9 @@ def main():
     split_threshold = list(map(int, sys.argv[3].split(",")))
     num_splits = len(split_threshold)+1
     tr_features, tr_labels, _, num_features, num_labels = data_utils.read_data(os.path.join(data_dir, train_fname))
-    tr_labels = data_utils.binarize_labels(tr_labels, num_labels)
     stats_obj = {'header': 'num_features,num_labels'}
     stats_obj['threshold'] = ",".join(map(str, split_threshold))
-    sd = splitData(split_method=1, num_splits=num_splits, threshold=split_threshold)
+    sd = splitData(split_method=0, num_splits=num_splits, threshold=split_threshold)
     sd.fit(tr_features, tr_labels)
     total_n_valid_labels = 0
     for idx in range(num_splits):
