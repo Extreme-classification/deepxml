@@ -24,7 +24,7 @@ class ModelFull(ModelBase):
 
     def _pp_with_shortlist(self, shorty, data_dir, dataset, tr_feat_fname='trn_X_Xf.txt',
                            tr_label_fname='trn_X_Y.txt', normalize_features=True,
-                           normalize_labels=False, data=None, keep_invalid=False,
+                           normalize_labels=False, data={'X': None, 'Y': None}, keep_invalid=False,
                            feature_indices=None, label_indices=None, batch_size=128,
                            num_workers=4, data_loader=None):
         """
@@ -40,6 +40,7 @@ class ModelFull(ModelBase):
                                            normalize_features=normalize_features,
                                            normalize_labels=normalize_labels,
                                            feature_indices=feature_indices,
+                                           label_indices=label_indices
                                            )
 
             data_loader = self._create_data_loader(dataset,
@@ -115,14 +116,14 @@ class ModelShortlist(ModelBase):
         num_labels = data_loader.dataset.num_labels
         offset = 1 if self.label_padding_index is not None else 0
         _num_labels = data_loader.dataset.num_labels + offset
-        num_batches = data_loader.dataset.num_samples//data_loader.batch_size
+        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
         mean_loss = 0
         predicted_labels = {}
-        predicted_labels['combined'] = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels['combined'] = lil_matrix((data_loader.dataset.num_instances,
                                                    _num_labels))
-        predicted_labels['knn'] = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels['knn'] = lil_matrix((data_loader.dataset.num_instances,
                                               _num_labels))
-        predicted_labels['clf'] = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels['clf'] = lil_matrix((data_loader.dataset.num_instances,
                                               _num_labels))
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
@@ -137,7 +138,7 @@ class ModelShortlist(ModelBase):
                 self.logger.info(
                     "Validation progress: [{}/{}]".format(batch_idx, num_batches))
         return self._strip_padding_label(predicted_labels, num_labels), mean_loss / \
-            data_loader.dataset.num_samples
+            data_loader.dataset.num_instances
 
     def _fit(self, train_loader, train_loader_shuffle, validation_loader, model_dir, 
              result_dir, init_epoch, num_epochs, beta):
@@ -267,14 +268,14 @@ class ModelShortlist(ModelBase):
             data_loader.dataset.load_shortlist(
                 os.path.join(self.model_dir, _fname))
 
-        num_batches = data_loader.dataset.num_samples//data_loader.batch_size
+        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
 
         predicted_labels = {}
-        predicted_labels['combined'] = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels['combined'] = lil_matrix((data_loader.dataset.num_instances,
                                                    _num_labels))
-        predicted_labels['knn'] = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels['knn'] = lil_matrix((data_loader.dataset.num_instances,
                                               _num_labels))
-        predicted_labels['clf'] = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels['clf'] = lil_matrix((data_loader.dataset.num_instances,
                                               _num_labels))
 
         count = 0
