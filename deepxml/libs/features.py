@@ -26,7 +26,6 @@ class FeaturesBase(object):
     """
     def __init__(self, data_dir, fname, X=None):
         self.X = self.load(data_dir, fname, X)
-        self.num_instances, self.num_features = self.X.shape
 
     def frequency(self, axis=0):
         return np.array(self.X.sum(axis=axis)).ravel()
@@ -60,7 +59,6 @@ class FeaturesBase(object):
             self._select_features(indices)
         else:
             raise NotImplementedError("Unknown Axis.")
-        self.num_instances, self.num_features = self.X.shape
 
     def load(self, data_dir, fname, X):
         fname = os.path.join(data_dir, fname)
@@ -73,6 +71,18 @@ class FeaturesBase(object):
                 return data_utils.read_sparse_file(fname, dtype=np.float32, force_header=True)
             else:
                 raise NotImplementedError("Unknown file extension")
+
+    @property
+    def num_instances(self):
+        return self.X.shape[0]
+
+    @property
+    def num_features(self):
+        return self.X.shape[1]
+
+    @property
+    def shape(self):
+        return (self.num_instances, self.num_features)
 
     def __getitem__(self, index):
         return self.X[index]

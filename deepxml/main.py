@@ -180,7 +180,8 @@ def inference(model, params):
                                      beta=params.beta,
                                      data={'X': None, 'Y': None},
                                      keep_invalid=params.keep_invalid,
-                                     feature_indices=params.feature_indices
+                                     feature_indices=params.feature_indices,
+                                     label_indices=params.label_indices
                                      )
     # Real number of labels
     num_samples, num_labels = utils.get_header(
@@ -334,7 +335,7 @@ def main(params):
             model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
-        if params.tr_feat_fname == "0":
+        if params.ts_feat_fname == "0":
             get_word_embeddings(model, params)
             get_classifier_wts(model, params)
         else:

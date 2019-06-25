@@ -43,11 +43,12 @@ class DatasetDense(DatasetBase):
             Expects 'libsvm' format with header
             Args:
                 data_file: str: File name for the set
+            Can Support datasets w/o any label
         """
         super().__init__(data_dir, fname_features, fname_labels, data, model_dir, 
                          mode, feature_indices, label_indices, keep_invalid, 
                          normalize_features, normalize_labels, feature_type, label_type)
-        if not keep_invalid:
+        if not keep_invalid and self.labels._valid:
             # Remove labels w/o any positive instance
             self._process_labels(model_dir)
         if self.mode == 'train':
@@ -55,8 +56,9 @@ class DatasetDense(DatasetBase):
             self._remove_samples_wo_features_and_labels()
         self.feature_type = feature_type
         self.partitioner = None
-        self.num_clf_partitions = num_clf_partitions
+        self.num_clf_partitions = num_clf_partitions if self.labels._valid else 1
         if self.mode == 'train':
+            assert self.labels._valid, "Labels can not be None while training.."
             if self.num_clf_partitions > 1:
                 self.partitioner = Partitioner(
                     self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
@@ -107,6 +109,8 @@ class DatasetSparse(DatasetBase):
         super().__init__(data_dir, fname_features, fname_labels, data, model_dir, mode, 
                          feature_indices, label_indices, keep_invalid, normalize_features, 
                          normalize_labels, feature_type, label_type)
+        if self.labels is None:
+            NotImplementedError("No support for shortlist w/o any label, consider using dense dataset.")
         self.feature_type = feature_type
         self.num_centroids = num_centroids
         self.num_clf_partitions = num_clf_partitions
@@ -172,8 +176,12 @@ class DatasetSparse(DatasetBase):
             - Load stats from train set
         """
         super()._process_labels_predict(data_obj)
-        self._ext_head = data_obj['ext_head']
-        self.multiple_cent_mapping = data_obj['multiple_cent_mapping']
+        try:
+            self._ext_head = data_obj['ext_head']
+            self.multiple_cent_mapping = data_obj['multiple_cent_mapping']
+        except KeyError:
+            self._ext_head = None
+            self.multiple_cent_mapping = None
 
     def _process_labels(self, model_dir, _ext_head_threshold=10000):
         """

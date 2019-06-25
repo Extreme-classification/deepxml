@@ -135,7 +135,7 @@ class ModelBase(object):
         """
         self.net.train()
         torch.set_grad_enabled(True)
-        num_batches = data_loader.dataset.num_samples//data_loader.batch_size
+        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
         mean_loss = 0
         for batch_idx, batch_data in enumerate(data_loader):
             self.net.zero_grad()
@@ -152,7 +152,7 @@ class ModelBase(object):
                     "Training progress: [{}/{}]".format(batch_idx, num_batches))
             # TODO Delete items from tuple
             del batch_data
-        return mean_loss / data_loader.dataset.num_samples
+        return mean_loss / data_loader.dataset.num_instances
 
     def _merge_part_predictions(self, out_ans):
         return torch.stack(out_ans, axis=1)
@@ -160,9 +160,9 @@ class ModelBase(object):
     def _validate(self, data_loader):
         self.net.eval()
         torch.set_grad_enabled(False)
-        num_batches = data_loader.dataset.num_samples//data_loader.batch_size
+        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
         mean_loss = 0
-        predicted_labels = lil_matrix((data_loader.dataset.num_samples,
+        predicted_labels = lil_matrix((data_loader.dataset.num_instances,
                                        data_loader.dataset.num_labels))
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
@@ -179,7 +179,7 @@ class ModelBase(object):
                 self.logger.info(
                     "Validation progress: [{}/{}]".format(batch_idx, num_batches))
             del batch_data
-        return predicted_labels, mean_loss / data_loader.dataset.num_samples
+        return predicted_labels, mean_loss / data_loader.dataset.num_instances
 
     def _fit(self, train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs):
         for epoch in range(init_epoch, init_epoch+num_epochs):
@@ -221,7 +221,6 @@ class ModelBase(object):
             init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
             normalize_features=True, normalize_labels=False, validate=False, **kwargs):
         self.logger.info("Loading training data.")
-        print("Loading training data.", tr_feat_fname, tr_label_fname)
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                              fname_features=tr_feat_fname,
                                              fname_labels=tr_label_fname,
@@ -267,7 +266,7 @@ class ModelBase(object):
 
     def predict(self, data_dir, dataset, data=None, ts_feat_fname='tst_X_Xf.txt',
                 ts_label_fname='tst_X_Y.txt', batch_size=256, num_workers=6, 
-                keep_invalid=False, feature_indices=None,
+                keep_invalid=False, feature_indices=None, label_indices=None,
                 normalize_features=True, normalize_labels=False, **kwargs):
         dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                        fname_features=ts_feat_fname,
@@ -278,6 +277,7 @@ class ModelBase(object):
                                        normalize_features=normalize_features,
                                        normalize_labels=normalize_labels,
                                        feature_indices=feature_indices,
+                                       label_indices=label_indices
                                        )
         data_loader = self._create_data_loader(dataset=dataset,
                                                batch_size=batch_size,
@@ -289,14 +289,14 @@ class ModelBase(object):
         acc = self.evaluate(dataset.labels.Y, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info("Prediction time (total): {} sec., Prediction time (per sample): {} msec., P@k(%): {}".format(
-            prediction_time, prediction_time*1000/data_loader.dataset.num_samples, _res))
+            prediction_time, prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
 
     def _predict(self, data_loader, **kwargs):
         self.net.eval()
         torch.set_grad_enabled(False)
-        num_batches = data_loader.dataset.num_samples//data_loader.batch_size
-        predicted_labels = lil_matrix((data_loader.dataset.num_samples,
+        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
+        predicted_labels = lil_matrix((data_loader.dataset.num_instances,
                                        data_loader.dataset.num_labels))
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
@@ -317,10 +317,10 @@ class ModelBase(object):
         torch.set_grad_enabled(False)
         if fname_out is not None: # Save to disk
             embeddings = np.memmap(fname_out, dtype=_dtype, mode='w+',
-                                   shape=(data_loader.dataset.num_samples, self.net.repr_dims))
+                                   shape=(data_loader.dataset.num_instances, self.net.repr_dims))
         else:  # Keep in memory
             embeddings = np.zeros((
-                data_loader.dataset.num_samples, self.net.repr_dims), dtype=_dtype)
+                data_loader.dataset.num_instances, self.net.repr_dims), dtype=_dtype)
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['X'].size(0)
