@@ -23,10 +23,8 @@ def normalize(mat):
     return _norm.dot(mat).tocsr()
 
 def main(targets_file, train_file, predictions_file, A, B, betas, _type):
-    _, te_labels, _, _, te_num_labels = data_utils.read_data(targets_file)
-    true_labels = data_utils.binarize_labels(te_labels, te_num_labels)
-    _, tr_labels, _, _, tr_num_labels = data_utils.read_data(train_file)
-    trn_labels = data_utils.binarize_labels(tr_labels, tr_num_labels)
+    _, true_labels, _, _, _ = data_utils.read_data(targets_file)
+    _, trn_labels, _, _, _ = data_utils.read_data(train_file)
     inv_propen = xc_metrics.compute_inv_propesity(trn_labels, A, B)
     acc = xc_metrics.Metrices(true_labels, inv_propensity_scores=inv_propen, remove_invalid=False)
     root = os.path.dirname(predictions_file)
