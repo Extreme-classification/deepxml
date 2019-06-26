@@ -61,10 +61,11 @@ class FeaturesBase(object):
             raise NotImplementedError("Unknown Axis.")
 
     def load(self, data_dir, fname, X):
-        fname = os.path.join(data_dir, fname)
         if X is not None:
             return X
         else:
+            assert fname is not None, "Filename can not be None."
+            fname = os.path.join(data_dir, fname)
             if fname.lower().endswith('.pkl'):
                 return pickle.load(open(fname, 'rb'))['X']
             elif fname.lower().endswith('.txt'):

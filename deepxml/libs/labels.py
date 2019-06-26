@@ -38,12 +38,12 @@ class LabelsBase(object):
         self.Y = scale(self.Y, copy=copy, norm=norm) if self._valid else None
 
     def load(self, data_dir, fname, Y):
-        fname = os.path.join(data_dir, fname)
         if Y is not None:
             return Y
         elif fname is None:
             return None
         else:
+            fname = os.path.join(data_dir, fname)
             if fname.lower().endswith('.pkl'):
                 return pickle.load(open(fname, 'rb'))['Y']
             elif fname.lower().endswith('.txt'):
