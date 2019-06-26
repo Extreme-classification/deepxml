@@ -62,8 +62,8 @@ class ModelBase(object):
 
     def _create_dataset(self, data_dir, fname_features, fname_labels=None,
                         data=None, mode='predict', normalize_features=True,
-                        normalize_labels=False, keep_invalid=False,
-                        feature_indices=None, label_indices=None):
+                        normalize_labels=False, feature_type='sparse', 
+                        keep_invalid=False, feature_indices=None, label_indices=None):
         """
             Create dataset as per given parameters
         """
@@ -78,6 +78,7 @@ class ModelBase(object):
                                      normalize_labels=normalize_labels,
                                      keep_invalid=keep_invalid,
                                      num_centroids=self.num_centroids,
+                                     feature_type=feature_type,
                                      num_clf_partitions=self.num_clf_partitions,
                                      feature_indices=feature_indices,
                                      label_indices=label_indices)
@@ -235,14 +236,27 @@ class ModelBase(object):
                                                 batch_size=batch_size,
                                                 num_workers=num_workers,
                                                 shuffle=shuffle)
+        if self.freeze_embeddings: #Compute and store representation if embeddings are fixed
+            self.logger.info("Computing and reusing document embeddings to save computations.")
+            data = {'X': None, 'Y': None}
+            data['X'] = self._document_embeddings(train_loader)
+            data['Y'] = train_dataset.labels.Y
+            train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                data=data,
+                                                fname_features=None,
+                                                mode='train',
+                                                keep_invalid=True) # Invalid labels already removed
+            train_loader = self._create_data_loader(train_dataset,
+                                                    batch_size=batch_size,
+                                                    num_workers=num_workers,
+                                                    shuffle=shuffle)
         self.logger.info("Loading validation data.")
-        print("Loading validation data.", val_feat_fname, val_label_fname)
         validation_loader = None
         if validate:
             validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                                       fname_features=val_feat_fname,
                                                       fname_labels=val_label_fname,
-                                                      data=data,
+                                                      data={'X': None, 'Y': None},
                                                       mode='predict',
                                                       keep_invalid=keep_invalid,
                                                       normalize_features=normalize_features,
@@ -339,7 +353,6 @@ class ModelBase(object):
         """
             Get document embeddings
         """
-        print(fname_features, fname_labels)
         if data_loader is None:
             dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                            fname_features=fname_features,

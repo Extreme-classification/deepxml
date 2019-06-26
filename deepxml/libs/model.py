@@ -226,14 +226,34 @@ class ModelShortlist(ModelBase):
                                                         batch_size=batch_size,
                                                         num_workers=num_workers,
                                                         shuffle=shuffle)
+        # No need to update embeddings
+        if self.freeze_embeddings:
+            self.logger.info("Computing and reusing document embeddings to save computations.")
+            data = {'X': None, 'Y': None}
+            data['X'] = self._document_embeddings(train_loader)
+            data['Y'] = train_dataset.labels.Y
+            train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                data=data,
+                                                fname_features=None,
+                                                mode='train',
+                                                feature_type='dense',
+                                                keep_invalid=True) # Invalid labels already removed
+            train_loader = self._create_data_loader(train_dataset,
+                                                    batch_size=batch_size,
+                                                    num_workers=num_workers,
+                                                    shuffle=False)
+            train_loader_shuffle = self._create_data_loader(train_dataset,
+                                                            batch_size=batch_size,
+                                                            num_workers=num_workers,
+                                                            shuffle=shuffle)
+
         self.logger.info("Loading validation data.")
-        print("Loading validation data.", val_feat_fname, val_label_fname)
         validation_loader = None
         if validate:
             validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                                       fname_features=val_feat_fname,
                                                       fname_labels=val_label_fname,
-                                                      data=data,
+                                                      data={'X': None, 'Y': None},
                                                       mode='predict',
                                                       keep_invalid=keep_invalid,
                                                       normalize_features=normalize_features,
@@ -264,7 +284,7 @@ class ModelShortlist(ModelBase):
                 _fname = kwargs['shorty_fname']
             except:
                 _fname = 'validation'
-            print("Loading Pre-computer shortlist from file: ", _fname)
+            self.logger.info("Loading Pre-computer shortlist from file: {}".format(_fname))
             data_loader.dataset.load_shortlist(
                 os.path.join(self.model_dir, _fname))
 
