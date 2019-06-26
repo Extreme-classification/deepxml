@@ -8,7 +8,7 @@
 # $nargs Version to run on each split
 
 #activate_anaconda
-export CUDA_VISIBLE_DEVICES=2,3
+#export CUDA_VISIBLE_DEVICES=2,3
 # cd $HOME/scratch/lab/xctools
 # python setup.py install --user
 # exit
@@ -42,7 +42,7 @@ run_beta(){
     fi
 }
 
-work_dir="/mnt/XC"
+work_dir="/mnt/Workspace"
 dataset=$1
 version=$2
 use_post=$3
@@ -53,15 +53,15 @@ split_threshold=$6
 shift 6
 
 learning_rates=1
-lr_full=(0.03)
+lr_full=(0.02)
 lr_shortlist=(0.005)
 num_epochs_full=25
 num_epochs_shortlist=15
 
 embedding_dims=300
 dlr_factor=0.5
-dlr_step=20
-batch_size=255
+dlr_step=14
+batch_size=128
 stats=`echo $dataset | python3 -c "import sys, json; print(json.load(open('../data_stats.json'))[sys.stdin.readline().rstrip()])"` 
 stats=($(echo $stats | tr ',' "\n"))
 
