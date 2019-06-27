@@ -110,13 +110,15 @@ class ShortlistHandler(object):
         - support for partitioned classifier
         - support for multiple representations for labels
     """
-    def __init__(self, num_labels, model_dir='', num_clf_partitions=1, mode='train',
-                 size_shortlist=-1, num_centroids=1, in_memory=True, label_mapping=None):
+    def __init__(self, num_labels, model_dir='', num_clf_partitions=1, 
+                 mode='train', size_shortlist=-1, num_centroids=1, 
+                 in_memory=True, label_mapping=None, dynamic=False):
         self.model_dir = model_dir
         self.num_centroids = num_centroids
         self.num_clf_partitions = num_clf_partitions
         self.size_shortlist = size_shortlist
         self.in_memory = in_memory
+        self.dynamic = dynamic
         self.mode = mode
         self.num_labels = num_labels
         self.label_mapping = label_mapping

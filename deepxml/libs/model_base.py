@@ -63,7 +63,8 @@ class ModelBase(object):
     def _create_dataset(self, data_dir, fname_features, fname_labels=None,
                         data=None, mode='predict', normalize_features=True,
                         normalize_labels=False, feature_type='sparse', 
-                        keep_invalid=False, feature_indices=None, label_indices=None):
+                        keep_invalid=False, feature_indices=None, 
+                        label_indices=None, size_shortlist=None):
         """
             Create dataset as per given parameters
         """
@@ -73,7 +74,7 @@ class ModelBase(object):
                                      data=data,
                                      model_dir=self.model_dir,
                                      mode=mode,
-                                     size_shortlist=self.shortlist_size,
+                                     size_shortlist=self.shortlist_size if size_shortlist is None else size_shortlist,
                                      normalize_features=normalize_features,
                                      normalize_labels=normalize_labels,
                                      keep_invalid=keep_invalid,

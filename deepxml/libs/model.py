@@ -342,3 +342,81 @@ class ModelShortlist(ModelBase):
             fname = self.tracking.saved_checkpoints[0]['ANN']
             os.remove(os.path.join(model_dir, fname))
         super().purge(model_dir)
+
+
+class ModelNS(ModelBase):
+    """
+        Models with negative sampling
+    """
+    def __init__(self, params, net, criterion, optimizer, shorty):
+        super().__init__(params, net, criterion, optimizer)
+        self.shorty = shorty
+        self.num_centroids = params.num_centroids
+        self.feature_indices = params.feature_indices
+        self.label_indices = params.label_indices
+
+    def _strip_padding_label(self, mat, num_labels):
+        stripped_vals = {}
+        for key, val in mat.items():
+            stripped_vals[key] = val[:, :num_labels].tocsr()
+            del val
+        return stripped_vals
+
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
+            tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
+            val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
+            init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
+            normalize_features=True, normalize_labels=False, validate=False, beta=0.2):
+        self.logger.info("Loading training data.")
+
+        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                             fname_features=tr_feat_fname,
+                                             fname_labels=tr_label_fname,
+                                             data=data,
+                                             mode='train',
+                                             keep_invalid=keep_invalid,
+                                             normalize_features=normalize_features,
+                                             normalize_labels=normalize_labels,
+                                             feature_indices=feature_indices,
+                                             label_indices=label_indices)
+        train_loader = self._create_data_loader(train_dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers,
+                                                shuffle=shuffle)
+        # No need to update embeddings
+        if self.freeze_embeddings:
+            self.logger.info("Computing and reusing document embeddings to save computations.")
+            data = {'X': None, 'Y': None}
+            data['X'] = self._document_embeddings(train_loader)
+            data['Y'] = train_dataset.labels.Y
+            train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                data=data,
+                                                fname_features=None,
+                                                mode='train',
+                                                feature_type='dense',
+                                                keep_invalid=True) # Invalid labels already removed
+            train_loader = self._create_data_loader(train_dataset,
+                                                    batch_size=batch_size,
+                                                    num_workers=num_workers,
+                                                    shuffle=shuffle)
+
+        self.logger.info("Loading validation data.")
+        validation_loader = None
+        if validate:
+            validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
+                                                      fname_features=val_feat_fname,
+                                                      fname_labels=val_label_fname,
+                                                      data={'X': None, 'Y': None},
+                                                      mode='predict',
+                                                      keep_invalid=keep_invalid,
+                                                      normalize_features=normalize_features,
+                                                      normalize_labels=normalize_labels,
+                                                      feature_indices=feature_indices,
+                                                      label_indices=label_indices, 
+                                                      size_shortlist=-1) # No shortlist during prediction
+            validation_loader = self._create_data_loader(validation_dataset,
+                                                         batch_size=batch_size,
+                                                         num_workers=num_workers)
+        self._fit(train_loader, validation_loader,
+                  model_dir, result_dir, init_epoch, num_epochs)
+                  
