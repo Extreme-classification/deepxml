@@ -374,7 +374,7 @@ class ModelBase(object):
         self.logger.info(
             "Adjusted learning rate to: {}".format(self.learning_rate))
 
-    def save_checkpoint(self, model_dir, epoch):
+    def save_checkpoint(self, model_dir, epoch, do_purge=True):
         checkpoint = {
             'epoch': epoch,
             'criterion': self.criterion.state_dict(),
@@ -385,7 +385,8 @@ class ModelBase(object):
         fname = {'net': 'checkpoint_net_{}.pkl'.format(epoch)}
         torch.save(checkpoint, os.path.join(model_dir, fname['net']))
         self.tracking.saved_checkpoints.append(fname)
-        self.purge(model_dir)
+        if do_purge:
+            self.purge(model_dir)
 
     def load_checkpoint(self, model_dir, fname, epoch):
         fname = os.path.join(model_dir, 'checkpoint_net_{}.pkl'.format(epoch))

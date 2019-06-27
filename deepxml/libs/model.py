@@ -312,7 +312,7 @@ class ModelShortlist(ModelBase):
         return self._strip_padding_label(predicted_labels, num_labels)
 
     def save_checkpoint(self, model_dir, epoch):
-        super().save_checkpoint(model_dir, epoch)
+        super().save_checkpoint(model_dir, epoch, False) # Avoid purge call from base class
         self.tracking.saved_checkpoints[-1]['ANN'] = 'checkpoint_ANN_{}.pkl'.format(
             epoch)
         self.shorty.save(os.path.join(
@@ -338,7 +338,7 @@ class ModelShortlist(ModelBase):
         self.shorty.load(os.path.join(model_dir, fname+'_ANN.pkl'))
 
     def purge(self, model_dir):
-        # if len(self.tracking.saved_checkpoints) > self.tracking.checkpoint_history:
-        #     fname = self.tracking.saved_checkpoints[-1]['ANN']
-        #     os.remove(os.path.join(model_dir, fname[1]))
+        if len(self.tracking.saved_checkpoints) > self.tracking.checkpoint_history:
+            fname = self.tracking.saved_checkpoints[0]['ANN']
+            os.remove(os.path.join(model_dir, fname))
         super().purge(model_dir)
