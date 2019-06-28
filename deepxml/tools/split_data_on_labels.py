@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class splitData(object):
     def __init__(self, split_method=0, num_splits=2, threshold=[2]):
         """
@@ -49,8 +50,6 @@ class splitData(object):
             current_split.sort() # Sort indices within the split
             self.labels_split.append(current_split)
 
-
-
     def split_based_on_frequency(self, labels):
         """
             Split labels based on frequency
@@ -99,7 +98,7 @@ class splitData(object):
         freq = np.array(data.sum(axis=0)).ravel()
         return freq
 
-    def fit(self, features, labels, remove_invalid_on_features=True, remove_invalid_on_labels=False):
+    def fit(self, features, labels, remove_invalid_on_features=False, remove_invalid_on_labels=False):
         if remove_invalid_on_features:
             features, labels = self.remove_documents_wo_features(features, labels)
         if remove_invalid_on_labels:

@@ -9,15 +9,14 @@
 
 #activate_anaconda
 #export CUDA_VISIBLE_DEVICES=2,3
-# cd $HOME/scratch/lab/xctools
-# python setup.py install --user
-# exit
+
 create_splits () {
     # $1: dataset
-    # $2: train_fname
-    # $3: num_splits
+    # $2: train_feat_fname
+    # $3: train_label_fname
+    # $4: split thresholds
     echo "Creating data splits.."
-    python3 ../tools/run_split_data_on_freq.py $1 $2 $3
+    python3 ../tools/run_split_data.py $1 $2 $3 $4
 }
 
 merge_split_predictions () {
@@ -54,7 +53,7 @@ shift 6
 
 learning_rates=1
 lr_full=(0.02)
-lr_shortlist=(0.005)
+lr_shortlist=(0.003)
 num_epochs_full=25
 num_epochs_shortlist=15
 
@@ -73,7 +72,7 @@ data_dir="${work_dir}/data/${dataset}"
 if [ ! -e "${data_dir}/split_stats.json" ]
 then
     echo "Splitting data."
-    create_splits $data_dir 'train.txt' $split_threshold
+    create_splits $data_dir 'trn_X_Xf.txt' 'trn_X_Y.txt' $split_threshold
 else
     echo "Using old" "${data_dir}/split_stats.json"
 fi

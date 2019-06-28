@@ -117,7 +117,7 @@ gen_tail_emb ()
     gen_emb=$result_dir
     feat_idx="${data_dir}/features_split_${version}.txt"
     out_emb="${model_dir}/head_embeddings_${embedding_dims}d.npy"
-    python DeepXML/tools/init_embedding_from_head.py $original_emb $gen_emb $feat_idx $out_emb
+    python ${work_dir}/programs/deepxml/deepxml/tools/init_embedding_from_head.py $original_emb $gen_emb $feat_idx $out_emb
 }
 
 # $1 Flag
@@ -153,7 +153,7 @@ then
     # $2 A
     # $3 B
     # $4 TYPE and BETAS
-    evaluate $result_dir $data_dir'/train.txt' $data_dir'/test.txt' "${result_dir}/${1}" ${2} ${3} "${4}"
+    evaluate $result_dir $data_dir'/trn_X_Y.txt' $data_dir'/tst_X_Y.txt' "${result_dir}/${1}" ${2} ${3} "${4}"
 
 elif [ "${FLAG}" == "extract" ]
 then

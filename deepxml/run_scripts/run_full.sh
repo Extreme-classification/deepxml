@@ -74,7 +74,7 @@ then
                 --freeze_embeddings \
                 --efC 300 \
                 --efS 300 \
-                --num_clf_partitions 2\
+                --num_clf_partitions 1\
                 --num_centroids 1 \
 		        --use_residual \
                 --lr $learning_rate \
@@ -141,7 +141,6 @@ docs=("trn" "tst")
 cwd=$(pwd)
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile "${TRAIN_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile "${PREDICT_PARAMS}"
 
 if [ $use_post -eq 1 ]
 then
@@ -150,7 +149,8 @@ then
 fi
 
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile "${PREDICT_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS} --ts_fname 0 --out_fname export/wrd_emb"
+./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
+
 if [ $quantile -gt -1 ]
 then
     echo "Generating Head Embeddings"

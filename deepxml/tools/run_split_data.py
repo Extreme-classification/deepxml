@@ -8,11 +8,15 @@ import json
 
 def main():
     data_dir = sys.argv[1]
-    train_fname = sys.argv[2]
-    split_threshold = list(map(int, sys.argv[3].split(",")))
+    train_feat_fname = sys.argv[2]
+    train_label_fname = sys.argv[3]
+    split_threshold = list(map(int, sys.argv[4].split(",")))
     num_splits = len(split_threshold)+1
-    tr_features, tr_labels, _, num_features, num_labels = data_utils.read_data(os.path.join(data_dir, train_fname))
-    tr_labels = data_utils.binarize_labels(tr_labels, num_labels)
+    tr_features = data_utils.read_sparse_file(os.path.join(data_dir, train_feat_fname), force_header=True)
+    tr_labels = data_utils.read_sparse_file(os.path.join(data_dir, train_label_fname), force_header=True)
+    assert tr_features.shape[0] == tr_labels.shape[0], "Number of instances must be same in features and labels"
+    num_features = tr_features.shape[1]
+    num_labels = tr_labels.shape[1]
     stats_obj = {'header': 'num_features,num_labels'}
     stats_obj['threshold'] = ",".join(map(str, split_threshold))
     sd = splitData(split_method=0, num_splits=num_splits, threshold=split_threshold)
