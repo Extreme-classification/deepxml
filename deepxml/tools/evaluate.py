@@ -22,9 +22,9 @@ def normalize(mat):
     _norm = sparse.diags(1.0/_max)
     return _norm.dot(mat).tocsr()
 
-def main(targets_file, train_file, predictions_file, A, B, betas, _type):
-    _, true_labels, _, _, _ = data_utils.read_data(targets_file)
-    _, trn_labels, _, _, _ = data_utils.read_data(train_file)
+def main(targets_label_file, train_label_file, predictions_file, A, B, betas, _type):
+    true_labels = data_utils.read_sparse_file(targets_label_file, force_header=True)
+    trn_labels = data_utils.read_sparse_file(train_label_file, force_header=True)
     inv_propen = xc_metrics.compute_inv_propesity(trn_labels, A, B)
     acc = xc_metrics.Metrices(true_labels, inv_propensity_scores=inv_propen, remove_invalid=False)
     root = os.path.dirname(predictions_file)
@@ -57,7 +57,7 @@ def main(targets_file, train_file, predictions_file, A, B, betas, _type):
         print(xc_metrics.format(*args))
 
 if __name__ == '__main__':
-    train_file = sys.argv[1]
+    train_label_file = sys.argv[1]
     targets_file = sys.argv[2]  # Usually test data file
     predictions_file = sys.argv[3]  # In mat format
     A = float(sys.argv[4])
@@ -65,4 +65,4 @@ if __name__ == '__main__':
     _type=int(sys.argv[6])
 
     betas = list(map(float, sys.argv[7:]))
-    main(targets_file, train_file, predictions_file, A, B, betas, _type)
+    main(targets_file, train_label_file, predictions_file, A, B, betas, _type)
