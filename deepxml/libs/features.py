@@ -3,6 +3,8 @@ import numpy as np
 import _pickle as pickle
 from xclib.data import data_utils
 import os
+import re
+import json
 
 
 def construct(data_dir, fname, X=None, normalize=False, _type='sparse'):
@@ -145,5 +147,41 @@ class SequentialFeatures(FeaturesBase):
             data_dir: str: data directory
             fname: str: load data from this file
             X: ?: ?
+        * 0: Reserved for padding index; 1: Start token and 2: end token
     """
-    pass
+    def __init__(self, data_dir, fname, X=None, vocabulary_file=None):
+        self.load(data_dir, fname)
+        if vocabulary_file is not None:
+            self.token_to_index = json.load(os.path.join(data_dir, vocabulary_file))
+            self.process_text() #Assumes text is already vectorized if no vocab file is supplied
+
+    @property
+    def shape(self):
+        return len(self.X), -1
+
+    def process_text(self):
+        self.X = [self.convert(item) for item in self.X]
+
+    def load(self, data_dir, fname):
+        with open(os.path.join(data_dir, fname), 'r', encoding='latin') as fp:
+            self.X = fp.readlines()
+        self.num_instances = len(self.X)
+        self.num_features = -1
+
+    def _clean_text(self, sentence):
+        sentence = sentence.lower().strip()
+        sentence = re.sub(r"([.!?])", r" \1", sentence)
+        sentence = re.sub(r"[^a-zA-Z0-9.!?]+", r" ", sentence)
+        return sentence
+
+    def convert(self, sentence):
+        # Assuming there is no need to truncate as of now
+        sentence = '<S> ' + self._clean_text(sentence) + " . </S>"
+        return self.map_to_indices(sentence.split(" "))
+
+    def map_to_indices(self, sentence):
+        return list(map(lambda x: self.token_to_index[x], sentence))
+
+    def __getitem__(self, index):
+        return self.X[index]
+ 
