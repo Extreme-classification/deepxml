@@ -11,8 +11,9 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         self.project = nn.Linear(in_dimensions, hidden_dimensions, bias=False)
         self.context = Parameter(torch.Tensor(hidden_dimensions, 1))
-        self.softmax = nn.Softmax(dim=-1)
+        self.softmax = nn.Softmax(dim=1)
         self.tanh = nn.Tanh()
+        self.initialize()
 
     def forward(self, query):
         """
@@ -28,7 +29,7 @@ class Attention(nn.Module):
               Tensor containing attention weights.
         """
         trans_query = self.tanh(self.project(query))
-        attention_scores = torch.bmm(trans_query, self.context)
+        attention_scores = torch.matmul(trans_query, self.context)
         attention_scores = self.softmax(attention_scores)
         return torch.sum(trans_query * attention_scores, dim=1) 
 
