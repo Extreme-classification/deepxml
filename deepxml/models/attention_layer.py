@@ -31,10 +31,13 @@ class Attention(nn.Module):
         trans_query = self.tanh(self.project(query))
         attention_scores = torch.matmul(trans_query, self.context)
         attention_scores = self.softmax(attention_scores)
-        return torch.sum(trans_query * attention_scores, dim=1) 
+        return torch.sum(query * attention_scores, dim=1) 
 
     def initialize(self):
         """
             Initialize modules
         """
         nn.init.xavier_uniform_(self.context, gain=nn.init.calculate_gain('tanh'))
+
+    def to_device(self, device):
+        self.to(device)
