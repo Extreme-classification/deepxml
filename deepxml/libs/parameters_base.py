@@ -86,6 +86,13 @@ class ParametersBase():
             type=str,
             help='validation label file name')
         self.parser.add_argument(
+            '--feature_type',
+            dest='feature_type',
+            default='sparse',
+            action='store',
+            type=str,
+            help='feature type sequential/dense/sparse')
+        self.parser.add_argument(
             '--ts_label_fname',
             dest='ts_label_fname',
             default='tst_X_Y.txt',

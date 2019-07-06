@@ -36,6 +36,7 @@ class ModelBase(object):
         self.model_dir = params.model_dir
         self.label_padding_index = params.label_padding_index
         self.last_epoch = 0
+        self.feature_type = params.feature_type
         self.shortlist_size = params.num_nbrs if params.use_shortlist else -1
         self.dlr_step = params.dlr_step
         self.dlr_factor = params.dlr_factor
@@ -62,7 +63,7 @@ class ModelBase(object):
 
     def _create_dataset(self, data_dir, fname_features, fname_labels=None,
                         data=None, mode='predict', normalize_features=True,
-                        normalize_labels=False, feature_type='sparse', 
+                        normalize_labels=False, feature_type=None, 
                         keep_invalid=False, feature_indices=None, 
                         label_indices=None, size_shortlist=None):
         """
@@ -79,7 +80,7 @@ class ModelBase(object):
                                      normalize_labels=normalize_labels,
                                      keep_invalid=keep_invalid,
                                      num_centroids=self.num_centroids,
-                                     feature_type=feature_type,
+                                     feature_type=self.feature_type if feature_type is None else feature_type,
                                      num_clf_partitions=self.num_clf_partitions,
                                      feature_indices=feature_indices,
                                      label_indices=label_indices)
@@ -96,7 +97,7 @@ class ModelBase(object):
                                batch_size=batch_size,
                                num_workers=num_workers,
                                collate_fn=construct_collate_fn(
-                                   feature_type, use_shortlist, False, self.num_clf_partitions),
+                                   feature_type, use_shortlist, self.num_clf_partitions),
                                shuffle=shuffle)
         return dt_loader
 
@@ -159,8 +160,9 @@ class ModelBase(object):
     def _merge_part_predictions(self, out_ans):
         return torch.stack(out_ans, axis=1)
 
-    def _validate(self, data_loader):
+    def _validate(self, data_loader, top_k=10):
         self.net.eval()
+        top_k = min(top_k, data_loader.dataset.num_labels)
         torch.set_grad_enabled(False)
         num_batches = data_loader.dataset.num_instances//data_loader.batch_size
         mean_loss = 0
@@ -175,7 +177,7 @@ class ModelBase(object):
             if self.num_clf_partitions > 1:
                 out_ans = torch.cat(out_ans, dim=1)
             utils.update_predicted(
-                count, batch_size, out_ans.data, predicted_labels)
+                count, batch_size, out_ans.data, predicted_labels, top_k)
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(

@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-def construct_collate_fn(feature_type, use_shortlist=False, use_seq_features=False, num_partitions=1):
+def construct_collate_fn(feature_type, use_shortlist=False, num_partitions=1):
     def _collate_fn_dense_full(batch):
         return collate_fn_dense_full(batch, num_partitions)
     def _collate_fn_dense_sl(batch):
@@ -11,11 +11,21 @@ def construct_collate_fn(feature_type, use_shortlist=False, use_seq_features=Fal
         return collate_fn_sparse_full(batch, num_partitions)
     def _collate_fn_sparse_sl(batch):
         return collate_fn_sparse_sl(batch, num_partitions)
+    def _collate_fn_seq_full(batch):
+        return collate_fn_seq_full(batch, num_partitions)
+    def _collate_fn_seq_sl(batch):
+        raise NotImplementedError
+
     if feature_type=='dense':
         if use_shortlist:
             return _collate_fn_dense_sl
         else:
             return _collate_fn_dense_full
+    if feature_type=='sequential':
+        if use_shortlist:
+            return _collate_fn_seq_sl
+        else:
+            return _collate_fn_seq_full
     else:
         if use_shortlist:
             return _collate_fn_sparse_sl
@@ -141,6 +151,31 @@ def collate_fn_sparse_full(batch, num_partitions):
     for idx, (seq, seqlen) in enumerate(zip(sequences, seq_lengths)):
         batch_data['X'][idx, :seqlen] = torch.LongTensor(seq[0])
         batch_data['X_w'][idx, :seqlen] = torch.FloatTensor(seq[1])
+    if _is_partitioned:
+        batch_data['Y'] = []
+        for idx in range(num_partitions):
+            batch_data['Y'].append(torch.stack([torch.from_numpy(x[1][idx]) for x in batch], 0))
+    else:
+        batch_data['Y'] = torch.stack([torch.from_numpy(x[1]) for x in batch], 0)
+    return batch_data
+
+
+def collate_fn_seq_full(batch, num_partitions):
+    """
+        Combine each sample in a batch
+        For sparse features
+    """
+    _is_partitioned = True if num_partitions > 1 else False
+    batch_data = {}
+    batch_size = len(batch)
+    seq_lengths = [len(item[0]) for item in batch]
+    batch_data['X'] = torch.zeros(batch_size, max(seq_lengths)).long()
+    batch_data['X_l'] = torch.zeros(batch_size).long()
+    sequences = [item[0] for item in batch]
+    for idx, (seq, seqlen) in enumerate(zip(sequences, seq_lengths)):
+        batch_data['X'][idx, :seqlen] = torch.LongTensor(seq)
+        batch_data['X_l'][idx] = len(seq)
+
     if _is_partitioned:
         batch_data['Y'] = []
         for idx in range(num_partitions):
