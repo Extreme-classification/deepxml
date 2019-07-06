@@ -69,7 +69,10 @@ class RNN(nn.Module):
         """
         features = pack_padded_sequence(features, lengths, batch_first=True, enforce_sorted=False)
         output, h_n = self.rnn(features)
-        output = pad_packed_sequence(output, batch_first=True)
-        #FIXME: return h_n with appropriate sizes and return
-        # h_n = h_n.permute(1, 0, 2).contiguous().view(-1, self.num_layers*self.num_directions*self.hidden_size)
-        return output, None
+        h_n = h_n.permute(1, 0, 2).contiguous().view(-1, self.num_layers*self.num_directions*self.hidden_size)
+        output, _ = pad_packed_sequence(output, batch_first=True)
+        return output, h_n
+
+    def to_device(self, device):
+        self.to(device)
+        

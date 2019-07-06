@@ -178,6 +178,7 @@ class DeepSeqXML(nn.Module):
         self.hidden_dims = params.embedding_dims
         self.embedding_dims = params.embedding_dims
         self.trans_method = params.trans_method
+        self.num_rnn_layers = 1
         self.dropout = params.dropout
         self.bidirectional = params.bidirectional
         self.num_clf_partitions = params.num_clf_partitions
@@ -199,7 +200,7 @@ class DeepSeqXML(nn.Module):
                                        sparse=True)
         self.rnn = rnn_layer.RNN(input_size=self.pt_repr_dims,
                                  cell_type='LSTM',
-                                 num_layers=1,
+                                 num_layers=self.num_rnn_layers,
                                  hidden_size=self.hidden_dims,
                                  bidirectional=self.bidirectional,
                                  dropout=0.2,
@@ -239,7 +240,7 @@ class DeepSeqXML(nn.Module):
 
     def _compute_rep_dims(self):
         pt_repr_dims = self.embedding_dims
-        rep_dims = self.hidden_dims*2 if self.bidirectional else self.hidden_dims
+        rep_dims = self.hidden_dims*self.num_rnn_layers*2 if self.bidirectional else self.hidden_dims*self.num_rnn_layers
         return pt_repr_dims, rep_dims
 
     def forward(self, batch_data, return_embeddings=False):
@@ -253,8 +254,8 @@ class DeepSeqXML(nn.Module):
             Returns:
                 out: logits for each label
         """
-        embed = self.embeddings(batch_data['X'])
-        embed, _ = self.rnn(embed, batch_data['X_l'])
+        embed = self.embeddings(batch_data['X'].to(self.device_embeddings))
+        embed, _ = self.rnn(embed, batch_data['X_l'].to(self.device_embeddings))
         embed = self.attention(embed)
         if return_embeddings:
             out = embed
