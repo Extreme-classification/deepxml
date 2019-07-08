@@ -51,8 +51,9 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
         label_embeddings = compute_label_embeddings(
             doc_embeddings, data_loader, num_graphs)
         if num_centroids != 1 and data_loader.dataset._ext_head is not None: # Multiple centroid not supported for multiple-graphs
+            #FIXME See if there is better way to handle this indexing
             extra_label_embeddings = get_multiple_centroids(
-                data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels)
+                data_loader.dataset._ext_head, num_centroids, doc_embeddings, data_loader.dataset.labels.Y) 
             label_embeddings = np.vstack([label_embeddings, extra_label_embeddings])
         # label_embeddings = normalize(label_embeddings, copy=False)
         shorty.train(label_embeddings)
