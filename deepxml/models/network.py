@@ -159,7 +159,7 @@ class DeepXML(nn.Module):
             torch.from_numpy(clf_weights[:, -1]).view(-1, 1))
 
     def get_clf_weights(self):
-        self.classifier.get_weights()
+        return self.classifier.get_weights()
 
     def to_device(self):
         self.embeddings.to_device()
