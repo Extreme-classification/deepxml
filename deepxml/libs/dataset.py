@@ -10,7 +10,7 @@ import xclib.data.data_utils as data_utils
 from .dist_utils import Partitioner
 import operator
 from .lookup import Table, PartitionedTable
-from .shortlist import ShortlistHandler
+from .shortlist_handler import ShortlistHandlerStatic, ShortlistHandlerDynamic
 
 
 def construct_dataset(data_dir, fname_features, fname_labels, data=None, model_dir='',
@@ -37,7 +37,7 @@ class DatasetDense(DatasetBase):
 
     def __init__(self, data_dir, fname_features, fname_labels, data=None, model_dir='',
                  mode='train', feature_indices=None, label_indices=None, keep_invalid=False,
-                 normalize_features=True, normalize_labels=False, num_clf_partitions=1, 
+                 normalize_features=True, normalize_labels=False, num_clf_partitions=1,
                  feature_type='sparse', label_type='dense'):
         """
             Expects 'libsvm' format with header
@@ -45,8 +45,8 @@ class DatasetDense(DatasetBase):
                 data_file: str: File name for the set
             Can Support datasets w/o any label
         """
-        super().__init__(data_dir, fname_features, fname_labels, data, model_dir, 
-                         mode, feature_indices, label_indices, keep_invalid, 
+        super().__init__(data_dir, fname_features, fname_labels, data, model_dir,
+                         mode, feature_indices, label_indices, keep_invalid,
                          normalize_features, normalize_labels, feature_type, label_type)
         if not keep_invalid and self.labels._valid:
             # Remove labels w/o any positive instance
@@ -71,7 +71,7 @@ class DatasetDense(DatasetBase):
                 self.partitioner.load(os.path.join(
                     self.model_dir, 'partitionar.pkl'))
 
-        #TODO Take care of this select and padding index
+        # TODO Take care of this select and padding index
         self.label_padding_index = self.num_labels
 
     def __getitem__(self, index):
@@ -99,18 +99,19 @@ class DatasetSparse(DatasetBase):
     def __init__(self, data_dir, fname_features, fname_labels, data=None, model_dir='',
                  mode='train', feature_indices=None, label_indices=None, keep_invalid=False,
                  normalize_features=True, normalize_labels=False, num_clf_partitions=1,
-                 size_shortlist=-1, num_centroids=1, feature_type='sparse', label_type='sparse', 
+                 size_shortlist=-1, num_centroids=1, feature_type='sparse', label_type='sparse',
                  shortlist_in_memory=True):
         """
             Expects 'libsvm' format with header
             Args:
                 data_file: str: File name for the set
         """
-        super().__init__(data_dir, fname_features, fname_labels, data, model_dir, mode, 
-                         feature_indices, label_indices, keep_invalid, normalize_features, 
+        super().__init__(data_dir, fname_features, fname_labels, data, model_dir, mode,
+                         feature_indices, label_indices, keep_invalid, normalize_features,
                          normalize_labels, feature_type, label_type)
         if self.labels is None:
-            NotImplementedError("No support for shortlist w/o any label, consider using dense dataset.")
+            NotImplementedError(
+                "No support for shortlist w/o any label, consider using dense dataset.")
         self.feature_type = feature_type
         self.num_centroids = num_centroids
         self.num_clf_partitions = num_clf_partitions
@@ -123,9 +124,9 @@ class DatasetSparse(DatasetBase):
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
-        self.shortlist = ShortlistHandler(self.num_labels, model_dir, num_clf_partitions, 
-                                          mode, size_shortlist, num_centroids, 
-                                          shortlist_in_memory, self.multiple_cent_mapping)
+        self.shortlist = ShortlistHandlerStatic(self.num_labels, model_dir, num_clf_partitions,
+                                                mode, size_shortlist, num_centroids,
+                                                shortlist_in_memory, self.multiple_cent_mapping)
         self.use_shortlist = True if self.size_shortlist > 0 else False
         self.label_padding_index = self.num_labels
 
@@ -190,8 +191,8 @@ class DatasetSparse(DatasetBase):
         """
         data_obj = {}
         fname = os.path.join(
-            model_dir, 'labels_params.pkl' if self._split is None else \
-                "labels_params_split_{}.pkl".format(self._split))
+            model_dir, 'labels_params.pkl' if self._split is None else
+            "labels_params_split_{}.pkl".format(self._split))
         if self.mode == 'train':
             self._process_labels_train(data_obj, _ext_head_threshold)
             pickle.dump(data_obj, open(fname, 'wb'))
@@ -203,7 +204,7 @@ class DatasetSparse(DatasetBase):
         """
             Get data with shortlist for given data index
         """
-        pos_labels, _ =  self.labels[index]
+        pos_labels, _ = self.labels[index]
         return self.shortlist.get_shortlist(index, pos_labels)
 
     def __getitem__(self, index):
