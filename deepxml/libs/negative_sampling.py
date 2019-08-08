@@ -11,6 +11,7 @@ class NegativeSamplerBase(object):
         self.num_labels = num_labels
         self.num_negatives = num_negatives
         self.index = None
+        self._construct()
 
     def _construct(self):
         """
@@ -23,7 +24,7 @@ class NegativeSamplerBase(object):
         """
             Query for one sample
         """
-        return self.index(size=self.num_negatives)
+        return (self.index(size=self.num_negatives), [1.0]*self.num_negatives)
 
     def query(self, num_samples, *args, **kwargs):
         """
@@ -48,6 +49,10 @@ class NegativeSamplerBase(object):
         """
         self = pickle.load(open(fname, 'rb'))
 
+    @property
+    def data_init(self):
+        return True if self.index is not None else False
+
 
 class NegativeSampler(NegativeSamplerBase):
     """
@@ -57,10 +62,6 @@ class NegativeSampler(NegativeSamplerBase):
         self.prob = prob
         self.replace = replace
         super().__init__(num_labels, num_negatives)
-        self._construct()
 
     def _construct(self):
-        if self.prob is not None:
-            self.index = partial(np.random.choice, a=self.num_labels, replace=self.replace, p=self.prob)
-        else:
-            super()._construct()
+        self.index = partial(np.random.choice, a=self.num_labels, replace=self.replace, p=self.prob)
