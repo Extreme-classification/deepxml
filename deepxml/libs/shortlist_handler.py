@@ -229,10 +229,10 @@ class ShortlistHandlerDynamic(ShortlistHandlerBase):
     """
 
     def __init__(self, num_labels, shortlist, model_dir='', num_clf_partitions=1, 
-                 mode='train', size_shortlist=-1, num_centroids=1, in_memory=True, 
-                 label_mapping=None):
+                 mode='train', size_shortlist=-1, num_centroids=1, label_mapping=None):
         super().__init__(num_labels, shortlist, model_dir, num_clf_partitions,
                          mode, size_shortlist, num_centroids, label_mapping)
+        self._create_shortlist(shortlist)
 
-    def query(self, num_samples):
-        return self.shortlist.query()
+    def query(self, index):
+        return self.shortlist.query(num_samples=1)

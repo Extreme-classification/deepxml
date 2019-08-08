@@ -65,7 +65,8 @@ class ModelBase(object):
                         data=None, mode='predict', normalize_features=True,
                         normalize_labels=False, feature_type=None, 
                         keep_invalid=False, feature_indices=None, 
-                        label_indices=None, size_shortlist=None):
+                        label_indices=None, size_shortlist=None, 
+                        shortlist_type='static', shorty=None):
         """
             Create dataset as per given parameters
         """
@@ -83,7 +84,9 @@ class ModelBase(object):
                                      feature_type=self.feature_type if feature_type is None else feature_type,
                                      num_clf_partitions=self.num_clf_partitions,
                                      feature_indices=feature_indices,
-                                     label_indices=label_indices)
+                                     label_indices=label_indices,
+                                     shortlist_type=shortlist_type,
+                                     shorty=shorty)
         return _dataset
 
     def _create_data_loader(self, dataset, batch_size=128,
@@ -92,7 +95,10 @@ class ModelBase(object):
             Create data loader for given dataset
         """
         feature_type = dataset.feature_type
-        use_shortlist = True if self.shortlist_size > 0 else False
+        if hasattr(dataset, 'size_shortlist'):
+            use_shortlist = True
+        else:
+            use_shortlist = False
         dt_loader = DataLoader(dataset,
                                batch_size=batch_size,
                                num_workers=num_workers,

@@ -105,8 +105,7 @@ class ModelShortlist(ModelBase):
         utils.update_predicted_shortlist(
             count, batch_size, _clf_score, predicted_labels['clf'], batch_shortlist, top_k)
         utils.update_predicted_shortlist(
-            count, batch_size, _knn_score, predicted_labels['knn'],
-            batch_shortlist, top_k)
+            count, batch_size, _knn_score, predicted_labels['knn'], batch_shortlist, top_k)
         utils.update_predicted_shortlist(
             count, batch_size, _score, predicted_labels['combined'], batch_shortlist, top_k)
 
@@ -378,7 +377,9 @@ class ModelNS(ModelBase):
                                              normalize_features=normalize_features,
                                              normalize_labels=normalize_labels,
                                              feature_indices=feature_indices,
-                                             label_indices=label_indices)
+                                             label_indices=label_indices,
+                                             shortlist_type='dynamic',
+                                             shorty=self.shorty)
         train_loader = self._create_data_loader(train_dataset,
                                                 batch_size=batch_size,
                                                 num_workers=num_workers,

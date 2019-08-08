@@ -17,7 +17,7 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None, model_d
                       mode='train', size_shortlist=-1, normalize_features=True,
                       normalize_labels=True, keep_invalid=False, num_centroids=1,
                       feature_type='sparse', num_clf_partitions=1, feature_indices=None,
-                      label_indices=None):
+                      label_indices=None, shortlist_type='static', shorty=None):
     if size_shortlist == -1:
         return DatasetDense(data_dir, fname_features, fname_labels, data, model_dir, mode,
                             feature_indices, label_indices, keep_invalid, normalize_features,
@@ -27,7 +27,8 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None, model_d
         return DatasetSparse(data_dir, fname_features, fname_labels, data, model_dir,
                              mode, feature_indices, label_indices, keep_invalid,
                              normalize_features, normalize_labels, num_clf_partitions,
-                             size_shortlist, num_centroids, feature_type)
+                             size_shortlist, num_centroids, feature_type, shortlist_type, 
+                             shorty)
 
 
 class DatasetDense(DatasetBase):
@@ -99,8 +100,8 @@ class DatasetSparse(DatasetBase):
     def __init__(self, data_dir, fname_features, fname_labels, data=None, model_dir='',
                  mode='train', feature_indices=None, label_indices=None, keep_invalid=False,
                  normalize_features=True, normalize_labels=False, num_clf_partitions=1,
-                 size_shortlist=-1, num_centroids=1, feature_type='sparse', label_type='sparse',
-                 shortlist_in_memory=True):
+                 size_shortlist=-1, num_centroids=1, feature_type='sparse', shortlist_type='static',
+                 shorty=None, label_type='sparse', shortlist_in_memory=True):
         """
             Expects 'libsvm' format with header
             Args:
@@ -118,15 +119,21 @@ class DatasetSparse(DatasetBase):
         self.shortlist_in_memory = shortlist_in_memory
         self.size_shortlist = size_shortlist
         self.multiple_cent_mapping = None
+        self.shortlist_type = shortlist_type
         if not keep_invalid:
             # Remove labels w/o any positive instance
             self._process_labels(model_dir)
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
-        self.shortlist = ShortlistHandlerStatic(self.num_labels, model_dir, num_clf_partitions,
-                                                mode, size_shortlist, num_centroids,
-                                                shortlist_in_memory, self.multiple_cent_mapping)
+        if shortlist_type == 'static':
+            self.shortlist = ShortlistHandlerStatic(self.num_labels, model_dir, num_clf_partitions,
+                                                    mode, size_shortlist, num_centroids,
+                                                    shortlist_in_memory, self.multiple_cent_mapping)
+        else:
+            self.shortlist = ShortlistHandlerDynamic(self.num_labels, shorty, model_dir, num_clf_partitions,
+                                                    mode, size_shortlist, num_centroids,
+                                                    self.multiple_cent_mapping)
         self.use_shortlist = True if self.size_shortlist > 0 else False
         self.label_padding_index = self.num_labels
 
