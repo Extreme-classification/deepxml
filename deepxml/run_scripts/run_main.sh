@@ -7,7 +7,6 @@
 # $6 Threshold to split on
 # $nargs Version to run on each split
 
-#activate_anaconda
 #export CUDA_VISIBLE_DEVICES=2,3
 
 create_splits () {
@@ -54,8 +53,10 @@ shift 6
 learning_rates=1
 lr_full=(0.02)
 lr_shortlist=(0.003)
+lr_ns=(0.003)
 num_epochs_full=25
 num_epochs_shortlist=15
+num_epochs_ns=15
 
 embedding_dims=300
 dlr_factor=0.5

@@ -18,6 +18,7 @@ import libs.shortlist_utils as shortlist_utils
 import libs.model as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
+import libs.negative_sampling as negative_sampling
 
 
 __author__ = 'KD'
@@ -31,15 +32,17 @@ def load_emeddings(params):
     if params.use_head_embeddings:
         embeddings = np.load(
             os.path.join(os.path.dirname(params.model_dir),
-                        params.embeddings))
+                         params.embeddings))
     else:
-        fname = os.path.join(params.data_dir, params.dataset, params.embeddings)
+        fname = os.path.join(
+            params.data_dir, params.dataset, params.embeddings)
         if Path(fname).is_file():
             print("Loading embeddings from file: {}".format(fname))
             embeddings = np.load(fname)
         else:
             print("Loading random embeddings")
-            embeddings = np.random.rand(params.vocabulary_dims, params.embedding_dims)
+            embeddings = np.random.rand(
+                params.vocabulary_dims, params.embedding_dims)
     if params.feature_indices is not None:
         indices = np.genfromtxt(params.feature_indices, dtype=np.int32)
         embeddings = embeddings[indices, :]
@@ -50,17 +53,17 @@ def load_emeddings(params):
 
 def pp_with_shorty(model, params, shorty):
     model._pp_with_shortlist(shorty=shorty,
-                         data_dir=params.data_dir,
-                         dataset=params.dataset,
-                         tr_feat_fname=params.tr_feat_fname,
-                         tr_label_fname=params.tr_label_fname,
-                         keep_invalid=False,
-                         normalize_features=params.normalize,
-                         normalize_labels=params.nbn_rel,
-                         batch_size=params.batch_size, 
-                         num_workers=4,
-                         label_indices=params.label_indices,
-                         feature_indices=params.feature_indices)
+                             data_dir=params.data_dir,
+                             dataset=params.dataset,
+                             tr_feat_fname=params.tr_feat_fname,
+                             tr_label_fname=params.tr_label_fname,
+                             keep_invalid=False,
+                             normalize_features=params.normalize,
+                             normalize_labels=params.nbn_rel,
+                             batch_size=params.batch_size,
+                             num_workers=4,
+                             label_indices=params.label_indices,
+                             feature_indices=params.feature_indices)
     shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
 
 
@@ -93,7 +96,7 @@ def train(model, params):
               keep_invalid=params.keep_invalid,
               feature_indices=params.feature_indices,
               label_indices=params.label_indices)
-    #TODO: Accomodate low rank
+    # TODO: Accomodate low rank
     model.save(params.model_dir, params.model_fname, params.low_rank)
 
 
@@ -118,6 +121,7 @@ def get_document_embeddings(model, params, _save=True):
     if _save:
         np.save(fname, doc_embeddings)
     return doc_embeddings
+
 
 def get_word_embeddings(model, params):
     """
@@ -150,14 +154,15 @@ def get_classifier_wts(model, params):
     _split = None
     if params.label_indices is not None:
         _split = params.label_indices.split("_")[-1].split(".")[0]
-   
+
     fname = os.path.join(params.model_dir,
                          'labels_params.pkl' if _split is None
                          else "labels_params_split_{}.pkl".format(_split))
     temp = pickle.load(open(fname, 'rb'))
     label_mapping = temp['valid_labels']
     num_labels = temp['num_labels']
-    clf_wts = np.zeros((num_labels, params.embedding_dims+1), dtype=np.float32) # +1 for bias
+    clf_wts = np.zeros((num_labels, params.embedding_dims+1),
+                       dtype=np.float32)  # +1 for bias
     clf_wts[:, -1] = -1e5  # -inf bias for untrained classifiers
     clf_wts[label_mapping, :] = model.net.get_clf_weights()
     fname = os.path.join(params.result_dir, 'export/classifier.npy')
@@ -192,11 +197,12 @@ def inference(model, params):
         if params.label_indices is not None:
             _split = params.label_indices.split("_")[-1].split(".")[0]
         fname = os.path.join(params.model_dir,
-            'labels_params.pkl' if _split is None else "labels_params_split_{}.pkl".format(_split))
+                             'labels_params.pkl' if _split is None else "labels_params_split_{}.pkl".format(_split))
         temp = pickle.load(open(fname, 'rb'))
         label_mapping = temp['valid_labels']
         num_labels = temp['num_labels']
-    utils.save_predictions(predicted_labels, params.result_dir, label_mapping, num_samples, num_labels)
+    utils.save_predictions(predicted_labels, params.result_dir,
+                           label_mapping, num_samples, num_labels)
 
 
 def main(params):
@@ -226,13 +232,25 @@ def main(params):
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
         if params.use_shortlist:
-            if params.num_clf_partitions > 1:
-                shorty = shortlist.ParallelShortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
-            else:
-                shorty = shortlist.Shortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-            model = model_utils.ModelShortlist(params, net, criterion, optimizer, shorty)
+            if params.ann_method == 'ns': #Negative Sampling
+                if params.num_clf_partitions > 1:
+                    raise NotImplementedError("Not tested yet!")
+                else:
+                    shorty = negative_sampling.NegativeSampler(params.num_labels, params.num_nbrs,
+                                                               None, False)
+                model = model_utils.ModelNS(
+                    params, net, criterion, optimizer, shorty)
+            else: # Approximate Nearest Neighbor
+                if params.num_clf_partitions > 1:
+                    shorty = shortlist.ParallelShortlist(
+                        params.ann_method, params.num_nbrs, params.M, params.efC,
+                        params.efS, params.ann_threads, params.num_clf_partitions)
+                else:
+                    shorty = shortlist.Shortlist(
+                        params.ann_method, params.num_nbrs, params.M,
+                        params.efC, params.efS, params.ann_threads)
+                model = model_utils.ModelShortlist(
+                    params, net, criterion, optimizer, shorty)
         else:
             model = model_utils.ModelFull(params, net, criterion, optimizer)
         model.transfer_to_devices()
@@ -247,10 +265,12 @@ def main(params):
         if params.use_shortlist:
             if params.num_clf_partitions > 1:
                 shorty = shortlist.ParallelShortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
+                    params.ann_method, params.num_nbrs, params.M, params.efC,
+                    params.efS, params.ann_threads, params.num_clf_partitions)
             else:
                 shorty = shortlist.Shortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
+                    params.ann_method, params.num_nbrs, params.M, params.efC,
+                    params.efS, params.ann_threads)
         optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
                                               learning_rate=params.learning_rate,
                                               momentum=params.momentum,
@@ -259,7 +279,7 @@ def main(params):
             size_average=False if params.use_shortlist else True)
         model = model.Model(
             params, net, criterion=criterion, optimizer=None, shorty=shorty)
-        
+
         model.load_checkpoint(
             params.model_dir, params.model_fname, params.last_epoch)
         model.transfer_to_devices()
@@ -287,9 +307,11 @@ def main(params):
             else:
                 shorty = shortlist.Shortlist(
                     params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-            model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
+            model = model_utils.ModelShortlist(
+                params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
         else:
-            model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
+            model = model_utils.ModelFull(
+                params=params, net=net, criterion=None, optimizer=None)
         model.transfer_to_devices()
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
         inference(model, params)
@@ -311,7 +333,8 @@ def main(params):
             else:
                 shorty = shortlist.Shortlist(
                     params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-        model = model_utils.ModelFull(params, net, criterion=None, optimizer=None)
+        model = model_utils.ModelFull(
+            params, net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
         model.transfer_to_devices()
         pp_with_shorty(model, params, shorty)
@@ -330,9 +353,11 @@ def main(params):
             else:
                 shorty = shortlist.Shortlist(
                     params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-            model = model_utils.ModelShortlist(params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
+            model = model_utils.ModelShortlist(
+                params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
         else:
-            model = model_utils.ModelFull(params=params, net=net, criterion=None, optimizer=None)
+            model = model_utils.ModelFull(
+                params=params, net=net, criterion=None, optimizer=None)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
         if params.ts_feat_fname == "0":
