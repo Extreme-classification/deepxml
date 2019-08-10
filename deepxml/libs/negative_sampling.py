@@ -1,6 +1,7 @@
 import numpy as np
 import _pickle as pickle
 from functools import partial
+import randomgen as rn
 
 
 class NegativeSamplerBase(object):
@@ -64,4 +65,4 @@ class NegativeSampler(NegativeSamplerBase):
         super().__init__(num_labels, num_negatives)
 
     def _construct(self):
-        self.index = partial(np.random.choice, a=self.num_labels, replace=self.replace, p=self.prob)
+        self.index = partial(rn.RandomGenerator().choice, a=self.num_labels, replace=self.replace, p=self.prob)
