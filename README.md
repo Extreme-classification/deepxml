@@ -17,8 +17,8 @@ Implementation of DeepXML
 - [x] Different class for shortlist
 - [ ] Parameters from json?
 - [ ] Remove dependence on labels in prediction?/get_document_embeddings?
-- [ ] Shortlist with NS
-- [ ] Support for dynamic shortlist
+- [x] Shortlist with NS
+- [x] Support for dynamic shortlist
 - [ ] Support for on-disk document embeddings (i.e. a large number of documents)
 - [ ] Support for novel documents i.e. w/o saving shortlist
 

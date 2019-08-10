@@ -52,6 +52,7 @@ TRAIN_PARAMS="--lr $learning_rate \
             --trans_method non_linear \
             --dropout 0.5 \
             --optim Adam \
+            --ann_method ns \
             --efS 300 \
             --normalize \
             --num_nbrs 300 \
@@ -77,7 +78,6 @@ PREDICT_PARAMS="--dataset ${dataset} \
 
 EXTRACT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
-                --use_shortlist \
                 --normalize \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${extra_params}"
