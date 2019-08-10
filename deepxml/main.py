@@ -320,6 +320,7 @@ def main(params):
         # Train ANNS for 1-vs-all classifier
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
+        params.ann_method = 'hnsw'  # FIXME: Hardcoded for now
         if params.num_centroids != 1:  # Pad label in case of multiple-centroids
             params.label_padding_index = params.num_labels
         net = network.DeepXML(params)
