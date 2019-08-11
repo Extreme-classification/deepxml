@@ -4,16 +4,21 @@ import h5py
 
 
 class Table(object):
+    """Maintain a lookup table
+    Supports in-memory and memmap file
+    Parameters
+    ----------
+    _type: str, optional, default='memory'
+        keep data in-memory or on-disk
+    _dtype: str, optional, default=np.float32
+        datatype of the incoming data
     """
-        Maintain a lookup table
-        Supports in-memory and memmap file
-    """
+
     def __init__(self, _type='memory', _dtype=np.float32):
         self._type = _type
         self._dtype = _dtype
         self._shape = None
         self.data = None
-        self.data_init = False
         self._file = None
 
     def _get_fname(self, fname, mode='data'):
@@ -32,7 +37,8 @@ class Table(object):
         if self._type == 'memory':
             self.data = _data
         elif self._type == 'memmap':
-            self.data = np.memmap(self._get_fname(_fname), dtype=self._dtype, mode='w+', shape=self._shape)
+            self.data = np.memmap(self._get_fname(
+                _fname), dtype=self._dtype, mode='w+', shape=self._shape)
             self._file = self.data
             self.data[:] = _data[:]
             self.data.flush()
@@ -47,22 +53,27 @@ class Table(object):
             pass
         else:
             raise NotImplementedError("Unknown type!")
-        self.data_init = True
 
     def query(self, indices):
         return self.data[indices]
 
     def save(self, _fname):
-        obj = {'_type': self._type, '_dtype': self._dtype, '_shape': self._shape}
+        obj = {'_type': self._type,
+               '_dtype': self._dtype,
+               '_shape': self._shape}
         pickle.dump(obj, open(self._get_fname(_fname, 'metadata'), 'wb'))
-        if self._type == 'memory': # Save numpy array; others are already on disk
+        # Save numpy array; others are already on disk
+        if self._type == 'memory':
             np.save(self._get_fname(_fname), self.data)
-        elif self._type == 'hdf5': #Not expected to work when filenames are same
+        # Not expected to work when filenames are same
+        elif self._type == 'hdf5':
             _file = h5py.File(self._get_fname(_fname), 'w+')
             _file.create_dataset('data', data=self.data)
-            _file.close()            
-        elif self._type == 'memmap': #Not expected to work when filenames are same
-            _file = np.memmap(self._get_fname(_fname), dtype=self._dtype, mode='w+', shape=self._shape)
+            _file.close()
+        # Not expected to work when filenames are same
+        elif self._type == 'memmap':
+            _file = np.memmap(self._get_fname(_fname),
+                              dtype=self._dtype, mode='w+', shape=self._shape)
             _file[:] = self.data[:]
             _file.flush()
         else:
@@ -76,7 +87,9 @@ class Table(object):
         if self._type == 'memory':
             self.data = np.load(self._get_fname(_fname), allow_pickle=True)
         elif self._type == 'memmap':
-            self.data = np.memmap(self._get_fname(_fname), mode='r+', shape=self._shape, dtype=self._dtype)
+            self.data = np.memmap(self._get_fname(_fname),
+                                  mode='r+', shape=self._shape,
+                                  dtype=self._dtype)
         elif self._type == 'hdf5':
             fp = h5py.File(self._get_fname(_fname), 'r+')
             self.data = fp.get('data')
@@ -84,27 +97,36 @@ class Table(object):
             pass
         else:
             raise NotImplementedError("Unknown type!")
-        self.data_init = True
 
     def __del__(self):
         del self.data
 
+    @property
+    def data_init(self):
+        return True if self.data is not None else False
+
 
 class PartitionedTable(object):
-    """
-        Maintain a lookup table
+    """Maintain multiple lookup tables
         Supports in-memory and memmap file
+    Parameters
+    ----------
+    num_partitions: int, optional, default=1
+        #tables to maintain
+    _type: str, optional, default='memory'
+        keep data in-memory or on-disk
+    _dtype: str, optional, default=np.float32
+        datatype of the incoming data
     """
+
     def __init__(self, num_partitions=1, _type='memory', _dtype=np.float32):
         self.num_partitions = num_partitions
         self.data = []
-        self.data_init = False
         for _ in range(self.num_partitions):
             self.data.append(Table(_type, _dtype))
 
-    def _create_one(self, _data, _fname, idx): # Create a specific graph only
-        #TODO: Add condition to check for invalid idx
-        #TODO: Good way to set data_init condition if individual graphs are set
+    def _create_one(self, _data, _fname, idx):  # Create a specific graph only
+        # TODO: Add condition to check for invalid idx
         self.data[idx].create(_data, _fname + ".{}".format(idx))
 
     def create(self, _data, _fname, idx=-1):
@@ -117,7 +139,6 @@ class PartitionedTable(object):
         else:
             for idx in range(self.num_partitions):
                 self._create_one(_data[idx], _fname, idx)
-            self.data_init = True
 
     def query(self, indices):
         """
@@ -130,15 +151,19 @@ class PartitionedTable(object):
         return out
 
     def save(self, _fname):
-        pickle.dump({'num_partitions': self.num_partitions}, open(_fname+".metadata", "wb"))
+        pickle.dump(
+            {'num_partitions': self.num_partitions},
+            open(_fname+".metadata", "wb"))
         for idx in range(self.num_partitions):
             self.data[idx].save(_fname + ".{}".format(idx))
 
     def load(self, _fname):
-        self.num_partitions = pickle.load(open(_fname+".metadata", "rb"))['num_partitions']
+        self.num_partitions = pickle.load(
+            open(_fname+".metadata", "rb"))['num_partitions']
         for idx in range(self.num_partitions):
             self.data[idx].load(_fname + ".{}".format(idx))
-        self.data_init = True
 
-    def set_status(self, _status):
-        self.data_init = _status
+    @property
+    def data_init(self):
+        status = [item.data_init for item in self.data]
+        return True if all(status) else False
