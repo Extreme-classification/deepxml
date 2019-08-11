@@ -7,14 +7,33 @@ from .lookup import Table, PartitionedTable
 
 
 class ShortlistHandlerBase(object):
-    """
-        Base class for ShortlistHandler: 
-        - support for partitioned classifier
-        - support for multiple representations for labels
+    """Base class for ShortlistHandler
+    - support for partitioned classifier
+    - support for multiple representations for labels
+
+    Parameters
+    ----------
+    num_labels: int
+        number of labels
+    shortlist:
+        shortlist object
+    model_dir: str, optional, default=''
+        save the data in model_dir
+    num_clf_partitions: int, optional, default=''
+        #classifier splits
+    mode: str: optional, default=''
+        mode i.e. train or test or val
+    size_shortlist:int, optional, default=-1
+        get shortlist of this size
+    num_centroids: int, optional, default=1
+        #centroids (useful when using multiple rep)
+    label_mapping: None or dict: optional, default=None
+        map labels as per this mapping
     """
 
-    def __init__(self, num_labels, shortlist, model_dir='', num_clf_partitions=1,
-                 mode='train', size_shortlist=-1, num_centroids=1,
+    def __init__(self, num_labels, shortlist, model_dir='',
+                 num_clf_partitions=1, mode='train',
+                 size_shortlist=-1, num_centroids=1,
                  label_mapping=None):
         self.model_dir = model_dir
         self.num_centroids = num_centroids
@@ -23,7 +42,7 @@ class ShortlistHandlerBase(object):
         self.mode = mode
         self.num_labels = num_labels
         self.label_mapping = label_mapping
-        #self._create_shortlist(shortlist)
+        # self._create_shortlist(shortlist)
         self._create_partitioner()
         self.label_padding_index = self.num_labels
         if self.num_clf_partitions > 1:
@@ -46,12 +65,14 @@ class ShortlistHandlerBase(object):
         if self.num_clf_partitions > 1:
             if self.mode == 'train':
                 self.partitioner = Partitioner(
-                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+                    self.num_labels, self.num_clf_partitions,
+                    padding=False, contiguous=True)
                 self.partitioner.save(os.path.join(
                     self.model_dir, 'partitionar.pkl'))
             else:
                 self.partitioner = Partitioner(
-                    self.num_labels, self.num_clf_partitions, padding=False, contiguous=True)
+                    self.num_labels, self.num_clf_partitions,
+                    padding=False, contiguous=True)
                 self.partitioner.load(os.path.join(
                     self.model_dir, 'partitionar.pkl'))
 
@@ -60,7 +81,8 @@ class ShortlistHandlerBase(object):
         indices.extend([self.label_padding_index]*_pad_length)
         dist.extend([100]*_pad_length)
 
-    def _remap_multiple_representations(self, indices, vals, _func=min, _limit=1e5):
+    def _remap_multiple_representations(self, indices, vals,
+                                        _func=min, _limit=1e5):
         """
             Remap multiple centroids to original labels
         """
@@ -127,7 +149,9 @@ class ShortlistHandlerBase(object):
             # Get shortlist for each classifier
             for idx in range(self.num_clf_partitions):
                 __shortlist, __labels_mask, __dist = self._adjust_shortlist(
-                    pos_labels[idx], _shortlist[idx].tolist(), _dist[idx].tolist())
+                    pos_labels[idx],
+                    _shortlist[idx].tolist(),
+                    _dist[idx].tolist())
                 shortlist.append(__shortlist)
                 labels_mask.append(__labels_mask)
                 dist.append(__dist)
@@ -155,11 +179,28 @@ class ShortlistHandlerBase(object):
 
 
 class ShortlistHandlerStatic(ShortlistHandlerBase):
-    """
-        ShortlistHandler with static shortlist 
-        - save/load/update/process shortlist
-        - support for partitioned classifier
-        - support for multiple representations for labels
+    """ShortlistHandler with static shortlist
+    - save/load/update/process shortlist
+    - support for partitioned classifier
+    - support for multiple representations for labels
+    Parameters
+    ----------
+    num_labels: int
+        number of labels
+    model_dir: str, optional, default=''
+        save the data in model_dir
+    num_clf_partitions: int, optional, default=''
+        #classifier splits
+    mode: str: optional, default=''
+        mode i.e. train or test or val
+    size_shortlist:int, optional, default=-1
+        get shortlist of this size
+    num_centroids: int, optional, default=1
+        #centroids (useful when using multiple rep)
+    in_memory: bool: optional, default=True
+        Keep the shortlist in memory or on-disk
+    label_mapping: None or dict: optional, default=None
+        map labels as per this mapping
     """
 
     def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
@@ -182,9 +223,11 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         _type = 'memory' if self.in_memory else 'memmap'
         if self.num_clf_partitions > 1:
             self.shortlist = PartitionedTable(
-                num_partitions=self.num_clf_partitions, _type=_type, _dtype=np.int)
+                num_partitions=self.num_clf_partitions,
+                _type=_type, _dtype=np.int)
             self.dist = PartitionedTable(
-                num_partitions=self.num_clf_partitions, _type=_type, _dtype=np.float32)
+                num_partitions=self.num_clf_partitions,
+                _type=_type, _dtype=np.float32)
         else:
             self.shortlist = Table(_type=_type, _dtype=np.int)
             self.dist = Table(_type=_type, _dtype=np.float32)
@@ -195,9 +238,13 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         """
         prefix = 'train' if self.mode == 'train' else 'test'
         self.shortlist.create(shortlist, os.path.join(
-            self.model_dir, '{}.{}.shortlist.indices'.format(fname, prefix)), idx)
+            self.model_dir,
+            '{}.{}.shortlist.indices'.format(fname, prefix)),
+            idx)
         self.dist.create(dist, os.path.join(
-            self.model_dir, '{}.{}.shortlist.dist'.format(fname, prefix)), idx)
+            self.model_dir,
+            '{}.{}.shortlist.dist'.format(fname, prefix)),
+            idx)
         del dist, shortlist
 
     def save_shortlist(self, fname):
@@ -222,14 +269,33 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
 
 
 class ShortlistHandlerDynamic(ShortlistHandlerBase):
-    """
-        ShortlistHandler with dynamic shortlist 
-        - support for partitioned classifier
-        - support for multiple representations for labels
+    """ShortlistHandler with dynamic shortlist
+    - support for partitioned classifier
+    - support for multiple representations for labels
+
+    Parameters
+    ----------
+    num_labels: int
+        number of labels
+    shortlist:
+        shortlist object like negative sampler
+    model_dir: str, optional, default=''
+        save the data in model_dir
+    num_clf_partitions: int, optional, default=''
+        #classifier splits
+    mode: str: optional, default=''
+        mode i.e. train or test or val
+    size_shortlist:int, optional, default=-1
+        get shortlist of this size
+    num_centroids: int, optional, default=1
+        #centroids (useful when using multiple rep)
+    label_mapping: None or dict: optional, default=None
+        map labels as per this mapping
     """
 
-    def __init__(self, num_labels, shortlist, model_dir='', num_clf_partitions=1, 
-                 mode='train', size_shortlist=-1, num_centroids=1, label_mapping=None):
+    def __init__(self, num_labels, shortlist, model_dir='',
+                 num_clf_partitions=1, mode='train', size_shortlist=-1,
+                 num_centroids=1, label_mapping=None):
         super().__init__(num_labels, shortlist, model_dir, num_clf_partitions,
                          mode, size_shortlist, num_centroids, label_mapping)
         self._create_shortlist(shortlist)

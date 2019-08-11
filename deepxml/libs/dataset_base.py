@@ -17,10 +17,10 @@ class DatasetBase(torch.utils.data.Dataset):
         Dataset to load and use XML-Datasets
     """
 
-    def __init__(self, data_dir, fname_features, fname_labels, data=None, 
-                model_dir='', mode='train', feature_indices=None, 
-                label_indices=None, keep_invalid=False, normalize_features=True, 
-                normalize_lables=False, feature_type='sparse', label_type='dense'):
+    def __init__(self, data_dir, fname_features, fname_labels, data=None,
+                 model_dir='', mode='train', feature_indices=None,
+                 label_indices=None, keep_invalid=False, normalize_features=True,
+                 normalize_lables=False, feature_type='sparse', label_type='dense'):
         """
             Support pickle or libsvm file format
             Args:
@@ -29,8 +29,8 @@ class DatasetBase(torch.utils.data.Dataset):
         self.data_dir = data_dir
         self.mode = mode
         self.features, self.labels = self.load_data(
-            data_dir, fname_features, fname_labels, data, 
-            normalize_features, normalize_lables, 
+            data_dir, fname_features, fname_labels, data,
+            normalize_features, normalize_lables,
             feature_type, label_type)
         self._split = None
         self.index_select(feature_indices, label_indices)
@@ -69,9 +69,10 @@ class DatasetBase(torch.utils.data.Dataset):
         """
             Returns None if filename is None
         """
-        labels = construct_l(data_dir, fname, Y, normalize_labels, label_type) # Pass dummy labels if required
+        labels = construct_l(data_dir, fname, Y, normalize_labels,
+                             label_type)  # Pass dummy labels if required
         if normalize_labels:
-            if self.mode == 'train': # Handle non-binary labels
+            if self.mode == 'train':  # Handle non-binary labels
                 print("Non-binary labels encountered in train; Normalizing...")
                 labels.normalize(norm='max', copy=False)
             else:
@@ -79,14 +80,16 @@ class DatasetBase(torch.utils.data.Dataset):
                 labels.binarize()
         return labels
 
-    def load_data(self, data_dir, fname_f, fname_l, data, 
+    def load_data(self, data_dir, fname_f, fname_l, data,
                   normalize_features=True, normalize_labels=False,
                   feature_type='sparse', label_type='dense'):
         """
             Load features and labels from file in libsvm format or pickle
         """
-        features = self.load_features(data_dir, fname_f, data['X'], normalize_features, feature_type)
-        labels = self.load_labels(data_dir, fname_l, data['Y'], normalize_labels, label_type)
+        features = self.load_features(
+            data_dir, fname_f, data['X'], normalize_features, feature_type)
+        labels = self.load_labels(
+            data_dir, fname_l, data['Y'], normalize_labels, label_type)
         return features, labels
 
     @property
@@ -116,7 +119,7 @@ class DatasetBase(torch.utils.data.Dataset):
         data_obj['num_labels'] = self.num_labels
         valid_labels = self.labels.remove_invalid()
         data_obj['valid_labels'] = valid_labels
-        
+
     def _process_labels_predict(self, data_obj):
         """
             Process labels for re-train data
@@ -133,8 +136,8 @@ class DatasetBase(torch.utils.data.Dataset):
         """
         data_obj = {}
         fname = os.path.join(
-            model_dir, 'labels_params.pkl' if self._split is None else \
-                "labels_params_split_{}.pkl".format(self._split))
+            model_dir, 'labels_params.pkl' if self._split is None else
+            "labels_params_split_{}.pkl".format(self._split))
         if self.mode == 'train':
             self._process_labels_train(data_obj)
             pickle.dump(data_obj, open(fname, 'wb'))

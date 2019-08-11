@@ -1,6 +1,9 @@
-# Tracking object; Maintain history of loss; accuracy etc.
+"""
+    Tracking object; Maintain history of loss; accuracy etc.
+"""
 
 import _pickle as pickle
+
 
 class Tracking(object):
     def __init__(self):
