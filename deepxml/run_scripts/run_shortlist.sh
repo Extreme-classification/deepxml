@@ -95,7 +95,7 @@ docs=("trn" "tst")
 cwd=$(pwd)
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile "${TRAIN_PARAMS}"
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile "${PREDICT_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS} --ts_fname 0 --out_fname export/wrd_emb"
+./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
 for doc in ${docs[*]}
 do 
     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"

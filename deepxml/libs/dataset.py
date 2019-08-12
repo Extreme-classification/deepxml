@@ -49,12 +49,12 @@ class DatasetDense(DatasetBase):
         super().__init__(data_dir, fname_features, fname_labels, data, model_dir,
                          mode, feature_indices, label_indices, keep_invalid,
                          normalize_features, normalize_labels, feature_type, label_type)
-        if not keep_invalid and self.labels._valid:
-            # Remove labels w/o any positive instance
-            self._process_labels(model_dir)
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
+        if not keep_invalid and self.labels._valid:
+            # Remove labels w/o any positive instance
+            self._process_labels(model_dir)
         self.feature_type = feature_type
         self.partitioner = None
         self.num_clf_partitions = num_clf_partitions if self.labels._valid else 1
@@ -120,12 +120,12 @@ class DatasetSparse(DatasetBase):
         self.size_shortlist = size_shortlist
         self.multiple_cent_mapping = None
         self.shortlist_type = shortlist_type
-        if not keep_invalid:
-            # Remove labels w/o any positive instance
-            self._process_labels(model_dir)
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
+        if not keep_invalid:
+            # Remove labels w/o any positive instance
+            self._process_labels(model_dir)
         if shortlist_type == 'static':
             self.shortlist = ShortlistHandlerStatic(self.num_labels, model_dir, num_clf_partitions,
                                                     mode, size_shortlist, num_centroids,
