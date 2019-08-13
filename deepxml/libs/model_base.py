@@ -148,7 +148,7 @@ class ModelBase(object):
         mean_loss = 0
         for batch_idx, batch_data in enumerate(data_loader):
             self.net.zero_grad()
-            batch_size = batch_data['X'].size(0)
+            batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             loss = self._compute_loss(out_ans, batch_data)
             if batch_div:  # If loss is sum and average over samples is required
@@ -176,7 +176,7 @@ class ModelBase(object):
                                        data_loader.dataset.num_labels))
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
-            batch_size = batch_data['X'].size(0)
+            batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             loss = self._compute_loss(out_ans, batch_data)
             mean_loss += loss.item()*batch_size
@@ -323,7 +323,7 @@ class ModelBase(object):
                                        data_loader.dataset.num_labels))
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
-            batch_size = batch_data['X'].size(0)
+            batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             if self.num_clf_partitions > 1:
                 out_ans = torch.cat(out_ans, dim=1)
@@ -346,7 +346,7 @@ class ModelBase(object):
                 data_loader.dataset.num_instances, self.net.repr_dims), dtype=_dtype)
         count = 0
         for _, batch_data in enumerate(data_loader):
-            batch_size = batch_data['X'].size(0)
+            batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data, return_embeddings=True)
             embeddings[count:count+batch_size, :] = out_ans.detach().cpu().numpy()
             count += batch_size

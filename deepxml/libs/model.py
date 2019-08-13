@@ -126,7 +126,7 @@ class ModelShortlist(ModelBase):
                                               _num_labels))
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
-            batch_size = batch_data['X'].size(0)
+            batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             loss = self._compute_loss(out_ans, batch_data)/batch_size
             mean_loss += loss.item()*batch_size
@@ -299,7 +299,7 @@ class ModelShortlist(ModelBase):
 
         count = 0
         for batch_idx, batch_data in enumerate(data_loader):
-            batch_size = batch_data['X'].size(0)
+            batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             self._update_predicted_shortlist(
                 count, batch_size, predicted_labels, out_ans, batch_data, beta)

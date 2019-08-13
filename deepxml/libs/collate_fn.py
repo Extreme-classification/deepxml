@@ -72,6 +72,7 @@ def collate_fn_sparse_sl(batch, num_partitions):
             batch_data['Y_s'][idx, :] = torch.LongTensor(seq[0])
             batch_data['Y'][idx, :] = torch.FloatTensor(seq[1])
             batch_data['Y_d'][idx, :] = torch.FloatTensor(seq[2])
+    batch_data['batch_size'] = batch_size
     return batch_data
 
 def collate_fn_dense_sl(batch, num_partitions):
@@ -111,6 +112,7 @@ def collate_fn_dense_sl(batch, num_partitions):
             batch_data['Y_s'][idx, :] = torch.LongTensor(seq[0])
             batch_data['Y'][idx, :] = torch.FloatTensor(seq[1])
             batch_data['Y_d'][idx, :] = torch.FloatTensor(seq[2])
+    batch_data['batch_size'] = batch_size
     return batch_data
 
 
@@ -133,6 +135,7 @@ def collate_fn_dense_full(batch, num_partitions):
             batch_data['Y'].append(torch.stack([torch.from_numpy(x[1][idx]) for x in batch], 0))
     else:
         batch_data['Y'] = torch.stack([torch.from_numpy(x[1]) for x in batch], 0)
+    batch_data['batch_size'] = batch_size
     return batch_data
 
 
@@ -157,6 +160,7 @@ def collate_fn_sparse_full(batch, num_partitions):
             batch_data['Y'].append(torch.stack([torch.from_numpy(x[1][idx]) for x in batch], 0))
     else:
         batch_data['Y'] = torch.stack([torch.from_numpy(x[1]) for x in batch], 0)
+    batch_data['batch_size'] = batch_size
     return batch_data
 
 
@@ -182,4 +186,5 @@ def collate_fn_seq_full(batch, num_partitions):
             batch_data['Y'].append(torch.stack([torch.from_numpy(x[1][idx]) for x in batch], 0))
     else:
         batch_data['Y'] = torch.stack([torch.from_numpy(x[1]) for x in batch], 0)
+    batch_data['batch_size'] = batch_size
     return batch_data
