@@ -15,6 +15,7 @@ def get_multiple_centroids(_ext_indices, num_centroids, features, labels):
 
 def get_and_update_shortlist(document_embeddings, shorty,
                              data_loader, _save_mem=True):
+    #FIXME: Figure out a way to delete document embeddings
     if not hasattr(shorty, 'num_graphs'):
         _save_mem = False
     if _save_mem:  # Fetch one-by-one; save to disk and delete
@@ -81,4 +82,4 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
     else:
         # get shortlist
         get_and_update_shortlist(doc_embeddings, shorty, data_loader)
-    return doc_embeddings
+    return None

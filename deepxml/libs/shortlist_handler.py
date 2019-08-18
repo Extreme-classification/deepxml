@@ -224,12 +224,12 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         if self.num_clf_partitions > 1:
             self.shortlist = PartitionedTable(
                 num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.int)
+                _type=_type, _dtype=np.int32)
             self.dist = PartitionedTable(
                 num_partitions=self.num_clf_partitions,
                 _type=_type, _dtype=np.float32)
         else:
-            self.shortlist = Table(_type=_type, _dtype=np.int)
+            self.shortlist = Table(_type=_type, _dtype=np.int32)
             self.dist = Table(_type=_type, _dtype=np.float32)
 
     def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
@@ -262,10 +262,6 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         self.shortlist.load(os.path.join(
             self.model_dir, fname+'.shortlist.indices'))
         self.dist.load(os.path.join(self.model_dir, fname+'.shortlist.dist'))
-
-    def set_status(self, _status=True):
-        self.shortlist.set_status(_status)
-        self.dist.set_status(_status)
 
 
 class ShortlistHandlerDynamic(ShortlistHandlerBase):

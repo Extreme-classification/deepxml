@@ -8,6 +8,7 @@
 import nmslib
 from sklearn.neighbors import NearestNeighbors
 import pickle
+import numpy as np
 
 
 class NearestNeighbor(object):
@@ -84,11 +85,11 @@ class HNSW(object):
             )
 
     def _filter(self, output):
-        indices = []
-        distances = []
-        for item in output:
-            indices.append(item[0])
-            distances.append(item[1])
+        indices = np.zeros((len(output), self.efS), dtype=np.int32)
+        distances = np.zeros((len(output), self.efS), dtype=np.float32)
+        for idx, item in enumerate(output):
+            indices[idx] = item[0]
+            distances[idx] = item[1]
         return indices, distances
 
     def predict(self, data):

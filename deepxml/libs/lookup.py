@@ -30,9 +30,9 @@ class Table(object):
     def create(self, _data, _fname, *args, **kwargs):
         """
             Create a file
-            Will copy data
+            Will not copy data if data-types are same
         """
-        _data = np.array(_data, dtype=self._dtype)
+        _data = np.asarray(_data, dtype=self._dtype)
         self._shape = _data.shape
         if self._type == 'memory':
             self.data = _data
