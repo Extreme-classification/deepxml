@@ -35,7 +35,7 @@ class ModelFull(ModelBase):
                                            fname_features=tr_feat_fname,
                                            fname_labels=tr_label_fname,
                                            data=data,
-                                           mode='predict',
+                                           mode='retrain_w_shortlist',
                                            keep_invalid=keep_invalid,
                                            normalize_features=normalize_features,
                                            normalize_labels=normalize_labels,

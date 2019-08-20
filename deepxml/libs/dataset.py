@@ -191,6 +191,19 @@ class DatasetSparse(DatasetBase):
             self._ext_head = None
             self.multiple_cent_mapping = None
 
+    def _process_labels_retrain_w_shortlist(self, data_obj, _ext_head_threshold):
+        super()._process_labels_predict(data_obj)
+        if self.num_centroids != 1:
+            print("Creating multiple centroid mappings..")
+            freq = self.labels.frequency()
+            self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
+            self.multiple_cent_mapping = np.arange(self.num_labels)
+            for idx in self._ext_head:
+                self.multiple_cent_mapping = np.append(
+                    self.multiple_cent_mapping, [idx]*self.num_centroids)
+            data_obj['ext_head'] = self._ext_head
+            data_obj['multiple_cent_mapping'] = self.multiple_cent_mapping
+
     def _process_labels(self, model_dir, _ext_head_threshold=10000):
         """
             Process labels to handle labels without any training instance;
@@ -198,10 +211,14 @@ class DatasetSparse(DatasetBase):
         """
         data_obj = {}
         fname = os.path.join(
-            model_dir, 'labels_params.pkl' if self._split is None else
-            "labels_params_split_{}.pkl".format(self._split))
+            model_dir, 'labels_params.pkl' if self._split is None else \
+                "labels_params_split_{}.pkl".format(self._split))
         if self.mode == 'train':
             self._process_labels_train(data_obj, _ext_head_threshold)
+            pickle.dump(data_obj, open(fname, 'wb'))
+        elif self.mode == 'retrain_w_shortlist':
+            data_obj = pickle.load(open(fname, 'rb'))
+            self._process_labels_retrain_w_shortlist(data_obj, _ext_head_threshold)
             pickle.dump(data_obj, open(fname, 'wb'))
         else:
             data_obj = pickle.load(open(fname, 'rb'))

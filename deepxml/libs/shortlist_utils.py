@@ -73,7 +73,7 @@ def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
             print("Clustering labels!")
             extra_label_embeddings = get_multiple_centroids(
                 data_loader.dataset._ext_head, num_centroids,
-                doc_embeddings, data_loader.dataset.labels)
+                doc_embeddings, data_loader.dataset.labels.Y)
             label_embeddings = np.vstack(
                 [label_embeddings, extra_label_embeddings])
         print("Label embedding shape: ", label_embeddings.shape)
