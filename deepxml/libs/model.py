@@ -265,7 +265,7 @@ class ModelShortlist(ModelBase):
         self._fit(train_loader, train_loader_shuffle, validation_loader,
                   model_dir, result_dir, init_epoch, num_epochs, beta)
 
-    def _predict(self, data_loader, **kwargs):
+    def _predict(self, data_loader, top_k, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()
@@ -302,7 +302,7 @@ class ModelShortlist(ModelBase):
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             self._update_predicted_shortlist(
-                count, batch_size, predicted_labels, out_ans, batch_data, beta)
+                count, batch_size, predicted_labels, out_ans, batch_data, beta, top_k)
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(

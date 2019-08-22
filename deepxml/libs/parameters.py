@@ -55,6 +55,13 @@ class Parameters(ParametersBase):
             type=str,
             help='Approximate nearest neighbor method')
         self.parser.add_argument(
+            '--top_k',
+            dest='top_k',
+            default=50,
+            action='store',
+            type=int,
+            help='#labels to predict for each document')
+        self.parser.add_argument(
             '--ann_threads',
             dest='ann_threads',
             default=4,

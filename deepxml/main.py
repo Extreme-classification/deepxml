@@ -183,6 +183,7 @@ def inference(model, params):
                                      normalize_features=params.normalize,
                                      normalize_labels=params.nbn_rel,
                                      beta=params.beta,
+                                     top_k=params.top_k,
                                      data={'X': None, 'Y': None},
                                      keep_invalid=params.keep_invalid,
                                      feature_indices=params.feature_indices,

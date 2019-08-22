@@ -290,7 +290,7 @@ class ModelBase(object):
     def predict(self, data_dir, dataset, data=None, ts_feat_fname='tst_X_Xf.txt',
                 ts_label_fname='tst_X_Y.txt', batch_size=256, num_workers=6, 
                 keep_invalid=False, feature_indices=None, label_indices=None,
-                normalize_features=True, normalize_labels=False, **kwargs):
+                normalize_features=True, normalize_labels=False, top_k=50, **kwargs):
         dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                        fname_features=ts_feat_fname,
                                        fname_labels=ts_label_fname,
@@ -306,7 +306,7 @@ class ModelBase(object):
                                                batch_size=batch_size,
                                                num_workers=num_workers)
         time_begin = time.time()
-        predicted_labels = self._predict(data_loader, **kwargs)
+        predicted_labels = self._predict(data_loader, top_k, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
         acc = self.evaluate(dataset.labels.Y, predicted_labels)
@@ -315,7 +315,7 @@ class ModelBase(object):
             prediction_time, prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
 
-    def _predict(self, data_loader, **kwargs):
+    def _predict(self, data_loader, top_k, **kwargs):
         self.net.eval()
         torch.set_grad_enabled(False)
         num_batches = data_loader.dataset.num_instances//data_loader.batch_size
@@ -328,7 +328,7 @@ class ModelBase(object):
             if self.num_clf_partitions > 1:
                 out_ans = torch.cat(out_ans, dim=1)
             utils.update_predicted(
-                count, batch_size, out_ans.data, predicted_labels)
+                count, batch_size, out_ans.data, predicted_labels, top_k)
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(
