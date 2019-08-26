@@ -340,3 +340,8 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Update shortlist while predicting'
         )
+        self.parser.add_argument(
+            '--use_coarse_for_shorty',
+            action='store_true',
+            help='Use coarse representation for shortlist'
+        )

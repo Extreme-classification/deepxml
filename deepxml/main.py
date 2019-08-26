@@ -187,7 +187,8 @@ def inference(model, params):
                                      data={'X': None, 'Y': None},
                                      keep_invalid=params.keep_invalid,
                                      feature_indices=params.feature_indices,
-                                     label_indices=params.label_indices
+                                     label_indices=params.label_indices,
+                                     use_coarse=params.use_coarse_for_shorty
                                      )
     # Real number of labels
     num_samples, num_labels = utils.get_header(
@@ -206,6 +207,13 @@ def inference(model, params):
                            label_mapping, num_samples, num_labels)
 
 
+def construct_network(params):
+    if params.use_shortlist:
+        return network.DeepXMLt(params)
+    else:
+        return network.DeepXMLh(params)
+
+
 def main(params):
     """
         Main function
@@ -214,7 +222,7 @@ def main(params):
         # Use last index as padding label
         if params.num_centroids != 1:
             params.label_padding_index = params.num_labels
-        net = network.DeepXML(params)
+        net = construct_network(params)
         if not params.use_hash_embeddings:
             embeddings = load_emeddings(params)
             net.initialize_embeddings(
@@ -233,7 +241,7 @@ def main(params):
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
         if params.use_shortlist:
-            if params.ann_method == 'ns': #Negative Sampling
+            if params.ann_method == 'ns':  # Negative Sampling
                 if params.num_clf_partitions > 1:
                     raise NotImplementedError("Not tested yet!")
                 else:
@@ -241,7 +249,7 @@ def main(params):
                                                                None, False)
                 model = model_utils.ModelNS(
                     params, net, criterion, optimizer, shorty)
-            else: # Approximate Nearest Neighbor
+            else:  # Approximate Nearest Neighbor
                 if params.num_clf_partitions > 1:
                     shorty = shortlist.ParallelShortlist(
                         params.ann_method, params.num_nbrs, params.M, params.efC,
@@ -262,7 +270,7 @@ def main(params):
     elif params.mode == 'retrain':
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
-        net = network.DeepXML(params)
+        net = construct_network(params)
         if params.use_shortlist:
             if params.num_clf_partitions > 1:
                 shorty = shortlist.ParallelShortlist(
@@ -297,7 +305,7 @@ def main(params):
     elif params.mode == 'predict':
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
-        net = network.DeepXML(params)
+        net = construct_network(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         shorty = None
@@ -324,7 +332,7 @@ def main(params):
         params.ann_method = 'hnsw'  # FIXME: Hardcoded for now
         if params.num_centroids != 1:  # Pad label in case of multiple-centroids
             params.label_padding_index = params.num_labels
-        net = network.DeepXML(params)
+        net = construct_network(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         shorty = None
@@ -345,7 +353,7 @@ def main(params):
     elif params.mode == 'extract':
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
-        net = network.DeepXML(params)
+        net = construct_network(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         if params.use_shortlist:
