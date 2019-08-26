@@ -1,56 +1,32 @@
-import torch
+import sys
+import re
 import torch.nn as nn
 import models.residual_layer as residual_layer
 
-__author__ = 'KD'
+
+elements = {
+    'dropout': nn.Dropout,
+    'batchnorm1d': nn.BatchNorm1d,
+    'linear': nn.Linear,
+    'relu': nn.ReLU,
+    'residual': residual_layer.Residual
+}
 
 
 class Transform(nn.Module):
     """
         Transform document representation!
+        transform_string: string for sequential pipeline
+            eg relu#,dropout#p:0.1,residual#input_size:300-output_size:300-dropout:0.5
+        params: dictionary like object for default params
+            eg {emb_size:300}
     """
 
-    def __init__(self, hidden_dims, embedding_dims, trans_method, dropout, use_residual, res_init, use_shortlist, device="cuda:0"):
+    def __init__(self, transform_string, params=None, device="cuda:0"):
         super(Transform, self).__init__()
-        self.hidden_dims = hidden_dims
-        self.embedding_dims = embedding_dims
-        self.trans_method = trans_method
-        self.dropout = dropout
-        self.use_residual = use_residual
-        self.res_init = res_init
-        self.device = torch.device(device)
-        self.use_shortlist = use_shortlist
-        modules = []
-        if self.trans_method == 'linear':
-            modules.append(nn.Dropout(self.dropout))
-            self.hidden_dims = self.embedding_dims
-        elif self.trans_method == 'non_linear':
-            modules.append(nn.ReLU())
-            modules.append(nn.Dropout(self.dropout))
-            self.hidden_dims = self.embedding_dims
-        elif self.trans_method == 'deep_non_linear':
-            modules.append(nn.ReLU())
-            modules.append(nn.Dropout(self.dropout))
-            modules.append(nn.Linear(self.embedding_dims, self.hidden_dims))
-            modules.append(nn.ReLU())
-            modules.append(nn.Dropout(self.dropout))        
-        elif self.trans_method == 'deep_non_linear_bn':
-            modules.append(nn.BatchNorm1d(self.hidden_dims))
-            modules.append(nn.ReLU())
-            modules.append(nn.Dropout(self.dropout))
-            modules.append(nn.Linear(self.embedding_dims, self.hidden_dims))
-            modules.append(nn.ReLU())
-            modules.append(nn.Dropout(self.dropout))               
-        else:
-            raise NotImplementedError("Unknown tranformation method!")
-
-        if self.use_residual:
-            modules.append(residual_layer.Residual(self.hidden_dims,
-                                                         self.hidden_dims,
-                                                         self.dropout,
-                                                   use_shortlist=self.use_shortlist, init=self.res_init))
+        self.device = device
+        modules = get_functions(transform_string, params)
         self.transform = nn.Sequential(*modules)
-
 
     def forward(self, embed):
         """
@@ -62,5 +38,31 @@ class Transform(nn.Module):
         """
         return self.transform(embed)
 
-    def to_device(self):
-        self.to(self.device)
+    def to(self):
+        super().to(self.device)
+
+
+def resolve_schema_args(string, ARGS):
+    arguments = re.findall(r"@ARGS\.(.+?);", string)
+    for arg in arguments:
+        replace = '@ARGS.%s;' % (arg)
+        to = str(ARGS[arg])
+        if string.find('@ARGS.%s;' % (arg)) != -1:
+            replace = '@ARGS.%s;' % (arg)
+            if isinstance(ARGS[arg], str):
+                to = str("\""+ARGS[arg]+"\"")
+        string = string.replace(replace, to)
+    return string
+
+
+def get_functions(obj, params=None):
+    obj_dict = []
+    obj = resolve_schema_args(obj, params)
+    for element in obj.split(','):
+        key, params = element.split('#', 1)
+        obj_dict.append([key, dict({})])
+        if params != '':
+            for param in params.split('-'):
+                _key_param, _val_param = param.split(':', 1)
+                obj_dict[-1][1][_key_param] = eval(_val_param)
+    return list(map(lambda x: elements[x[0]](**x[1]), obj_dict))
