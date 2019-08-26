@@ -41,8 +41,8 @@ class CustomEmbedding(torch.nn.Module):
         if self.padding_idx is not None:
             self.weight.data[self.padding_idx].fill_(0)
 
-    def to_device(self):
-        self.to(self.device)
+    def to(self):
+        super().to(self.device)
 
     def forward(self, features, weights, _div=False):
         """

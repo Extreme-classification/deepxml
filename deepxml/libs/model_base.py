@@ -49,7 +49,7 @@ class ModelBase(object):
         self.model_fname = params.model_fname
 
     def transfer_to_devices(self):
-        self.net.to_device()
+        self.net.to()
 
     def _create_devices(self, _devices):
         if len(_devices) < 2:  # Repeat devices if required
@@ -63,9 +63,9 @@ class ModelBase(object):
 
     def _create_dataset(self, data_dir, fname_features, fname_labels=None,
                         data=None, mode='predict', normalize_features=True,
-                        normalize_labels=False, feature_type=None, 
-                        keep_invalid=False, feature_indices=None, 
-                        label_indices=None, size_shortlist=None, 
+                        normalize_labels=False, feature_type=None,
+                        keep_invalid=False, feature_indices=None,
+                        label_indices=None, size_shortlist=None,
                         shortlist_type='static', shorty=None):
         """
             Create dataset as per given parameters
@@ -245,16 +245,17 @@ class ModelBase(object):
                                                 batch_size=batch_size,
                                                 num_workers=num_workers,
                                                 shuffle=shuffle)
-        if self.freeze_embeddings: #Compute and store representation if embeddings are fixed
-            self.logger.info("Computing and reusing document embeddings to save computations.")
+        if self.freeze_embeddings:  # Compute and store representation if embeddings are fixed
+            self.logger.info(
+                "Computing and reusing document embeddings to save computations.")
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(train_loader)
             data['Y'] = train_dataset.labels.Y
             train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                data=data,
-                                                fname_features=None,
-                                                mode='train',
-                                                keep_invalid=True) # Invalid labels already removed
+                                                 data=data,
+                                                 fname_features=None,
+                                                 mode='train',
+                                                 keep_invalid=True)  # Invalid labels already removed
             train_loader = self._create_data_loader(train_dataset,
                                                     batch_size=batch_size,
                                                     num_workers=num_workers,
@@ -265,7 +266,8 @@ class ModelBase(object):
             validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                                       fname_features=val_feat_fname,
                                                       fname_labels=val_label_fname,
-                                                      data={'X': None, 'Y': None},
+                                                      data={
+                                                          'X': None, 'Y': None},
                                                       mode='predict',
                                                       keep_invalid=keep_invalid,
                                                       normalize_features=normalize_features,
@@ -288,7 +290,7 @@ class ModelBase(object):
         return _res
 
     def predict(self, data_dir, dataset, data=None, ts_feat_fname='tst_X_Xf.txt',
-                ts_label_fname='tst_X_Y.txt', batch_size=256, num_workers=6, 
+                ts_label_fname='tst_X_Y.txt', batch_size=256, num_workers=6,
                 keep_invalid=False, feature_indices=None, label_indices=None,
                 normalize_features=True, normalize_labels=False, top_k=50, **kwargs):
         dataset = self._create_dataset(os.path.join(data_dir, dataset),
@@ -335,10 +337,10 @@ class ModelBase(object):
                     "Prediction progress: [{}/{}]".format(batch_idx, num_batches))
         return predicted_labels
 
-    def _document_embeddings(self, data_loader, fname_out=None, _dtype='float32'):
+    def _document_embeddings(self, data_loader, return_coarse=False, fname_out=None, _dtype='float32'):
         self.net.eval()
         torch.set_grad_enabled(False)
-        if fname_out is not None: # Save to disk
+        if fname_out is not None:  # Save to disk
             embeddings = np.memmap(fname_out, dtype=_dtype, mode='w+',
                                    shape=(data_loader.dataset.num_instances, self.net.repr_dims))
         else:  # Keep in memory
@@ -347,18 +349,21 @@ class ModelBase(object):
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['batch_size']
-            out_ans = self.net.forward(batch_data, return_embeddings=True)
-            embeddings[count:count+batch_size, :] = out_ans.detach().cpu().numpy()
+            out_ans = self.net.encode(batch_data, return_coarse)
+            embeddings[count:count+batch_size,
+                       :] = out_ans.detach().cpu().numpy()
             count += batch_size
         torch.cuda.empty_cache()
-        if fname_out is not None: # Flush all changes to disk
+        if fname_out is not None:  # Flush all changes to disk
             embeddings.flush()
         return embeddings
 
-    def get_document_embeddings(self, data_dir, dataset, fname_features, fname_labels=None,
-                                data=None, keep_invalid=False, batch_size=128, 
-                                num_workers=4, data_loader=None, normalize_features=True, 
-                                feature_indices=None, fname_out=None):
+    def get_document_embeddings(self, data_dir, dataset, fname_features,
+                                fname_labels=None, data=None,
+                                keep_invalid=False, batch_size=128,
+                                num_workers=4, data_loader=None,
+                                normalize_features=True, feature_indices=None,
+                                fname_out=None, return_coarse=False):
         """
             Get document embeddings
         """
@@ -374,7 +379,7 @@ class ModelBase(object):
             data_loader = self._create_data_loader(dataset,
                                                    batch_size=batch_size,
                                                    num_workers=num_workers)
-        return self._document_embeddings(data_loader, fname_out)
+        return self._document_embeddings(data_loader, return_coarse, fname_out)
 
     def _adjust_parameters(self):
         self.optimizer.adjust_lr(self.dlr_factor)
