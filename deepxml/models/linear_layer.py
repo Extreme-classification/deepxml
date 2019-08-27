@@ -30,13 +30,13 @@ class Linear(nn.Module):
         self.output_size = output_size
         self.weight = Parameter(torch.Tensor(self.output_size, self.input_size))
         if bias:
-            self.bias = Parameter(torch.Tensor(self.output_size))
+            self.bias = Parameter(torch.Tensor(self.output_size, 1))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
 
     def forward(self, input):
-        return F.linear(input.to(self.device), self.weight, self.bias)
+        return F.linear(input.to(self.device), self.weight, self.bias.view(-1))
 
     def to(self):
         """Transfer to device
@@ -57,7 +57,7 @@ class Linear(nn.Module):
         """
         _wts = self.weight.detach().cpu().numpy()
         _bias = self.bias.detach().cpu().numpy()
-        return np.hstack([_wts, _bias[:, np.newaxis]])
+        return np.hstack([_wts, _bias])
 
     def __repr__(self):
         s = '{name}({input_size}, {output_size}, {device}'
@@ -116,7 +116,7 @@ class SparseLinear(Linear):
         out = torch.matmul(embed.unsqueeze(1), short_weights.permute(0, 2, 1))
         if self.bias is not None:
             short_bias = F.embedding(shortlist,
-                                     self.bias.view(-1, 1),
+                                     self.bias,
                                      sparse=self.sparse,
                                      padding_idx=self.padding_idx)
             out = out + short_bias.permute(0, 2, 1)
@@ -150,7 +150,7 @@ class SparseLinear(Linear):
         if self.padding_idx is not None:
             _wts = _wts[:-1, :]
             _bias = _bias[:-1, :]
-        return np.hstack([_wts, _bias[:, np.newaxis]])
+        return np.hstack([_wts, _bias])
 
 
 class ParallelLinear(nn.Module):
