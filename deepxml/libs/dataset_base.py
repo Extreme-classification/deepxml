@@ -13,19 +13,47 @@ from .labels import construct as construct_l
 
 
 class DatasetBase(torch.utils.data.Dataset):
-    """
-        Dataset to load and use XML-Datasets
+    """Dataset to load and use XML-Datasets
+    Support pickle or libsvm file format
+    Parameters
+    ---------
+    data_dir: str
+        data files are stored in this directory
+    fname_features: str
+        feature file (libsvm or pickle)
+    fname_labels: str
+        labels file (libsvm or pickle)    
+    data: dict, optional, default=None
+        Read data directly from this obj rather than files
+        Files are ignored if this is not None
+        Keys: 'X', 'Y'
+    model_dir: str, optional, default=''
+        Dump data like valid labels here
+    mode: str, optional, default='train'
+        Mode of the dataset
+    feature_indices: np.ndarray or None, optional, default=None
+        Train with selected features only
+    label_indices: np.ndarray or None, optional, default=None
+        Train for selected labels only
+    keep_invalid: bool, optional, default=False
+        Don't touch data points or labels
+    normalize_features: bool, optional, default=True
+        Normalize data points to unit norm
+    normalize_lables: bool, optional, default=False
+        Normalize labels to convert in probabilities
+        Useful in-case on non-binary labels
+    feature_type: str, optional, default='sparse'
+        sparse or dense features
+    label_type: str, optional, default='dense'
+        sparse (i.e. with shortlist) or dense (OVA) labels
     """
 
-    def __init__(self, data_dir, fname_features, fname_labels, data=None,
-                 model_dir='', mode='train', feature_indices=None,
-                 label_indices=None, keep_invalid=False, normalize_features=True,
-                 normalize_lables=False, feature_type='sparse', label_type='dense'):
-        """
-            Support pickle or libsvm file format
-            Args:
-                data_file: str: File name for the set
-        """
+    def __init__(self, data_dir, fname_features, fname_labels,
+                 data=None, model_dir='', mode='train',
+                 feature_indices=None, label_indices=None,
+                 keep_invalid=False, normalize_features=True,
+                 normalize_lables=False, feature_type='sparse',
+                 label_type='dense'):
         self.data_dir = data_dir
         self.mode = mode
         self.features, self.labels = self.load_data(
@@ -39,8 +67,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self.label_padding_index = self.num_labels
 
     def _remove_samples_wo_features_and_labels(self):
-        """
-            Remove instances if they don't have any feature or label
+        """Remove instances if they don't have any feature or label
         """
         indices = self.features.get_valid(axis=1)
         if self.labels is not None:
@@ -50,7 +77,12 @@ class DatasetBase(torch.utils.data.Dataset):
         self.features.index_select(indices, axis=0)
 
     def index_select(self, feature_indices, label_indices):
+        """Transform feature and label matrix to specified
+        features/labels only
+        """
         def _get_split_id(fname):
+            """Split ID (or quantile) from file name
+            """
             idx = fname.split("_")[-1].split(".")[0]
             return idx
         if label_indices is not None:
@@ -62,29 +94,33 @@ class DatasetBase(torch.utils.data.Dataset):
             feature_indices = np.loadtxt(feature_indices, dtype=np.int32)
             self.features.index_select(feature_indices, axis=1)
 
-    def load_features(self, data_dir, fname, X, normalize_features, feature_type):
-        return construct_f(data_dir, fname, X, normalize_features, feature_type)
+    def load_features(self, data_dir, fname, X,
+                      normalize_features, feature_type):
+        """Load features from given file
+        Features can also be supplied directly
+        """
+        return construct_f(data_dir, fname, X,
+                           normalize_features, feature_type)
 
     def load_labels(self, data_dir, fname, Y, normalize_labels, label_type):
-        """
-            Returns None if filename is None
+        """Load labels from given file
+        Labels can also be supplied directly
         """
         labels = construct_l(data_dir, fname, Y, normalize_labels,
                              label_type)  # Pass dummy labels if required
         if normalize_labels:
             if self.mode == 'train':  # Handle non-binary labels
-                print("Non-binary labels encountered in train; Normalizing...")
+                print("Non-binary labels encountered in train; Normalizing.")
                 labels.normalize(norm='max', copy=False)
             else:
-                print("Non-binary labels encountered in test/val; Binarizing...")
+                print("Non-binary labels encountered in test/val; Binarizing.")
                 labels.binarize()
         return labels
 
     def load_data(self, data_dir, fname_f, fname_l, data,
                   normalize_features=True, normalize_labels=False,
                   feature_type='sparse', label_type='dense'):
-        """
-            Load features and labels from file in libsvm format or pickle
+        """Load features and labels from file in libsvm format or pickle
         """
         features = self.load_features(
             data_dir, fname_f, data['X'], normalize_features, feature_type)
@@ -105,34 +141,28 @@ class DatasetBase(torch.utils.data.Dataset):
         return self.labels.num_labels
 
     def get_stats(self):
-        """
-            Get dataset statistics
+        """Get dataset statistics
         """
         return self.num_instances, self.num_features, self.num_labels
 
     def _process_labels_train(self, data_obj):
-        """
-            Process labels for train data
+        """Process labels for train data
             - Remove labels without any training instance
-            - Handle multiple centroids
         """
         data_obj['num_labels'] = self.num_labels
         valid_labels = self.labels.remove_invalid()
         data_obj['valid_labels'] = valid_labels
 
     def _process_labels_predict(self, data_obj):
-        """
-            Process labels for re-train data
-            - Remove labels without any training instance
-            - Handle multiple centroids
+        """Process labels for test data
+           Only use valid labels i.e. which had atleast one training
+           example
         """
         valid_labels = data_obj['valid_labels']
         self.labels.index_select(valid_labels)
 
     def _process_labels(self, model_dir):
-        """
-            Process labels to handle labels without any training instance;
-            Handle multiple centroids if required
+        """Process labels to handle labels without any training instance;
         """
         data_obj = {}
         fname = os.path.join(
@@ -149,14 +179,18 @@ class DatasetBase(torch.utils.data.Dataset):
         return self.num_instances
 
     def __getitem__(self, index):
-        """
-            Get features and labels for index
-            Args:
-                index: for this sample
-            Returns:
-                features: : non zero entries
-                labels: : numpy array
-
+        """Get features and labels for index
+        Arguments
+        ---------
+        index: int
+            data for this index
+        Returns
+        -------
+        features: np.ndarray or tuple
+            for dense: np.ndarray
+            for sparse: feature indices and their weights
+        labels: np.ndarray
+            1 when relevant; 0 otherwise
         """
         x = self.features[index]
         y = self.labels[index]
