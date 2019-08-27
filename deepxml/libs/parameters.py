@@ -15,7 +15,7 @@ class Parameters(ParametersBase):
         self.parser.add_argument(
             '--trans_method',
             dest='trans_method',
-            default='non_linear',
+            default='',
             type=str,
             action='store',
             help='which network to use')
@@ -339,4 +339,9 @@ class Parameters(ParametersBase):
             '--update_shortlist',
             action='store_true',
             help='Update shortlist while predicting'
+        )
+        self.parser.add_argument(
+            '--use_coarse_for_shorty',
+            action='store_true',
+            help='Use coarse representation for shortlist'
         )

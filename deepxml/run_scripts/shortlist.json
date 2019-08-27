@@ -1,0 +1,18 @@
+{
+    "transform_coarse": {
+        "order": ["relu", "dropout"],
+        "relu": {},
+        "dropout": {
+            "p": 0.5
+        }
+    },
+    "transform_fine": {
+        "order": ["residual"],
+        "residual": {
+            "input_size": "#ARGS.embedding_dims;",
+            "output_size": "#ARGS.embedding_dims;",
+            "dropout": 0.5,
+            "init": "eye"
+        }
+    }
+}

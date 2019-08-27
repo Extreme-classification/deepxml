@@ -140,7 +140,7 @@ class ModelShortlist(ModelBase):
             data_loader.dataset.num_instances
 
     def _fit(self, train_loader, train_loader_shuffle, validation_loader, model_dir, 
-             result_dir, init_epoch, num_epochs, beta):
+             result_dir, init_epoch, num_epochs, beta, use_coarse):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             if epoch != 0 and self.dlr_step != -1 and epoch % self.dlr_step == 0:
                 self._adjust_parameters()
@@ -151,12 +151,12 @@ class ModelShortlist(ModelBase):
                 shorty_start_t = time.time()
                 self.shorty.reset()
                 shortlist_utils.update(
-                    train_loader, self, self.embedding_dims, self.shorty, 
-                    flag=0, num_graphs=self.num_clf_partitions)
+                    train_loader, self, self.embedding_dims, self.shorty,
+                    flag=0, num_graphs=self.num_clf_partitions, use_coarse=use_coarse)
                 if validation_loader is not None:
                     shortlist_utils.update(
-                        validation_loader, self, self.embedding_dims, self.shorty, 
-                        flag=2, num_graphs=self.num_clf_partitions)
+                        validation_loader, self, self.embedding_dims, self.shorty,
+                        flag=2, num_graphs=self.num_clf_partitions, use_coarse=use_coarse)
                 shorty_end_t = time.time()
                 self.logger.info("ANN train time: {} sec".format(
                     shorty_end_t - shorty_start_t))
@@ -204,7 +204,7 @@ class ModelShortlist(ModelBase):
             tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
             init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
-            normalize_features=True, normalize_labels=False, validate=False, beta=0.2):
+            normalize_features=True, normalize_labels=False, validate=False, beta=0.2, use_coarse=True):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
@@ -227,9 +227,9 @@ class ModelShortlist(ModelBase):
                                                         shuffle=shuffle)
         # No need to update embeddings
         if self.freeze_embeddings:
-            self.logger.info("Computing and reusing document embeddings to save computations.")
+            self.logger.info("Computing and reusing coarse document embeddings to save computations.")
             data = {'X': None, 'Y': None}
-            data['X'] = self._document_embeddings(train_loader)
+            data['X'] = self._document_embeddings(train_loader, return_coarse=True)
             data['Y'] = train_dataset.labels.Y
             train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                                 data=data,
@@ -263,9 +263,9 @@ class ModelShortlist(ModelBase):
                                                          batch_size=batch_size,
                                                          num_workers=num_workers)
         self._fit(train_loader, train_loader_shuffle, validation_loader,
-                  model_dir, result_dir, init_epoch, num_epochs, beta)
+                  model_dir, result_dir, init_epoch, num_epochs, beta, use_coarse)
 
-    def _predict(self, data_loader, top_k, **kwargs):
+    def _predict(self, data_loader, top_k, use_coarse, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()
@@ -277,7 +277,7 @@ class ModelShortlist(ModelBase):
         if self.update_shortlist:
             shortlist_utils.update(
                 data_loader, self, self.embedding_dims, self.shorty, 
-                flag=2, num_graphs=self.num_clf_partitions)
+                flag=2, num_graphs=self.num_clf_partitions, use_coarse=use_coarse)
         else:
             try:
                 _fname = kwargs['shorty_fname']

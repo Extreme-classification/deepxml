@@ -43,10 +43,10 @@ def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
         return out
 
 
-def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1):
+def update(data_loader, model, embedding_dim, shorty, flag=0, num_graphs=1, use_coarse=False):
     # 0: train and update, 1: train, 2: update
     num_centroids = data_loader.dataset.num_centroids
-    doc_embeddings = model._document_embeddings(data_loader)
+    doc_embeddings = model._document_embeddings(data_loader, return_coarse=use_coarse)
     # Do not normalize if kmeans clustering needs to be done!
     # doc_embeddings = normalize(doc_embeddings, copy=False)
     if flag == 0:

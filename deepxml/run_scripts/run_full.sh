@@ -32,16 +32,18 @@ if [ $quantile -eq -1 ]
 then
     extra_params=""    
 fi
+current_working_dir=$(pwd)
 
 TRAIN_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --num_labels ${num_labels} \
                 --vocabulary_dims ${vocabulary_dims} \
-                --trans_method non_linear \
+                --trans_method ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
                 --low_rank -1 \
                 --efC 300 \
-                --efS 300 \
+                --freeze_embeddings \
+		        --efS 300 \
                 --num_clf_partitions 1\
                 --lr $learning_rate \
                 --use_residual \

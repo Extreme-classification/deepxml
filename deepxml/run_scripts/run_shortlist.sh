@@ -11,7 +11,7 @@ dlr_factor=$8
 dlr_step=${9}
 batch_size=${10}
 work_dir=${11}
-use_head_embeddings=1
+use_head_embeddings=0
 
 data_dir="${work_dir}/data"
 extra_params="--feature_indices ${data_dir}/${dataset}/features_split_${quantile}.txt --label_indices ${data_dir}/${dataset}/labels_split_${quantile}.txt"
@@ -35,6 +35,7 @@ if [ $quantile -eq -1 ]
 then
     extra_params=""    
 fi
+current_working_dir=$(pwd)
 
 TRAIN_PARAMS="--lr $learning_rate \
             --embeddings $embedding_file \
@@ -48,7 +49,7 @@ TRAIN_PARAMS="--lr $learning_rate \
             --data_dir=${work_dir}/data \
             --num_labels ${num_labels} \
             --vocabulary_dims ${vocabulary_dims} \
-            --trans_method non_linear \
+            --trans_method ${current_working_dir}/shortlist.json \
             --dropout 0.5 
             --optim Adam \
             --low_rank -1 \
@@ -64,8 +65,9 @@ TRAIN_PARAMS="--lr $learning_rate \
             --ann_threads 12 \
             --beta 0.5 \
             --update_shortlist \
+            --use_coarse_for_shorty \
             --model_fname ${MODEL_NAME} ${extra_params} \
-            --retrain_hnsw_after $(($num_epochs+3))"
+            --retrain_hnsw_after 5"
             # --retrain_hnsw_after $(($num_epochs+3))"
             # --retrain_hnsw_after 5"
 
@@ -81,8 +83,9 @@ PREDICT_PARAMS="--dataset ${dataset} \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 256 \
                 --beta 0.5 ${extra_params}\
-                --out_fname predictions.txt"
-                #--update_shortlist"
+                --out_fname predictions.txt \
+                --use_coarse_for_shorty \
+                --update_shortlist"
 
 EXTRACT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \

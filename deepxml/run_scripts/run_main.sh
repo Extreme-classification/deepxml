@@ -40,7 +40,7 @@ run_beta(){
     fi
 }
 
-work_dir="/mnt/Workspace"
+work_dir="/mnt/XC"
 dataset=$1
 version=$2
 use_post=$3
@@ -52,10 +52,10 @@ shift 6
 
 learning_rates=1
 lr_full=(0.02)
-lr_shortlist=(0.003)
+lr_shortlist=(0.005)
 lr_ns=(0.003)
 num_epochs_full=25
-num_epochs_shortlist=15
+num_epochs_shortlist=25
 num_epochs_ns=15
 
 embedding_dims=300
