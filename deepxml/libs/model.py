@@ -227,9 +227,9 @@ class ModelShortlist(ModelBase):
                                                         shuffle=shuffle)
         # No need to update embeddings
         if self.freeze_embeddings:
-            self.logger.info("Computing and reusing document embeddings to save computations.")
+            self.logger.info("Computing and reusing coarse document embeddings to save computations.")
             data = {'X': None, 'Y': None}
-            data['X'] = self._document_embeddings(train_loader)
+            data['X'] = self._document_embeddings(train_loader, return_coarse=True)
             data['Y'] = train_dataset.labels.Y
             train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                                 data=data,
@@ -265,8 +265,7 @@ class ModelShortlist(ModelBase):
         self._fit(train_loader, train_loader_shuffle, validation_loader,
                   model_dir, result_dir, init_epoch, num_epochs, beta, use_coarse)
 
-    def _predict(self, data_loader, top_k, **kwargs):
-        self.logger.info("Coarse rep. for shortlist: {}".format(use_coarse))
+    def _predict(self, data_loader, top_k, use_coarse, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()

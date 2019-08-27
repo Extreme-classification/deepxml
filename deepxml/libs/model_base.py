@@ -246,14 +246,19 @@ class ModelBase(object):
                                                 num_workers=num_workers,
                                                 shuffle=shuffle)
         if self.freeze_embeddings:  # Compute and store representation if embeddings are fixed
+            train_loader = self._create_data_loader(train_dataset,
+                                                batch_size=batch_size,
+                                                num_workers=num_workers,
+                                                shuffle=False)
             self.logger.info(
-                "Computing and reusing document embeddings to save computations.")
+                "Computing and reusing coarse document embeddings to save computations.")
             data = {'X': None, 'Y': None}
-            data['X'] = self._document_embeddings(train_loader)
+            data['X'] = self._document_embeddings(train_loader, return_coarse=True)
             data['Y'] = train_dataset.labels.Y
             train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
                                                  data=data,
                                                  fname_features=None,
+                                                 feature_type='dense',
                                                  mode='train',
                                                  keep_invalid=True)  # Invalid labels already removed
             train_loader = self._create_data_loader(train_dataset,
