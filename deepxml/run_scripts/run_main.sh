@@ -1,21 +1,23 @@
 #!/bin/bash
-# $1 Datset
-# $2 Version
-# $3 1: to do post processsing else 
-# $4 Type of evaluation function to be used
-# $5 Number of splits for the dataset labels
-# $6 Threshold to split on
-# $nargs Version to run on each split
+# $1 GPU DEIVCE ID
+# $2 ABLATION TYPE
+# $3 DATASET
+# eg. ./run_main 0 DeepXML EURLex-4K
+# eg. ./run_main 0 DeepXML-fr EURLex-4K
 
-#export CUDA_VISIBLE_DEVICES=2,3
+export CUDA_VISIBLE_DEVICES=$1
+model_type=$2
+dataset=$3
+source "../configs/${model_type}/${dataset}.sh"
 
 create_splits () {
     # $1: dataset
     # $2: train_feat_fname
     # $3: train_label_fname
     # $4: split thresholds
+    # $5: temp model data directory
     echo "Creating data splits.."
-    python3 ../tools/run_split_data.py $1 $2 $3 $4
+    python3 ../tools/run_split_data.py $1 $2 $3 $4 $5
 }
 
 merge_split_predictions () {
@@ -24,100 +26,108 @@ merge_split_predictions () {
     # $3: num_labels
     # $4: out_fname 
     echo "Merging predictions.."
-    python3 ../tools/merge_split_predictions.py $1 $2 $3 $4
+    python3 ../tools/merge_split_predictions.py $1 $2 $3 $4 $5
+}
+
+clean_up(){
+    echo "clean test train data copy"
+    rm -rf ${trn_ft_file} ${trn_lbl_file} ${tst_ft_file} ${tst_lbl_file}
 }
 
 run_beta(){
     flag=$1
     shift
+    echo $6
     if [ "${flag}" == "shortlist" ]
     then
         BETA="0.1 0.15 0.2 0.3 0.4 0.5 0.6"
-        ./run_base.sh "evaluate" $1 $2 $3 $4 $5 $6 "${7} ${BETA}"
+        ./run_base.sh "evaluate" $1 $2 $3 $model_type $4 $5 $6 "${7} ${BETA}"
     else
         BETA="-1"
-        ./run_base.sh "evaluate" $1 $2 $3 $4 $5 $6 "${7} ${BETA}"
+        ./run_base.sh "evaluate" $1 $2 $3 $model_type $4 $5 $6 "${7} ${BETA}"
     fi
 }
 
 work_dir="/mnt/XC"
-dataset=$1
-version=$2
-use_post=$3
-evaluation_type=$4
-num_splits=$(expr $5 - 1)
-split_threshold=$6
-
-shift 6
-
-learning_rates=1
-lr_full=(0.02)
-lr_shortlist=(0.005)
-lr_ns=(0.003)
-num_epochs_full=25
-num_epochs_shortlist=25
-num_epochs_ns=15
-
-embedding_dims=300
-dlr_factor=0.5
-dlr_step=14
-batch_size=128
-stats=`echo $dataset | python3 -c "import sys, json; print(json.load(open('../data_stats.json'))[sys.stdin.readline().rstrip()])"` 
-stats=($(echo $stats | tr ',' "\n"))
-
-num_labels=${stats[1]}
-A=${stats[3]}
-B=${stats[4]}
 data_dir="${work_dir}/data/${dataset}"
+temp_model_data="deep-xml_data"
 
-if [ ! -e "${data_dir}/split_stats.json" ]
-then
-    echo "Splitting data."
-    create_splits $data_dir 'trn_X_Xf.txt' 'trn_X_Y.txt' $split_threshold
-else
-    echo "Using old" "${data_dir}/split_stats.json"
+train_file="${data_dir}/train.txt"
+test_file="${data_dir}/test.txt"
+trn_ft_file="${data_dir}/trn_X_Xf.txt"
+trn_lbl_file="${data_dir}/trn_X_Y.txt"
+tst_ft_file="${data_dir}/tst_X_Xf.txt"
+tst_lbl_file="${data_dir}/tst_X_Y.txt"
+mkdir -p "${data_dir}/${temp_model_data}"
+
+convert() {
+    perl ../tools/convert_format.pl $1 $2 $3
+    perl ../tools/convert_format.pl $4 $5 $6
+}
+
+if [ ! -e "${trn_ft_file}" ]; then
+    convert ${train_file} ${trn_ft_file} ${trn_lbl_file} ${test_file} ${tst_ft_file} ${tst_lbl_file}
 fi
+
+
+
+if [ ! -e "${data_dir}/$temp_model_data/$split_threshold/split_stats.json" ]
+then
+    mkdir -p "${data_dir}/$temp_model_data/$split_threshold"
+    echo "Splitting data."
+    create_splits $data_dir "${trn_ft_file}" "${trn_lbl_file}" $split_threshold $temp_model_data
+else
+    echo "Using old" "${data_dir}/$temp_model_data/$split_threshold/split_stats.json"
+fi
+
+run(){
+    file=$1
+    version=$2
+    splitid=$3
+    learning_rate=$4
+    num_epochs=$5
+    echo "Training $file split.. with lr:" ${learning_rate} "epochs:" ${num_epochs}  
+    ./run_"${file}".sh $dataset $version $splitid $use_post $learning_rate $embedding_dims $num_epochs $dlr_factor $dlr_step $batch_size "${work_dir}" $model_type "${temp_model_data}" "${split_threshold}"
+}
 
 for((lr_idx=0; lr_idx<$learning_rates; lr_idx++));
 do 
 
-    results_dir="${work_dir}/results/deep-xml/${dataset}/v_${version}"
+    results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
 
-    if [ $num_splits -lt 0 ]; then
+    if [ $num_splits -eq 0 ]; then
         echo "Not using any split to train."
-        arg=$(expr $num_splits + 2 |bc)
-        lr_arr="lr_${!arg}[${lr_idx}]"
-        epc_arr="num_epochs_${!arg}"
-        echo "Training ${!arg} split.. with lr:" ${!lr_arr} "epochs:" ${!epc_arr}
-        ./run_"${1}".sh $dataset $version $num_splits $use_post ${!lr_arr} $embedding_dims ${!epc_arr} $dlr_factor $dlr_step $batch_size "${work_dir}"
-        cp -r ${results_dir}/$num_splits/* ${results_dir}
-        echo ${results_dir}
+        type="order[$num_splits]"
+        epc_arr="num_epochs_${!type}"
+        lr_arr="lr_${!type}[${lr_idx}]"
+        run "${!type}" $version "-1" ${!lr_arr} ${!epc_arr}
+        cp -r ${results_dir}/"-1"/* ${results_dir}
         if [ $use_post -eq 1 ]
         then
             run_beta "shortlist" $dataset $work_dir $version "predictions" $A $B $evaluation_type
         else
-            run_beta $1 $dataset $work_dir $version "predictions" $A $B $evaluation_type
+            run_beta ${!type} $dataset $work_dir $version "predictions" $A $B $evaluation_type
         fi
 
-    #TODO shift is not acceptable here
     else
-        echo $(seq 0 $num_splits)
-        for((sp_idx=$num_splits; sp_idx>=0; sp_idx--));
+        for((sp_idx=$num_splits; sp_idx>0; sp_idx--));
         do
-            arg=$(expr $sp_idx + 1 |bc)
-            lr_arr="lr_${!arg}[${lr_idx}]"
-            epc_arr="num_epochs_${!arg}"
-            echo "Training ${!arg} split.. with lr:" ${!lr_arr} "epochs:" ${!epc_arr}  
-            ./run_"${!arg}".sh $dataset $version $sp_idx $use_post ${!lr_arr} $embedding_dims ${!epc_arr} $dlr_factor $dlr_step $batch_size "${work_dir}"
+            arg=$(expr $sp_idx - 1 |bc)
+            type="order[$arg]"
+            lr_arr="lr_${!type}[${lr_idx}]"
+            epc_arr="num_epochs_${!type}"
+            run "${!type}" $version $arg ${!lr_arr} ${!epc_arr}
         done
+
         if [ $use_post -eq 1 ]
         then
-            merge_split_predictions "${results_dir}/0/predictions_knn.npz,${results_dir}/1/predictions_knn.npz" "${data_dir}/labels_split_0.txt,${data_dir}/labels_split_1.txt" $num_labels "${results_dir}/predictions_knn.npz"
-            merge_split_predictions "${results_dir}/0/predictions_clf.npz,${results_dir}/1/predictions_clf.npz" "${data_dir}/labels_split_0.txt,${data_dir}/labels_split_1.txt" $num_labels "${results_dir}/predictions_clf.npz"
+            merge_split_predictions "${results_dir}" "0,1" "predictions_knn.npz"  "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "predictions_clf.npz"  "${data_dir}/$temp_model_data/$split_threshold" $num_labels
         fi
-        echo "Evaluating with A/B: ${A}/${B}"
+        echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
         run_beta "shortlist" $dataset $work_dir $version "predictions" $A $B $evaluation_type
     fi
     ((version++))
 done       
 
+clean_up

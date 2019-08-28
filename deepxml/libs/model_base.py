@@ -347,10 +347,10 @@ class ModelBase(object):
         torch.set_grad_enabled(False)
         if fname_out is not None:  # Save to disk
             embeddings = np.memmap(fname_out, dtype=_dtype, mode='w+',
-                                   shape=(data_loader.dataset.num_instances, self.net.repr_dims))
+                                   shape=(data_loader.dataset.num_instances, self.net.representation_dims))
         else:  # Keep in memory
             embeddings = np.zeros((
-                data_loader.dataset.num_instances, self.net.repr_dims), dtype=_dtype)
+                data_loader.dataset.num_instances, self.net.representation_dims), dtype=_dtype)
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['batch_size']

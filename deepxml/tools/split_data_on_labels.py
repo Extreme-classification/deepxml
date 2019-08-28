@@ -98,7 +98,7 @@ class splitData(object):
         freq = np.array(data.sum(axis=0)).ravel()
         return freq
 
-    def fit(self, features, labels, remove_invalid_on_features=False, remove_invalid_on_labels=False):
+    def fit(self, features, labels, remove_invalid_on_features=True, remove_invalid_on_labels=False):
         if remove_invalid_on_features:
             features, labels = self.remove_documents_wo_features(features, labels)
         if remove_invalid_on_labels:

@@ -48,8 +48,9 @@ TRAIN_PARAMS="--lr $learning_rate \
             --data_dir=${work_dir}/data \
             --num_labels ${num_labels} \
             --vocabulary_dims ${vocabulary_dims} \
-            --trans_method non_linear \
+            --trans_method ${current_working_dir}/shortlist.json \
             --dropout 0.5 \
+            --model_method ns \
             --optim Adam \
             --ann_method ns \
             --efS 300 \
@@ -69,11 +70,12 @@ then
                 --data_dir=${work_dir}/data \
                 --num_labels ${num_labels} \
                 --vocabulary_dims ${vocabulary_dims} \
-                --trans_method non_linear \
+                --trans_method ${current_working_dir}/shortlist.json \
                 --dropout 0.5 --optim Adam \
                 --low_rank -1 \
                 --freeze_embeddings \
                 --efC 300 \
+                --model_method shortlist \
                 --efS 300 \
                 --num_clf_partitions 1\
                 --ann_method hnsw \
@@ -98,6 +100,7 @@ then
                     --efS 300 \
                     --num_centroids 1 \
                     --num_nbrs 300 \
+                    --model_method shortlist \
                     --ann_threads 12 \
                     --normalize \
                     --use_shortlist \
@@ -109,6 +112,7 @@ then
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --model_method shortlist \
                     --use_shortlist \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512 ${extra_params}"
@@ -118,18 +122,17 @@ else
                     --data_dir=${work_dir}/data \
                     --ts_feat_fname tst_X_Xf.txt \
                     --ts_label_fname tst_X_Y.txt \
-                    --efS 300 \
-                    --num_nbrs 300 \
+                    --model_method full \
                     --ann_threads 12\
                     --normalize \
                     --model_fname ${MODEL_NAME}\
-                    --batch_size 256 \
-                    --beta 0.5 ${extra_params}\
+                    --batch_size 256 ${extra_params}\
                     --out_fname predictions.txt"
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --model_method full \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512 ${extra_params}"
 fi

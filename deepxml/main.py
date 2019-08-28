@@ -2,11 +2,7 @@ import sys
 import argparse
 import os
 import numpy as np
-import time
 import json
-import logging
-import math
-from scipy.io import savemat
 import _pickle as pickle
 import torch
 import torch.utils.data
@@ -29,10 +25,17 @@ np.random.seed(22)
 
 
 def load_emeddings(params):
+    """Load word embeddings from numpy file
+    * Support for:
+        - loading pre-trained embeddings
+        - loading head embeddings
+    * vocabulary_dims must match #rows in embeddings
+    """
     if params.use_head_embeddings:
         embeddings = np.load(
             os.path.join(os.path.dirname(params.model_dir),
                          params.embeddings))
+        
     else:
         fname = os.path.join(
             params.data_dir, params.dataset, params.embeddings)
@@ -52,84 +55,97 @@ def load_emeddings(params):
 
 
 def pp_with_shorty(model, params, shorty):
-    model._pp_with_shortlist(shorty=shorty,
-                             data_dir=params.data_dir,
-                             dataset=params.dataset,
-                             tr_feat_fname=params.tr_feat_fname,
-                             tr_label_fname=params.tr_label_fname,
-                             keep_invalid=False,
-                             normalize_features=params.normalize,
-                             normalize_labels=params.nbn_rel,
-                             batch_size=params.batch_size,
-                             num_workers=4,
-                             label_indices=params.label_indices,
-                             feature_indices=params.feature_indices)
+    """Post-process with shortlist
+    Train a shortlist for a already trained model (typically from OVA) 
+    """
+    model._pp_with_shortlist(
+        shorty=shorty,
+        data_dir=params.data_dir,
+        dataset=params.dataset,
+        tr_feat_fname=params.tr_feat_fname,
+        tr_label_fname=params.tr_label_fname,
+        keep_invalid=False,
+        normalize_features=params.normalize,
+        normalize_labels=params.nbn_rel,
+        batch_size=params.batch_size,
+        num_workers=4,
+        label_indices=params.label_indices,
+        feature_indices=params.feature_indices)
     shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
 
 
 def train(model, params):
+    """Train the model with given data
+    Parameters
+    ----------
+    model: DeepXML
+        train this model (typically DeepXML model)
+    params: NameSpace
+        parameter of the model
     """
-        Train the model with given data
-        Args:
-            model: model_utils
-            params: : parameters
-    """
-    model.fit(data_dir=params.data_dir,
-              model_dir=params.model_dir,
-              result_dir=params.result_dir,
-              dataset=params.dataset,
-              data={'X': None, 'Y': None},
-              learning_rate=params.learning_rate,
-              num_epochs=params.num_epochs,
-              tr_feat_fname=params.tr_feat_fname,
-              val_feat_fname=params.val_feat_fname,
-              tr_label_fname=params.tr_label_fname,
-              val_label_fname=params.val_label_fname,
-              batch_size=params.batch_size,
-              num_workers=4,
-              normalize_features=params.normalize,
-              normalize_labels=params.nbn_rel,
-              shuffle=params.shuffle,
-              validate=params.validate,
-              beta=params.beta,
-              init_epoch=params.last_epoch,
-              keep_invalid=params.keep_invalid,
-              feature_indices=params.feature_indices,
-              label_indices=params.label_indices)
+    model.fit(
+        data_dir=params.data_dir,
+        model_dir=params.model_dir,
+        result_dir=params.result_dir,
+        dataset=params.dataset,
+        data={'X': None, 'Y': None},
+        learning_rate=params.learning_rate,
+        num_epochs=params.num_epochs,
+        tr_feat_fname=params.tr_feat_fname,
+        val_feat_fname=params.val_feat_fname,
+        tr_label_fname=params.tr_label_fname,
+        val_label_fname=params.val_label_fname,
+        batch_size=params.batch_size,
+        num_workers=4,
+        normalize_features=params.normalize,
+        normalize_labels=params.nbn_rel,
+        shuffle=params.shuffle,
+        validate=params.validate,
+        beta=params.beta,
+        init_epoch=params.last_epoch,
+        keep_invalid=params.keep_invalid,
+        feature_indices=params.feature_indices,
+        label_indices=params.label_indices)
     # TODO: Accomodate low rank
     model.save(params.model_dir, params.model_fname, params.low_rank)
 
 
 def get_document_embeddings(model, params, _save=True):
+    """Get document embedding for given test file
+    Parameters
+    ----------
+    model: DeepXML
+        train this model (typically DeepXML model)
+    params: NameSpace
+        parameter of the model
+    _save: boolean, optional, default=True
+        Save embeddings as well (fname=params.out_fname)
     """
-        Get document embedding for given test file
-        Args:
-            model: model_utils
-            params: parameters
-    """
-    doc_embeddings = model.get_document_embeddings(data_dir=params.data_dir,
-                                                   dataset=params.dataset,
-                                                   fname_features=params.ts_feat_fname,
-                                                   fname_labels=params.ts_label_fname,
-                                                   data={'X': None, 'Y': None},
-                                                   keep_invalid=params.keep_invalid,
-                                                   batch_size=params.batch_size,
-                                                   normalize_features=params.normalize,
-                                                   num_workers=4,
-                                                   feature_indices=params.feature_indices)
+    doc_embeddings = model.get_document_embeddings(
+        data_dir=params.data_dir,
+        dataset=params.dataset,
+        fname_features=params.ts_feat_fname,
+        fname_labels=params.ts_label_fname,
+        data={'X': None, 'Y': None},
+        keep_invalid=params.keep_invalid,
+        batch_size=params.batch_size,
+        normalize_features=params.normalize,
+        num_workers=4,
+        feature_indices=params.feature_indices)
     fname = os.path.join(params.result_dir, params.out_fname)
-    if _save:
+    if _save:  # Save
         np.save(fname, doc_embeddings)
     return doc_embeddings
 
 
 def get_word_embeddings(model, params):
-    """
-        Get word embeddings
-        Embedding corresponding to padding index is removed
-        Args:
-            model: model_utils
-            params: parameters
+    """Extract word embeddings for the given model
+    Parameters
+    ----------
+    model: DeepXML
+        train this model (typically DeepXML model)
+    params: NameSpace
+        parameter of the model
     """
     if params.use_hash_embeddings:
         _embeddings, importance_wts = model.net.embeddings.get_weights()
@@ -144,12 +160,16 @@ def get_word_embeddings(model, params):
 
 
 def get_classifier_wts(model, params):
-    """
-        Get classifier weights and biases
-        -inf bias for untrained classifiers i.e. labels without any data
-        Args:
-            model: model_utils
-            params: parameters
+    """Get classifier weights and biases for given model
+    * -inf bias for untrained classifiers i.e. labels without any data
+    * default path: params.result_dir/export/classifier.npy
+    * Bias is appended in the end
+    Parameters
+    ----------
+    model: DeepXML
+        train this model (typically DeepXML model)
+    params: NameSpace
+        parameter of the model
     """
     _split = None
     if params.label_indices is not None:
@@ -170,26 +190,29 @@ def get_classifier_wts(model, params):
 
 
 def inference(model, params):
+    """Predict the top-k labels for given test data
+    Parameters
+    ----------
+    model: DeepXML
+        train this model (typically DeepXML model)
+    params: NameSpace
+        parameter of the model
     """
-        Predict the top-k labels for given test data
-        Args:
-            model: model_utils
-            params: : parameters
-    """
-    predicted_labels = model.predict(data_dir=params.data_dir,
-                                     dataset=params.dataset,
-                                     ts_label_fname=params.ts_label_fname,
-                                     ts_feat_fname=params.ts_feat_fname,
-                                     normalize_features=params.normalize,
-                                     normalize_labels=params.nbn_rel,
-                                     beta=params.beta,
-                                     top_k=params.top_k,
-                                     data={'X': None, 'Y': None},
-                                     keep_invalid=params.keep_invalid,
-                                     feature_indices=params.feature_indices,
-                                     label_indices=params.label_indices,
-                                     use_coarse=params.use_coarse_for_shorty
-                                     )
+    predicted_labels = model.predict(
+        data_dir=params.data_dir,
+        dataset=params.dataset,
+        ts_label_fname=params.ts_label_fname,
+        ts_feat_fname=params.ts_feat_fname,
+        normalize_features=params.normalize,
+        normalize_labels=params.nbn_rel,
+        beta=params.beta,
+        top_k=params.top_k,
+        data={'X': None, 'Y': None},
+        keep_invalid=params.keep_invalid,
+        feature_indices=params.feature_indices,
+        label_indices=params.label_indices,
+        use_coarse=params.use_coarse_for_shorty
+    )
     # Real number of labels
     num_samples, num_labels = utils.get_header(
         os.path.join(params.data_dir, params.dataset, params.ts_label_fname))
@@ -198,20 +221,72 @@ def inference(model, params):
         _split = None
         if params.label_indices is not None:
             _split = params.label_indices.split("_")[-1].split(".")[0]
-        fname = os.path.join(params.model_dir,
-                             'labels_params.pkl' if _split is None else "labels_params_split_{}.pkl".format(_split))
+        temp = "labels_params_split_{}.pkl".format(_split)
+        if _split is None:
+            temp = 'labels_params.pkl'
+        fname = os.path.join(params.model_dir, temp)
         temp = pickle.load(open(fname, 'rb'))
         label_mapping = temp['valid_labels']
         num_labels = temp['num_labels']
-    utils.save_predictions(predicted_labels, params.result_dir,
-                           label_mapping, num_samples, num_labels)
+    utils.save_predictions(
+        predicted_labels, params.result_dir,
+        label_mapping, num_samples, num_labels)
 
 
 def construct_network(params):
+    """Construct DeepXML network
+    """
     if params.use_shortlist:
         return network.DeepXMLt(params)
     else:
         return network.DeepXMLh(params)
+
+
+def construct_shortlist(params):
+    """Construct shorty
+    * Support for:
+        - negative sampling (ns)
+        - hnsw
+        - parallel shortlist
+    """
+    if params.use_shortlist == -1:
+        return None
+    if params.ann_method == 'ns':  # Negative Sampling
+        if params.num_clf_partitions > 1:
+            raise NotImplementedError("Not tested yet!")
+        else:
+            shorty = negative_sampling.NegativeSampler(
+                params.num_labels, params.num_nbrs, None, False)
+    else:  # Approximate Nearest Neighbor
+        if params.num_clf_partitions > 1:
+            shorty = shortlist.ParallelShortlist(
+                params.ann_method, params.num_nbrs, params.M, params.efC,
+                params.efS, params.ann_threads, params.num_clf_partitions)
+        else:
+            shorty = shortlist.Shortlist(
+                params.ann_method, params.num_nbrs, params.M,
+                params.efC, params.efS, params.ann_threads)
+    return shorty
+
+
+def construct_model(params, net, criterion, optimizer, shorty):
+    """Construct shorty
+    * Support for:
+        - negative sampling (ns)
+        - OVA (full)
+        - hnsw (shortlist)
+    """
+    if params.model_method == 'ns':  # Negative Sampling
+        model = model_utils.ModelNS(
+            params, net, criterion, optimizer, shorty)
+    elif params.model_method == 'shortlist':  # Approximate Nearest Neighbor
+        model = model_utils.ModelShortlist(
+            params, net, criterion, optimizer, shorty)
+    elif params.model_method == 'full':
+        model = model_utils.ModelFull(params, net, criterion, optimizer)
+    else:
+        raise NotImplementedError("Unknown model_method.")
+    return model
 
 
 def main(params):
@@ -230,7 +305,7 @@ def main(params):
             del embeddings
             print("Initialized embeddings!")
         criterion = torch.nn.BCEWithLogitsLoss(
-            size_average=False if params.use_shortlist else True)
+            reduction='sum' if params.use_shortlist else 'mean')
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
@@ -240,28 +315,8 @@ def main(params):
                                               weight_decay=params.weight_decay)
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
-        if params.use_shortlist:
-            if params.ann_method == 'ns':  # Negative Sampling
-                if params.num_clf_partitions > 1:
-                    raise NotImplementedError("Not tested yet!")
-                else:
-                    shorty = negative_sampling.NegativeSampler(params.num_labels, params.num_nbrs,
-                                                               None, False)
-                model = model_utils.ModelNS(
-                    params, net, criterion, optimizer, shorty)
-            else:  # Approximate Nearest Neighbor
-                if params.num_clf_partitions > 1:
-                    shorty = shortlist.ParallelShortlist(
-                        params.ann_method, params.num_nbrs, params.M, params.efC,
-                        params.efS, params.ann_threads, params.num_clf_partitions)
-                else:
-                    shorty = shortlist.Shortlist(
-                        params.ann_method, params.num_nbrs, params.M,
-                        params.efC, params.efS, params.ann_threads)
-                model = model_utils.ModelShortlist(
-                    params, net, criterion, optimizer, shorty)
-        else:
-            model = model_utils.ModelFull(params, net, criterion, optimizer)
+        shorty = construct_shortlist(params)
+        model = construct_model(params, net, criterion, optimizer, shorty)
         model.transfer_to_devices()
         train(model, params)
         fname = os.path.join(params.result_dir, 'params.json')
@@ -271,23 +326,14 @@ def main(params):
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
         net = construct_network(params)
-        if params.use_shortlist:
-            if params.num_clf_partitions > 1:
-                shorty = shortlist.ParallelShortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC,
-                    params.efS, params.ann_threads, params.num_clf_partitions)
-            else:
-                shorty = shortlist.Shortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC,
-                    params.efS, params.ann_threads)
         optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
                                               learning_rate=params.learning_rate,
                                               momentum=params.momentum,
                                               freeze_embeddings=params.freeze_embeddings)
         criterion = torch.nn.BCEWithLogitsLoss(
             size_average=False if params.use_shortlist else True)
-        model = model.Model(
-            params, net, criterion=criterion, optimizer=None, shorty=shorty)
+        shorty = construct_shortlist(params)
+        model = construct_model(params, net, criterion, optimizer, shorty)
 
         model.load_checkpoint(
             params.model_dir, params.model_fname, params.last_epoch)
@@ -309,18 +355,8 @@ def main(params):
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         shorty = None
-        if params.use_shortlist:
-            if params.num_clf_partitions > 1:
-                shorty = shortlist.ParallelShortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
-            else:
-                shorty = shortlist.Shortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-            model = model_utils.ModelShortlist(
-                params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
-        else:
-            model = model_utils.ModelFull(
-                params=params, net=net, criterion=None, optimizer=None)
+        shorty = construct_shortlist(params)
+        model = construct_model(params, net, None, None, shorty)
         model.transfer_to_devices()
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
         inference(model, params)
@@ -329,22 +365,14 @@ def main(params):
         # Train ANNS for 1-vs-all classifier
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
-        params.ann_method = 'hnsw'  # FIXME: Hardcoded for now
         if params.num_centroids != 1:  # Pad label in case of multiple-centroids
             params.label_padding_index = params.num_labels
         net = construct_network(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
-        shorty = None
-        if params.use_shortlist:
-            if params.num_clf_partitions > 1:
-                shorty = shortlist.ParallelShortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
-            else:
-                shorty = shortlist.Shortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-        model = model_utils.ModelFull(
-            params, net, criterion=None, optimizer=None)
+        shorty = construct_shortlist(params)
+        model = construct_model(
+            params, net, criterion=None, optimizer=None, shorty=shorty)
         model.load(params.model_dir, params.model_fname, params.use_low_rank)
         model.transfer_to_devices()
         pp_with_shorty(model, params, shorty)
@@ -356,18 +384,9 @@ def main(params):
         net = construct_network(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
-        if params.use_shortlist:
-            if params.num_clf_partitions > 1:
-                shorty = shortlist.ParallelShortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads, params.num_clf_partitions)
-            else:
-                shorty = shortlist.Shortlist(
-                    params.ann_method, params.num_nbrs, params.M, params.efC, params.efS, params.ann_threads)
-            model = model_utils.ModelShortlist(
-                params=params, net=net, criterion=None, optimizer=None, shorty=shorty)
-        else:
-            model = model_utils.ModelFull(
-                params=params, net=net, criterion=None, optimizer=None)
+        shorty = construct_shortlist(params)
+        model = construct_model(
+            params, net, criterion=None, optimizer=None, shorty=shorty)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
         if params.ts_feat_fname == "0":

@@ -11,7 +11,13 @@ dlr_factor=$8
 dlr_step=${9}
 batch_size=${10}
 work_dir=${11}
+MODEL_NAME="${12}"
+temp_model_data="${13}"
+split_threhold="${14}"
 use_head_embeddings=0
+current_working_dir=$(pwd)
+data_dir="${work_dir}/data"
+docs=("trn" "tst")
 
 if [ $use_head_embeddings -eq 1 ]
 then
@@ -21,68 +27,60 @@ else
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
 fi
 
-data_dir="${work_dir}/data"
-stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset}/split_stats.json'))['${quantile}'])"` 
+stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/split_stats.json'))['${quantile}'])"` 
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[2]}
-MODEL_NAME="deepxml_model"
-extra_params=" --feature_indices ${data_dir}/${dataset}/features_split_${quantile}.txt --label_indices ${data_dir}/${dataset}/labels_split_${quantile}.txt"
+echo $num_labels $(wc -l ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt)
+extra_params="--feature_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/features_split_${quantile}.txt \
+                --label_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt"
+
 if [ $quantile -eq -1 ]
 then
     extra_params=""    
 fi
-current_working_dir=$(pwd)
 
-TRAIN_PARAMS="--dataset ${dataset} \
+DEFAULT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --num_labels ${num_labels} \
                 --vocabulary_dims ${vocabulary_dims} \
-                --trans_method ${current_working_dir}/full.json \
-                --dropout 0.5 --optim Adam \
-                --low_rank -1 \
-                --efC 300 \
-                --freeze_embeddings \
-		        --efS 300 \
-                --num_clf_partitions 1\
-                --lr $learning_rate \
-                --use_residual \
                 --embeddings $embedding_file \
                 --embedding_dims ${embedding_dims} \
                 --num_epochs $num_epochs \
+                --tr_feat_fname trn_X_Xf.txt \
+                --tr_label_fname trn_X_Y.txt \
+		        --val_feat_fname tst_X_Xf.txt \
+                --val_label_fname tst_X_Y.txt \
+                --ts_feat_fname tst_X_Xf.txt \
+                --ts_label_fname tst_X_Y.txt \
+                --model_fname ${MODEL_NAME} ${extra_params}"
+
+TRAIN_PARAMS="  --trans_method ${current_working_dir}/full.json \
+                --dropout 0.5 --optim Adam \
+                --num_clf_partitions 1\
+                --lr $learning_rate \
+                --model_method full \
                 --dlr_factor $dlr_factor \
                 --dlr_step $dlr_step \
                 --batch_size $batch_size \
-                --num_nbrs 300 \
-                --M 100 \
                 --normalize \
                 --validate \
-		        --val_feat_fname tst_X_Xf.txt \
-                --val_label_fname tst_X_Y.txt \
-                --ann_threads 12\
-                --beta 0.5\
-                --model_fname ${MODEL_NAME}${extra_params}"
+                ${DEFAULT_PARAMS}"
 
 if [ $use_post -eq 1 ]
 then
 
-    TRAIN_PARAMS_post="--dataset ${dataset} \
-                --data_dir=${work_dir}/data \
-                --num_labels ${num_labels} \
-                --vocabulary_dims ${vocabulary_dims} \
-                --trans_method non_linear \
+    TRAIN_PARAMS_post="
+                --trans_method  ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
                 --low_rank -1 \
                 --freeze_embeddings \
                 --efC 300 \
                 --efS 300 \
                 --num_clf_partitions 1\
+                --model_method full \
                 --num_centroids 1 \
-		        --use_residual \
-                --lr $learning_rate \
-                --embeddings $embedding_file \
-                --embedding_dims ${embedding_dims} \
-                --num_epochs $num_epochs \
+		        --lr $learning_rate \
                 --dlr_factor $dlr_factor \
                 --dlr_step $dlr_step \
                 --batch_size $batch_size \
@@ -91,76 +89,67 @@ then
                 --use_shortlist \
                 --normalize \
                 --validate \
-                --val_feat_fname tst_X_Xf.txt \
-                --val_label_fname tst_X_Y.txt \
                 --ann_threads 12\
                 --beta 0.5\
-                --model_fname ${MODEL_NAME}${extra_params}"
+                ${DEFAULT_PARAMS}"
 
-    PREDICT_PARAMS="--dataset ${dataset} \
-                    --data_dir=${work_dir}/data \
-                    --ts_feat_fname tst_X_Xf.txt \
+    PREDICT_PARAMS="--ts_feat_fname tst_X_Xf.txt \
                     --efS 300 \
+                    --model_method shortlist \
                     --num_centroids 1 \
                     --num_nbrs 300 \
                     --ann_threads 12 \
                     --normalize \
                     --use_shortlist \
-                    --model_fname ${MODEL_NAME} \
                     --batch_size 256 \
                     --out_fname predictions.txt \
-                    --update_shortlist${extra_params}"
+                    --update_shortlist \
+                    ${DEFAULT_PARAMS}"
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --model_method shortlist \
                     --use_shortlist \
                     --model_fname ${MODEL_NAME}\
-                    --batch_size 512${extra_params}"
+                    --batch_size 512 ${extra_params}"
 
 else
-    PREDICT_PARAMS="--dataset ${dataset} \
-                    --data_dir=${work_dir}/data \
-                    --ts_feat_fname tst_X_Xf.txt \
-                    --ts_label_fname tst_X_Y.txt \
-                    --efS 300 \
+    PREDICT_PARAMS="--model_method full \
                     --normalize \
-                    --num_nbrs 300 \
-                    --ann_threads 12\
                     --model_fname ${MODEL_NAME}\
                     --out_fname predictions.txt \
-                    --batch_size 256${extra_params}"
-
+                    --batch_size 256 \
+                    ${DEFAULT_PARAMS}"
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --model_method full \
                     --model_fname ${MODEL_NAME}\
-                    --batch_size 512${extra_params}"
+                    --batch_size 512 ${extra_params}"
 
 fi
-docs=("trn" "tst")
-cwd=$(pwd)
 
-./run_base.sh "train" $dataset $work_dir $dir_version/$quantile "${TRAIN_PARAMS}"
+./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
 
 if [ $use_post -eq 1 ]
 then
     echo "Retraining with shortlist.."
-   ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile "${TRAIN_PARAMS_post}"
+   ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS_post}"
 fi
 
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile "${PREDICT_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
+./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
+./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
 
 if [ $quantile -gt -1 ]
 then
     echo "Generating Head Embeddings"
-    ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$quantile "export/wrd_emb.npy" $quantile $embedding_dims
+    ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "export/wrd_emb.npy" $quantile $embedding_dims "${temp_model_data}/${split_threhold}"
 fi
 
 for doc in ${docs[*]} 
 do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
+    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$quantile "export/${doc}_emb.npy" "${doc}"
 done

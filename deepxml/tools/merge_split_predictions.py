@@ -53,13 +53,16 @@ class CombineResults(object):
 
 
 def main():
-    fname_predictions = sys.argv[1].split(',')
-    fname_mapping = sys.argv[2].split(',')
-    num_labels = int(sys.argv[3])
-    out_fname = sys.argv[4]
+    result_dir = sys.argv[1]
+    splits = sys.argv[2].split(',')
+    suffix_predictions = sys.argv[3]
+    mapping_dir = sys.argv[4]
+    num_labels = int(sys.argv[5])
     cr = CombineResults('npz')
+    fname_predictions = list(map(lambda x: os.path.join(result_dir, x, suffix_predictions), splits))
+    fname_mapping = list(map(lambda x: os.path.join(mapping_dir, "labels_split_%s.txt"%(x)), splits))
     predicted_labels = cr.combine(num_labels, fname_predictions, fname_mapping)
-    cr.write_predictions(predicted_labels, out_fname)
+    cr.write_predictions(predicted_labels, os.path.join(result_dir, suffix_predictions))
     print("Results combined!")
 
 

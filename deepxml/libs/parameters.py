@@ -15,7 +15,7 @@ class Parameters(ParametersBase):
         self.parser.add_argument(
             '--trans_method',
             dest='trans_method',
-            default='',
+            default='non_linear',
             type=str,
             action='store',
             help='which network to use')
@@ -47,6 +47,13 @@ class Parameters(ParametersBase):
             action='store',
             type=int,
             help='Start training from here')
+        self.parser.add_argument(
+            '--model_method',
+            dest='model_method',
+            default='full',
+            action='store',
+            type=str,
+            help='Model method (full/shortlist/ns)')
         self.parser.add_argument(
             '--ann_method',
             dest='ann_method',

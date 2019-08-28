@@ -11,6 +11,7 @@ def main():
     train_feat_fname = sys.argv[2]
     train_label_fname = sys.argv[3]
     split_threshold = list(map(int, sys.argv[4].split(",")))
+    temp_model_data = sys.argv[5]
     num_splits = len(split_threshold)+1
     tr_features = data_utils.read_sparse_file(os.path.join(data_dir, train_feat_fname), force_header=True)
     tr_labels = data_utils.read_sparse_file(os.path.join(data_dir, train_label_fname), force_header=True)
@@ -25,11 +26,12 @@ def main():
     for idx in range(num_splits):
         stats_obj[idx] = "{},{},{}".format(sd.features_split[idx].size, sd.labels_split[idx].size, sd.num_valid_labels[idx])
         total_n_valid_labels += sd.num_valid_labels[idx]
-        np.savetxt(os.path.join(data_dir, 'features_split_{}.txt'.format(str(idx))), sd.features_split[idx], fmt='%d')
-        np.savetxt(os.path.join(data_dir, 'labels_split_{}.txt'.format(str(idx))), sd.labels_split[idx], fmt='%d')        
+        np.savetxt(os.path.join(data_dir, temp_model_data, sys.argv[4], 'features_split_{}.txt'.format(str(idx))), sd.features_split[idx], fmt='%d')
+        np.savetxt(os.path.join(data_dir, temp_model_data, sys.argv[4], 'labels_split_{}.txt'.format(str(idx))), sd.labels_split[idx], fmt='%d')        
     stats_obj['-1']="{},{},{}".format(num_features, num_labels, total_n_valid_labels)
-    pickle.dump(sd, open(os.path.join(data_dir, "split_obj.pkl"), 'wb'))
-    json.dump(stats_obj, open(os.path.join(data_dir, "split_stats.json"), 'w'), indent=4)
+    pickle.dump(sd, open(os.path.join(data_dir, temp_model_data, sys.argv[4], "split_obj.pkl"), 'wb'))
+    json.dump(stats_obj, open(os.path.join(data_dir, temp_model_data,
+                                           sys.argv[4], "split_stats.json"), 'w'), indent=4)
 
 if __name__ == '__main__':
     main()
