@@ -1,4 +1,4 @@
-version=0
+version=10
 use_post=1
 evaluation_type=1
 num_splits=2
@@ -19,4 +19,4 @@ batch_size=128
 num_labels=3993
 A=0.55
 B=1.5
-order=("shortlist" "full")
+order=("shortlist" "ful")

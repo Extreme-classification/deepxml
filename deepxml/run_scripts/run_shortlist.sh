@@ -33,7 +33,6 @@ then
     extra_params=""    
 fi
 
-<<<<<<< HEAD
 if [ $use_head_embeddings -eq 1 ]
 then
     echo "Using Head Embeddings"
@@ -56,28 +55,13 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --val_label_fname tst_X_Y.txt \
                 --ts_feat_fname tst_X_Xf.txt \
                 --ts_label_fname tst_X_Y.txt \
+                --freeze_embeddings \
                 --model_fname ${MODEL_NAME} ${extra_params}"
 
 TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
             --batch_size $batch_size \
             --num_clf_partitions 1\
-=======
-current_working_dir=$(pwd)
-
-TRAIN_PARAMS="--lr $learning_rate \
-            --embeddings $embedding_file \
-            --embedding_dims $embedding_dims \
-            --num_epochs $num_epochs \
-            --dlr_factor $dlr_factor \
-            --dlr_step $dlr_step \
-            --batch_size $batch_size \
-            --num_clf_partitions 1\
-            --dataset ${dataset} \
-            --data_dir=${work_dir}/data \
-            --num_labels ${num_labels} \
-            --vocabulary_dims ${vocabulary_dims} \
->>>>>>> c8451fcf6d4a49155b5e6fff1cab93fff8586e83
             --trans_method ${current_working_dir}/shortlist.json \
             --dropout 0.5 
             --optim Adam \
@@ -118,10 +102,10 @@ EXTRACT_PARAMS="--dataset ${dataset} \
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
-for doc in ${docs[*]}
-do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
-done
+# ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
+# for doc in ${docs[*]}
+# do 
+#     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
+#     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
+# done
 
