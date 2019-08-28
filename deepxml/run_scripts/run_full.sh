@@ -70,8 +70,7 @@ TRAIN_PARAMS="  --trans_method ${current_working_dir}/full.json \
 if [ $use_post -eq 1 ]
 then
 
-    TRAIN_PARAMS_post="
-                --trans_method  ${current_working_dir}/full.json \
+    TRAIN_PARAMS_post="--trans_method  ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
                 --low_rank -1 \
                 --freeze_embeddings \

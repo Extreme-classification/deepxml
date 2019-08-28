@@ -33,6 +33,7 @@ then
     extra_params=""    
 fi
 
+<<<<<<< HEAD
 if [ $use_head_embeddings -eq 1 ]
 then
     echo "Using Head Embeddings"
@@ -61,6 +62,22 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
             --batch_size $batch_size \
             --num_clf_partitions 1\
+=======
+current_working_dir=$(pwd)
+
+TRAIN_PARAMS="--lr $learning_rate \
+            --embeddings $embedding_file \
+            --embedding_dims $embedding_dims \
+            --num_epochs $num_epochs \
+            --dlr_factor $dlr_factor \
+            --dlr_step $dlr_step \
+            --batch_size $batch_size \
+            --num_clf_partitions 1\
+            --dataset ${dataset} \
+            --data_dir=${work_dir}/data \
+            --num_labels ${num_labels} \
+            --vocabulary_dims ${vocabulary_dims} \
+>>>>>>> c8451fcf6d4a49155b5e6fff1cab93fff8586e83
             --trans_method ${current_working_dir}/shortlist.json \
             --dropout 0.5 
             --optim Adam \
