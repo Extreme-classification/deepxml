@@ -19,4 +19,4 @@ batch_size=128
 num_labels=3993
 A=0.55
 B=1.5
-order=("shortlist" "ful")
+order=("shortlist" "full")
