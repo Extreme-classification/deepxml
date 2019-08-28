@@ -48,6 +48,13 @@ class Parameters(ParametersBase):
             type=int,
             help='Start training from here')
         self.parser.add_argument(
+            '--model_method',
+            dest='model_method',
+            default='full',
+            action='store',
+            type=str,
+            help='Model method (full/shortlist/ns)')
+        self.parser.add_argument(
             '--ann_method',
             dest='ann_method',
             default='hnsw',

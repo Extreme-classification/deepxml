@@ -1,15 +1,10 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.parameter import Parameter
-import os
 import numpy as np
 import models.custom_embeddings as custom_embeddings
 import models.hash_embeddings as hash_embeddings
 import models.transform_layer as transform_layer
 import models.linear_layer as linear_layer
-import models.attention_layer as attention_layer
-import models.rnn_layer as rnn_layer
 
 
 __author__ = 'KD'
@@ -35,8 +30,8 @@ class DeepXMLBase(nn.Module):
         padding index in words embedding layer
     """
 
-    def __init__(self, vocabulary_dims, num_labels, embedding_dims, 
-                 trans_config, dropout=0.5, num_clf_partitions=1, 
+    def __init__(self, vocabulary_dims, num_labels, embedding_dims,
+                 trans_config, dropout=0.5, num_clf_partitions=1,
                  padding_idx=0):
         super(DeepXMLBase, self).__init__()
         self.vocabulary_dims = vocabulary_dims+1
@@ -46,7 +41,6 @@ class DeepXMLBase(nn.Module):
         self.padding_idx = padding_idx
         self.num_clf_partitions = num_clf_partitions
         self.num_labels = num_labels
-        self.pt_repr_dims, self.repr_dims = self._compute_rep_dims()
         self.embeddings = self._construct_embedding()
         self.transform = self._construct_transform(trans_config)
         self.classifier = self._construct_classifier()
@@ -67,23 +61,25 @@ class DeepXMLBase(nn.Module):
             _clf_devices = ["cuda:{}".format(
                 idx) for idx in range(self.num_clf_partitions)]
             return linear_layer.ParallelLinear(
-                input_size=self.repr_dims,
+                input_size=self.representation_dims,
                 output_size=self.num_labels,
                 bias=_bias,
                 num_partitions=self.num_clf_partitions,
                 devices=_clf_devices)
         else:
             return linear_layer.Linear(
-                input_size=self.repr_dims,
+                input_size=self.representation_dims,
                 output_size=self.num_labels,  # last one is padding index
                 bias=True
             )
 
     def _construct_transform(self, trans_config):
-        return transform_layer.Transform(trans_config)
+        return transform_layer.Transform(
+            transform_layer.get_functions(trans_config))
 
-    def _compute_rep_dims(self):
-        return 300, 300
+    @property
+    def representation_dims(self):
+        return self.transform.representation_dims
 
     def encode(self, batch_data):
         """encode documents
@@ -155,7 +151,6 @@ class DeepXMLBase(nn.Module):
         """
         self.embeddings.to()
         self.transform.to()
-        self.transform_fine.to()
         self.classifier.to()
 
 
@@ -165,8 +160,10 @@ class DeepXMLh(DeepXMLBase):
     """
 
     def __init__(self, params):
-        params.trans_config_coarse = "relu#,dropout#p:0.5"
-        params.trans_config_fine = "residual#input_size:300-output_size:300-dropout:0.5"
+        transform_config_dict = transform_layer.fetch_json(
+            params.trans_method, params)
+        params.trans_config_coarse = transform_config_dict['transform_coarse']
+        params.trans_config_fine = transform_config_dict['transform_fine']
         super(DeepXMLh, self).__init__(
             vocabulary_dims=params.vocabulary_dims,
             num_labels=params.num_labels,
@@ -175,8 +172,8 @@ class DeepXMLh(DeepXMLBase):
             dropout=params.dropout,
             num_clf_partitions=params.num_clf_partitions,
             padding_idx=params.padding_idx)
-        print("Hardcoding configs for now.......")
-        self.transform_fine = self._construct_transform(params.trans_config_fine)
+        self.transform_fine = self._construct_transform(
+            params.trans_config_fine)
 
     def encode(self, batch_data, return_coarse=False):
         """encode documents
@@ -202,6 +199,7 @@ class DeepXMLh(DeepXMLBase):
     def to(self):
         """Send layers to respective devices
         """
+        self.transform_fine.to()
         super().to()
 
 
@@ -211,8 +209,10 @@ class DeepXMLt(DeepXMLBase):
     """
 
     def __init__(self, params):
-        params.trans_config_coarse = "relu#,dropout#p:0.5"
-        params.trans_config_fine = "residual#input_size:300-output_size:300-dropout:0.5"
+        transform_config_dict = transform_layer.fetch_json(
+            params.trans_method, params)
+        params.trans_config_coarse = transform_config_dict['transform_coarse']
+        params.trans_config_fine = transform_config_dict['transform_fine']
         self.label_padding_index = params.label_padding_index
         super(DeepXMLt, self).__init__(
             vocabulary_dims=params.vocabulary_dims,
@@ -222,7 +222,8 @@ class DeepXMLt(DeepXMLBase):
             dropout=params.dropout,
             num_clf_partitions=params.num_clf_partitions,
             padding_idx=params.padding_idx)
-        self.transform_fine = self._construct_transform(params.trans_config_fine)
+        self.transform_fine = self._construct_transform(
+            params.trans_config_fine)
 
     def encode(self, batch_data, return_coarse=False):
         """encode documents
@@ -278,20 +279,22 @@ class DeepXMLt(DeepXMLBase):
             _clf_devices = ["cuda:{}".format(
                 idx) for idx in range(self.num_clf_partitions)]
             return linear_layer.ParallelSparseLinear(
-                input_size=self.repr_dims,
+                input_size=self.representation_dims,
                 output_size=_num_labels,
                 bias=_bias,
                 padding_idx=_padding_idx,
                 num_partitions=self.num_clf_partitions,
                 devices=_clf_devices)
         else:
+            # last one is padding index
             return linear_layer.SparseLinear(
-                input_size=self.repr_dims,
-                output_size=self.num_labels + offset,  # last one is padding index
+                input_size=self.representation_dims,
+                output_size=self.num_labels + offset,
                 padding_idx=self.label_padding_index,
                 bias=True)
 
     def to(self):
         """Send layers to respective devices
         """
+        self.transform_fine.to()
         super().to()

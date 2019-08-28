@@ -33,32 +33,27 @@ then
     extra_params=""    
 fi
 
+current_working_dir=$(pwd)
+
 TRAIN_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --num_labels ${num_labels} \
                 --vocabulary_dims ${vocabulary_dims} \
-                --trans_method non_linear \
+                --trans_method ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
-                --low_rank -1 \
-                --efC 300 \
-                --efS 300 \
                 --num_clf_partitions 1\
                 --lr $learning_rate \
-                --use_residual \
+                --model_method full \
                 --embeddings $embedding_file \
                 --embedding_dims ${embedding_dims} \
                 --num_epochs $num_epochs \
                 --dlr_factor $dlr_factor \
                 --dlr_step $dlr_step \
                 --batch_size $batch_size \
-                --num_nbrs 300 \
-                --M 100 \
                 --normalize \
                 --validate \
 		        --val_feat_fname tst_X_Xf.txt \
                 --val_label_fname tst_X_Y.txt \
-                --ann_threads 12\
-                --beta 0.5\
                 --model_fname ${MODEL_NAME}${extra_params}"
 
 if [ $use_post -eq 1 ]
@@ -75,6 +70,7 @@ then
                 --efC 300 \
                 --efS 300 \
                 --num_clf_partitions 1\
+                --model_method full \
                 --num_centroids 1 \
 		        --use_residual \
                 --lr $learning_rate \
@@ -99,6 +95,7 @@ then
                     --data_dir=${work_dir}/data \
                     --ts_feat_fname tst_X_Xf.txt \
                     --efS 300 \
+                    --model_method shortlist \
                     --num_centroids 1 \
                     --num_nbrs 300 \
                     --ann_threads 12 \
@@ -112,6 +109,7 @@ then
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --model_method shortlist \
                     --use_shortlist \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512${extra_params}"
@@ -121,10 +119,8 @@ else
                     --data_dir=${work_dir}/data \
                     --ts_feat_fname tst_X_Xf.txt \
                     --ts_label_fname tst_X_Y.txt \
-                    --efS 300 \
+                    --model_method full \
                     --normalize \
-                    --num_nbrs 300 \
-                    --ann_threads 12\
                     --model_fname ${MODEL_NAME}\
                     --out_fname predictions.txt \
                     --batch_size 256${extra_params}"
@@ -133,6 +129,7 @@ else
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --model_method full \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512${extra_params}"
 

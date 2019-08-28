@@ -36,6 +36,8 @@ then
     extra_params=""    
 fi
 
+current_working_dir=$(pwd)
+
 TRAIN_PARAMS="--lr $learning_rate \
             --embeddings $embedding_file \
             --embedding_dims $embedding_dims \
@@ -48,10 +50,10 @@ TRAIN_PARAMS="--lr $learning_rate \
             --data_dir=${work_dir}/data \
             --num_labels ${num_labels} \
             --vocabulary_dims ${vocabulary_dims} \
-            --trans_method non_linear \
+            --trans_method ${current_working_dir}/shortlist.json \
             --dropout 0.5 
             --optim Adam \
-            --low_rank -1 \
+            --model_method shortlist \
             --efS 300 \
             --normalize \
             --num_nbrs 300 \
@@ -75,18 +77,21 @@ PREDICT_PARAMS="--dataset ${dataset} \
                 --ts_label_fname tst_X_Y.txt \
                 --efS 300 \
                 --num_nbrs 300 \
+                --model_method shortlist \
                 --ann_threads 12\
                 --normalize \
                 --use_shortlist \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 256 \
                 --beta 0.5 ${extra_params}\
-                --out_fname predictions.txt"
-                #--update_shortlist"
+                --out_fname predictions.txt \
+                --use_coarse_for_shorty \
+                --update_shortlist"
 
 EXTRACT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --use_shortlist \
+                --model_method shortlist \
                 --normalize \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${extra_params}"
