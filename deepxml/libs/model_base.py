@@ -42,11 +42,11 @@ class ModelBase(object):
         self.dlr_factor = params.dlr_factor
         self.progress_step = 500
         self.freeze_embeddings = params.freeze_embeddings
-        self.logger = self.get_logger()
+        self.model_fname = params.model_fname
+        self.logger = self.get_logger(name=self.model_fname)
         self.devices = self._create_devices(params.devices)
         self.embedding_dims = params.embedding_dims
         self.tracking = Tracking()
-        self.model_fname = params.model_fname
 
     def transfer_to_devices(self):
         self.net.to()

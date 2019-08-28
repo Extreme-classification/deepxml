@@ -31,7 +31,7 @@ stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[2]}
-echo $num_labels $(wc -l ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt)
+
 extra_params="--feature_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/features_split_${quantile}.txt \
                 --label_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt"
 
