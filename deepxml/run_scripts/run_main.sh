@@ -86,8 +86,15 @@ run(){
     splitid=$3
     learning_rate=$4
     num_epochs=$5
-    echo "Training $file split.. with lr:" ${learning_rate} "epochs:" ${num_epochs}  
-    ./run_"${file}".sh $dataset $version $splitid $use_post $learning_rate $embedding_dims $num_epochs $dlr_factor $dlr_step $batch_size "${work_dir}" $model_type "${temp_model_data}" "${split_threshold}"
+    dlr_step="dlr_step_${file}"
+    num_epochs="num_epochs_${file}"
+    batch_size="batch_size_${file}"
+    echo "Training $file split.. with lr:" ${learning_rate} "epochs:" ${!num_epochs}  
+    args="$dataset $version $splitid $use_post $learning_rate $embedding_dims \
+            ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
+            $model_type ${temp_model_data} ${split_threshold}"
+    echo $args
+    ./run_"${file}".sh $args
 }
 
 for((lr_idx=0; lr_idx<$learning_rates; lr_idx++));
@@ -115,14 +122,13 @@ do
             arg=$(expr $sp_idx - 1 |bc)
             type="order[$arg]"
             lr_arr="lr_${!type}[${lr_idx}]"
-            epc_arr="num_epochs_${!type}"
-            run "${!type}" $version $arg ${!lr_arr} ${!epc_arr}
+            run "${!type}" $version $arg ${!lr_arr}
         done
 
         if [ $use_post -eq 1 ]
         then
-            merge_split_predictions "${results_dir}" "0,1" "predictions_knn.npz"  "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            merge_split_predictions "${results_dir}" "0,1" "predictions_clf.npz"  "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "predictions_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
         fi
         echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
         run_beta "shortlist" $dataset $work_dir $version "predictions" $A $B $evaluation_type
@@ -130,4 +136,4 @@ do
     ((version++))
 done       
 
-clean_up
+#clean_up

@@ -66,6 +66,8 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dropout 0.5 
             --optim Adam \
             --model_method shortlist \
+            --shortlist_method hybrid \
+            --lr ${learning_rate} \
             --efS 300 \
             --normalize \
             --num_nbrs 300 \
@@ -74,6 +76,7 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --use_shortlist \
             --validate \
 		    --ann_threads 12 \
+            --use_coarse_for_shorty \
             --beta 0.5 \
             --update_shortlist \
             --retrain_hnsw_after $(($num_epochs+3)) \
@@ -103,9 +106,10 @@ EXTRACT_PARAMS="--dataset ${dataset} \
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
 ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
-# for doc in ${docs[*]}
-# do 
-#     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-#     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
-# done
+
+for doc in ${docs[*]}
+do 
+    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
+    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
+done
 

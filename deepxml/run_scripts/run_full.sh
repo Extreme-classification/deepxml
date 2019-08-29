@@ -15,8 +15,8 @@ MODEL_NAME="${12}"
 temp_model_data="${13}"
 split_threhold="${14}"
 use_head_embeddings=0
-current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
+current_working_dir=$(pwd)
 docs=("trn" "tst")
 
 if [ $use_head_embeddings -eq 1 ]
