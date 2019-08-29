@@ -43,7 +43,6 @@ class DeepXMLBase(nn.Module):
         self.num_labels = num_labels
         self.embeddings = self._construct_embedding()
         self.transform = self._construct_transform(trans_config)
-        self.classifier = self._construct_classifier()
         # Keep embeddings on first device
         self.device_embeddings = torch.device("cuda:0")
 
@@ -174,6 +173,7 @@ class DeepXMLh(DeepXMLBase):
             padding_idx=params.padding_idx)
         self.transform_fine = self._construct_transform(
             params.trans_config_fine)
+        self.classifier = self._construct_classifier()
 
     def encode(self, batch_data, return_coarse=False):
         """encode documents
@@ -224,6 +224,7 @@ class DeepXMLt(DeepXMLBase):
             padding_idx=params.padding_idx)
         self.transform_fine = self._construct_transform(
             params.trans_config_fine)
+        self.classifier = self._construct_classifier()
 
     def encode(self, batch_data, return_coarse=False):
         """encode documents

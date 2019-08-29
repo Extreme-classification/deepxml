@@ -11,6 +11,7 @@ from .dist_utils import Partitioner
 import operator
 from .lookup import Table, PartitionedTable
 from .shortlist_handler import ShortlistHandlerStatic, ShortlistHandlerDynamic
+from .shortlist_handler import ShortlistHandlerHybrid
 
 
 def construct_dataset(data_dir, fname_features, fname_labels, data=None,
@@ -19,7 +20,7 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None,
                       keep_invalid=False, num_centroids=1,
                       feature_type='sparse', num_clf_partitions=1,
                       feature_indices=None, label_indices=None,
-                      shortlist_type='static', shorty=None):
+                      shortlist_method='static', shorty=None):
     if size_shortlist == -1:
         return DatasetDense(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
@@ -31,7 +32,7 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None,
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
             normalize_labels, num_clf_partitions, size_shortlist,
-            num_centroids, feature_type, shortlist_type, shorty)
+            num_centroids, feature_type, shortlist_method, shorty)
 
 
 class DatasetDense(DatasetBase):
@@ -186,7 +187,7 @@ class DatasetSparse(DatasetBase):
                  label_indices=None, keep_invalid=False,
                  normalize_features=True, normalize_labels=False,
                  num_clf_partitions=1, size_shortlist=-1, num_centroids=1,
-                 feature_type='sparse', shortlist_type='static',
+                 feature_type='sparse', shortlist_method='static',
                  shorty=None, label_type='sparse', shortlist_in_memory=True):
         """
             Expects 'libsvm' format with header
@@ -207,22 +208,31 @@ class DatasetSparse(DatasetBase):
         self.shortlist_in_memory = shortlist_in_memory
         self.size_shortlist = size_shortlist
         self.multiple_cent_mapping = None
-        self.shortlist_type = shortlist_type
+        self.shortlist_method = shortlist_method
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
         if not keep_invalid:
             # Remove labels w/o any positive instance
             self._process_labels(model_dir)
-        if shortlist_type == 'static':
+        if shortlist_method == 'static':
             self.shortlist = ShortlistHandlerStatic(
                 self.num_labels, model_dir, num_clf_partitions,
                 mode, size_shortlist, num_centroids,
                 shortlist_in_memory, self.multiple_cent_mapping)
-        else:
+        elif shortlist_method == 'hybrid':
+            self.shortlist = ShortlistHandlerHybrid(
+                self.num_labels, model_dir, num_clf_partitions,
+                mode, size_shortlist, num_centroids,
+                shortlist_in_memory, self.multiple_cent_mapping,
+                _corruption=200)
+        elif shortlist_method == 'dynamic':
             self.shortlist = ShortlistHandlerDynamic(
                 self.num_labels, shorty, model_dir, num_clf_partitions, mode,
                 size_shortlist, num_centroids, self.multiple_cent_mapping)
+        else:
+            raise NotImplementedError(
+                "Unknown shortlist method: {}!".format(shortlist_method))
         self.use_shortlist = True if self.size_shortlist > 0 else False
         self.label_padding_index = self.num_labels
 

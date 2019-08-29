@@ -48,6 +48,13 @@ class Parameters(ParametersBase):
             type=int,
             help='Start training from here')
         self.parser.add_argument(
+            '--shortlist_method',
+            dest='shortlist_method',
+            default='static',
+            action='store',
+            type=str,
+            help='Shortlist method (static/dynamic/hybrid)')
+        self.parser.add_argument(
             '--model_method',
             dest='model_method',
             default='full',
@@ -69,9 +76,16 @@ class Parameters(ParametersBase):
             type=int,
             help='#labels to predict for each document')
         self.parser.add_argument(
+            '--num_workers',
+            dest='num_workers',
+            default=6,
+            action='store',
+            type=int,
+            help='#workers in data loader')
+        self.parser.add_argument(
             '--ann_threads',
             dest='ann_threads',
-            default=4,
+            default=12,
             action='store',
             type=int,
             help='HSNW params')

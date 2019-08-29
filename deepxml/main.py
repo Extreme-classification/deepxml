@@ -35,7 +35,7 @@ def load_emeddings(params):
         embeddings = np.load(
             os.path.join(os.path.dirname(params.model_dir),
                          params.embeddings))
-        
+
     else:
         fname = os.path.join(
             params.data_dir, params.dataset, params.embeddings)
@@ -96,7 +96,7 @@ def train(model, params):
         tr_label_fname=params.tr_label_fname,
         val_label_fname=params.val_label_fname,
         batch_size=params.batch_size,
-        num_workers=4,
+        num_workers=params.num_workers,
         normalize_features=params.normalize,
         normalize_labels=params.nbn_rel,
         shuffle=params.shuffle,
@@ -104,6 +104,7 @@ def train(model, params):
         beta=params.beta,
         init_epoch=params.last_epoch,
         keep_invalid=params.keep_invalid,
+        shortlist_method=params.shortlist_method,
         feature_indices=params.feature_indices,
         label_indices=params.label_indices)
     # TODO: Accomodate low rank
@@ -130,7 +131,7 @@ def get_document_embeddings(model, params, _save=True):
         keep_invalid=params.keep_invalid,
         batch_size=params.batch_size,
         normalize_features=params.normalize,
-        num_workers=4,
+        num_workers=params.num_workers,
         feature_indices=params.feature_indices)
     fname = os.path.join(params.result_dir, params.out_fname)
     if _save:  # Save
@@ -308,11 +309,12 @@ def main(params):
             reduction='sum' if params.use_shortlist else 'mean')
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
-        optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
-                                              learning_rate=params.learning_rate,
-                                              momentum=params.momentum,
-                                              freeze_embeddings=params.freeze_embeddings,
-                                              weight_decay=params.weight_decay)
+        optimizer = optimizer_utils.Optimizer(
+            opt_type=params.optim,
+            learning_rate=params.learning_rate,
+            momentum=params.momentum,
+            freeze_embeddings=params.freeze_embeddings,
+            weight_decay=params.weight_decay)
         params.lrs = {"embeddings": params.learning_rate*1.0}
         optimizer.construct(net, params)
         shorty = construct_shortlist(params)
@@ -326,10 +328,11 @@ def main(params):
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
         net = construct_network(params)
-        optimizer = optimizer_utils.Optimizer(opt_type=params.optim,
-                                              learning_rate=params.learning_rate,
-                                              momentum=params.momentum,
-                                              freeze_embeddings=params.freeze_embeddings)
+        optimizer = optimizer_utils.Optimizer(
+            opt_type=params.optim,
+            learning_rate=params.learning_rate,
+            momentum=params.momentum,
+            freeze_embeddings=params.freeze_embeddings)
         criterion = torch.nn.BCEWithLogitsLoss(
             size_average=False if params.use_shortlist else True)
         shorty = construct_shortlist(params)
@@ -342,7 +345,9 @@ def main(params):
         model.optimizer = optimizer
         model.optimizer.construct(model.net)
 
-        # fname = os.path.join(params.model_dir, 'checkpoint_net_{}.pkl'.format(params.last_epoch))
+        # fname = os.path.join(
+        #   params.model_dir, 'checkpoint_net_{}.pkl'.format(
+        #   params.last_epoch))
         # checkpoint = torch.load(open(fname, 'rb'))
         # model.optimizer.load_state_dict(checkpoint['optimizer'])
         print("Model configuration is: ", params)
@@ -362,10 +367,11 @@ def main(params):
         inference(model, params)
 
     elif params.mode == 'retrain_w_shorty':
-        # Train ANNS for 1-vs-all classifier
+        #  Train ANNS for 1-vs-all classifier
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
-        if params.num_centroids != 1:  # Pad label in case of multiple-centroids
+        #  Pad label in case of multiple-centroids
+        if params.num_centroids != 1:
             params.label_padding_index = params.num_labels
         net = construct_network(params)
         print("Model parameters: ", params)

@@ -204,7 +204,8 @@ class ModelShortlist(ModelBase):
             tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
             init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
-            normalize_features=True, normalize_labels=False, validate=False, beta=0.2, use_coarse=True):
+            normalize_features=True, normalize_labels=False, validate=False, beta=0.2, 
+            use_coarse=True, shortlist_method='static'):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
@@ -216,6 +217,7 @@ class ModelShortlist(ModelBase):
                                              normalize_features=normalize_features,
                                              normalize_labels=normalize_labels,
                                              feature_indices=feature_indices,
+                                             shortlist_method=shortlist_method,
                                              label_indices=label_indices)
         train_loader = self._create_data_loader(train_dataset,
                                                 batch_size=batch_size,
@@ -235,8 +237,9 @@ class ModelShortlist(ModelBase):
                                                 data=data,
                                                 fname_features=None,
                                                 mode='train',
+                                                shortlist_method=shortlist_method,
                                                 feature_type='dense',
-                                                keep_invalid=True) # Invalid labels already removed
+                                                keep_invalid=True)  # Invalid labels already removed
             train_loader = self._create_data_loader(train_dataset,
                                                     batch_size=batch_size,
                                                     num_workers=num_workers,
@@ -378,7 +381,7 @@ class ModelNS(ModelBase):
                                              normalize_labels=normalize_labels,
                                              feature_indices=feature_indices,
                                              label_indices=label_indices,
-                                             shortlist_type='dynamic',
+                                             shortlist_method='dynamic',
                                              shorty=self.shorty)
         train_loader = self._create_data_loader(train_dataset,
                                                 batch_size=batch_size,
@@ -394,6 +397,7 @@ class ModelNS(ModelBase):
                                                 data=data,
                                                 fname_features=None,
                                                 mode='train',
+                                                shortlist_method='dynamic',
                                                 feature_type='dense',
                                                 keep_invalid=True) # Invalid labels already removed
             train_loader = self._create_data_loader(train_dataset,

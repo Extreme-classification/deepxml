@@ -66,7 +66,7 @@ class ModelBase(object):
                         normalize_labels=False, feature_type=None,
                         keep_invalid=False, feature_indices=None,
                         label_indices=None, size_shortlist=None,
-                        shortlist_type='static', shorty=None):
+                        shortlist_method='static', shorty=None):
         """
             Create dataset as per given parameters
         """
@@ -85,7 +85,7 @@ class ModelBase(object):
                                      num_clf_partitions=self.num_clf_partitions,
                                      feature_indices=feature_indices,
                                      label_indices=label_indices,
-                                     shortlist_type=shortlist_type,
+                                     shortlist_method=shortlist_method,
                                      shorty=shorty)
         return _dataset
 

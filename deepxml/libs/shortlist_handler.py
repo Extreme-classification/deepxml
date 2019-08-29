@@ -4,6 +4,7 @@ from .dist_utils import Partitioner
 import operator
 import os
 from .lookup import Table, PartitionedTable
+from .negative_sampling import NegativeSampler
 
 
 class ShortlistHandlerBase(object):
