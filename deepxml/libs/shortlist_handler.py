@@ -298,3 +298,98 @@ class ShortlistHandlerDynamic(ShortlistHandlerBase):
 
     def query(self, index):
         return self.shortlist.query(num_samples=1)
+
+
+class ShortlistHandlerHybrid(ShortlistHandlerBase):
+    """ShortlistHandler with hybrid shortlist
+    - save/load/update/process shortlist
+    - support for partitioned classifier
+    - support for multiple representations for labels
+    Parameters
+    ----------
+    num_labels: int
+        number of labels
+    model_dir: str, optional, default=''
+        save the data in model_dir
+    num_clf_partitions: int, optional, default=''
+        #classifier splits
+    mode: str: optional, default=''
+        mode i.e. train or test or val
+    size_shortlist:int, optional, default=-1
+        get shortlist of this size
+    num_centroids: int, optional, default=1
+        #centroids (useful when using multiple rep)
+    in_memory: bool: optional, default=True
+        Keep the shortlist in memory or on-disk
+    label_mapping: None or dict: optional, default=None
+        map labels as per this mapping
+    _corruption: int, optional, default=None
+        add these many random labels
+    """
+
+    def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
+                 mode='train', size_shortlist=-1, num_centroids=1,
+                 in_memory=True, label_mapping=None, _corruption=200):
+        super().__init__(num_labels, None, model_dir, num_clf_partitions,
+                         mode, size_shortlist, num_centroids, label_mapping)
+        self.in_memory = in_memory
+        self._create_shortlist()
+        # Some labels will be repeated, so keep it low
+        self.shortlist_dynamic = NegativeSampler(num_labels, size_shortlist)
+        self.size_shortlist = size_shortlist+_corruption  # Both
+
+    def query(self, index):
+        shortlist = self.shortlist.query(index).tolist()
+        dist = self.dist.query(index).tolist()
+        _shortlist, _dist = self.shortlist_dynamic.query(1)
+        shortlist.extend(_shortlist)
+        dist.extend(_dist)
+        return shortlist, dist
+
+    def _create_shortlist(self):
+        """
+            Create structure to hold shortlist
+        """
+        _type = 'memory' if self.in_memory else 'memmap'
+        if self.num_clf_partitions > 1:
+            self.shortlist = PartitionedTable(
+                num_partitions=self.num_clf_partitions,
+                _type=_type, _dtype=np.int32)
+            self.dist = PartitionedTable(
+                num_partitions=self.num_clf_partitions,
+                _type=_type, _dtype=np.float32)
+        else:
+            self.shortlist = Table(_type=_type, _dtype=np.int32)
+            self.dist = Table(_type=_type, _dtype=np.float32)
+
+    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
+        """
+            Update label shortlist for each instance
+        """
+        prefix = 'train' if self.mode == 'train' else 'test'
+        self.shortlist.create(shortlist, os.path.join(
+            self.model_dir,
+            '{}.{}.shortlist.indices'.format(fname, prefix)),
+            idx)
+        self.dist.create(dist, os.path.join(
+            self.model_dir,
+            '{}.{}.shortlist.dist'.format(fname, prefix)),
+            idx)
+        del dist, shortlist
+
+    def save_shortlist(self, fname):
+        """
+            Save label shortlist and distance for each instance
+        """
+        self.shortlist.save(os.path.join(
+            self.model_dir, fname+'.shortlist.indices'))
+        self.dist.save(os.path.join(self.model_dir, fname+'.shortlist.dist'))
+
+    def load_shortlist(self, fname):
+        """
+            Load label shortlist and distance for each instance
+        """
+        self.shortlist.load(os.path.join(
+            self.model_dir, fname+'.shortlist.indices'))
+        self.dist.load(os.path.join(
+            self.model_dir, fname+'.shortlist.dist'))
