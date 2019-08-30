@@ -3,25 +3,36 @@ import _pickle as pickle
 
 
 class Partitioner(object):
-    """
-        Utility to distribute an array
+    """Utility to distribute an array
         Indices support: contiguous or otherwise (e.g. shortlist)
+    Parameters:
+    -----------
+    size: int
+        size of data
+    num_patitions: int
+        Divide data in these many parittions
+    padding: boolean, optional, default=False
+        Padding index (Not handeled #TODO)
+    contiguous: boolean, optional, default=True
+        whether data is contiguous or not
+        (non-contiguous not supported as of now)
     """
+
     def __init__(self, size, num_patitions, padding=False, contiguous=True):
-        #TODO: Handle padding
+        # TODO: Handle padding
         self.num_patitions = num_patitions
         self.size = size
         self.contiguous = contiguous
         self._partitions = self._create_partitions()
-        self.mapping_to_original, self.mapping_to_partition = self._create_mapping()
+        self.mapping_to_original, \
+            self.mapping_to_partition = self._create_mapping()
         self.partition_boundaries = self._create_partition_boundaries()
 
     def get_padding_indices(self):
         return [item.size for item in self._partitions]
 
     def _create_partition_boundaries(self):
-        """
-            Split array at these points
+        """Split array at these points
         """
         _last = 0
         partition_boundaries = []
@@ -31,20 +42,20 @@ class Partitioner(object):
         return partition_boundaries
 
     def _create_partitions(self):
-        """
-            Create partitions
+        """Create partitions
         """
         return np.array_split(np.arange(self.size), self.num_patitions)
 
     def _create_mapping(self):
-        """
-            Mapping to map indices original<->partitioned
+        """Mapping to map indices original<->partitioned
         """
         mapping_to_original = []
         mapping_to_partition = []
         for _, _partition in enumerate(self._partitions):
-            mapping_to_original.append(dict(zip(np.arange(_partition.size), _partition)))
-            mapping_to_partition.append(dict(zip(_partition, np.arange(_partition.size))))
+            mapping_to_original.append(
+                dict(zip(np.arange(_partition.size), _partition)))
+            mapping_to_partition.append(
+                dict(zip(_partition, np.arange(_partition.size))))
         return mapping_to_original, mapping_to_partition
 
     def _map(self, fun, array):
@@ -67,8 +78,7 @@ class Partitioner(object):
         return self.num_patitions-1
 
     def split_indices_with_data(self, indices, data):
-        """
-            Split given indices and data (Shortlist)
+        """Split given indices and data (Shortlist)
             i.e. get the partition and map them accordingly
         """
         out_ind = [[] for _ in range(self.num_patitions)]
@@ -81,8 +91,7 @@ class Partitioner(object):
         return out_ind, out_vals
 
     def split_indices(self, indices):
-        """
-            Split given indices (Shortlist)
+        """Split given indices (Shortlist)
             i.e. get the partition and map them accordingly
         """
         out_ind = [[] for _ in range(self.num_patitions)]
@@ -92,9 +101,8 @@ class Partitioner(object):
             out_ind[part].append(ind)
         return out_ind
 
-    def split(self, array): #Split as per bondaries
-        """
-            Split given array in partitions (For contiguous indices)
+    def split(self, array):  # Split as per bondaries
+        """Split given array in partitions (For contiguous indices)
         """
         if self.contiguous:
             return np.hsplit(array, self.partition_boundaries)
@@ -118,4 +126,5 @@ class Partitioner(object):
         return self._partitions[part]
 
     def __repr__(self):
-        return "({}) #Size: {}, #partitions: {}".format(self.__class__.__name__, self.size, self.num_patitions)
+        return "({}) #Size: {}, #partitions: {}".format(
+            self.__class__.__name__, self.size, self.num_patitions)

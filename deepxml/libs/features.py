@@ -8,6 +8,22 @@ import json
 
 
 def construct(data_dir, fname, X=None, normalize=False, _type='sparse'):
+    """Construct feature class based on given parameters
+    Arguments
+    ----------
+    data_dir: str
+        data directory
+    fname: str
+        load data from this file
+    X: csr_matrix or None, optional, default=None
+        data is already provided
+    normalize: boolean, optional, default=False
+        Normalize the data or not
+    _type: str, optional, default=sparse
+        -sparse
+        -dense
+        -sequential
+    """
     if _type == 'sparse':
         return SparseFeatures(data_dir, fname, X, normalize)
     elif _type == 'dense':
@@ -19,13 +35,17 @@ def construct(data_dir, fname, X=None, normalize=False, _type='sparse'):
 
 
 class FeaturesBase(object):
+    """Class for dense features
+    Parameters
+    ----------
+    data_dir: str
+        data directory
+    fname: str
+        load data from this file
+    X: np.ndarray or csr_matrix or None, optional, default=None
+        data is already provided
     """
-        Base class for features
-        Args:
-            data_dir: str: data directory
-            fname: str: load data from this file
-            X: np.ndarray or csr_matrix: data is already provided
-    """
+
     def __init__(self, data_dir, fname, X=None):
         self.X = self.load(data_dir, fname, X)
 
@@ -33,10 +53,10 @@ class FeaturesBase(object):
         return np.array(self.X.sum(axis=axis)).ravel()
 
     def get_invalid(self, axis=0):
-        return np.where(self.frequency(axis)==0)[0]
+        return np.where(self.frequency(axis) == 0)[0]
 
     def get_valid(self, axis=0):
-        return np.where(self.frequency(axis)>0)[0]
+        return np.where(self.frequency(axis) > 0)[0]
 
     def remove_invalid(self, axis=0):
         indices = self.get_valid(axis)
@@ -54,7 +74,7 @@ class FeaturesBase(object):
         """
             Choose only selected labels or instances
         """
-        #TODO: Load and select from file
+        # TODO: Load and select from file
         if axis == 0:
             self._select_instances(indices)
         elif axis == 1:
@@ -71,7 +91,8 @@ class FeaturesBase(object):
             if fname.lower().endswith('.pkl'):
                 return pickle.load(open(fname, 'rb'))['X']
             elif fname.lower().endswith('.txt'):
-                return data_utils.read_sparse_file(fname, dtype=np.float32, force_header=True)
+                return data_utils.read_sparse_file(
+                    fname, dtype=np.float32)
             else:
                 raise NotImplementedError("Unknown file extension")
 
@@ -92,13 +113,19 @@ class FeaturesBase(object):
 
 
 class DenseFeatures(FeaturesBase):
+    """Class for dense features
+    Parameters
+    ----------
+    data_dir: str
+        data directory
+    fname: str
+        load data from this file
+    X: np.ndarray or None, optional, default=None
+        data is already provided
+    normalize: boolean, optional, default=False
+        Normalize the data or not
     """
-        Class for dense features
-        Args:
-            data_dir: str: data directory
-            fname: str: load data from this file
-            X: np.ndarray: data is already provided
-    """
+
     def __init__(self, data_dir, fname, X=None, normalize=False):
         super().__init__(data_dir, fname, X)
 
@@ -113,13 +140,19 @@ class DenseFeatures(FeaturesBase):
 
 
 class SparseFeatures(FeaturesBase):
+    """Class for sparse features
+    Parameters
+    ----------
+    data_dir: str
+        data directory
+    fname: str
+        load data from this file
+    X: csr_matrix or None, optional, default=None
+        data is already provided
+    normalize: boolean, optional, default=False
+        Normalize the data or not
     """
-        Class for sparse features
-        Args:
-            data_dir: str: data directory
-            fname: str: load data from this file
-            X: csr_matrix: data is already provided
-    """
+
     def __init__(self, data_dir, fname, X=None, normalize=False):
         super().__init__(data_dir, fname, X)
         if normalize:
@@ -135,31 +168,39 @@ class SparseFeatures(FeaturesBase):
         return np.array(self.X.astype(np.bool).sum(axis=axis)).ravel()
 
     def __getitem__(self, index):
-        x = list(map(lambda item: item+1, self.X[index, :].indices)) # Treat idx:0 as Padding
+        # Treat idx:0 as Padding
+        x = list(map(lambda item: item+1, self.X[index, :].indices))
         w = self.X[index, :].data.tolist()
         return x, w
 
 
 class SequentialFeatures(FeaturesBase):
+    """Class for Sequential features; useful for sequential models
+    Parameters
+    ---------
+    data_dir: str
+        data directory
+    fname: str
+        load data from this file
+    X: ?: ?
+    * 0: Reserved for padding index; 1: UNK, 2: Start token and 3: end token
     """
-        Class for Sequential features; useful for sequential models
-        Args:
-            data_dir: str: data directory
-            fname: str: load data from this file
-            X: ?: ?
-        * 0: Reserved for padding index; 1: UNK, 2: Start token and 3: end token
-    """
-    def __init__(self, data_dir, fname, X=None, vocabulary_file=None, cutoff_len=300):
+
+    def __init__(self, data_dir, fname, X=None,
+                 vocabulary_file=None, cutoff_len=300):
         self.load(data_dir, fname)
         self.cutoff_len = cutoff_len
         if vocabulary_file is not None:
-            self.token_to_index = json.load(open(os.path.join(data_dir, vocabulary_file)))
+            self.token_to_index = json.load(
+                open(os.path.join(data_dir, vocabulary_file)))
             self._check_pad_index()
-            self.process_text() #Assumes text is already vectorized if no vocab file is supplied
+            #  Assumes text is already vectorized if no vocab file is supplied
+            self.process_text()
 
     def _check_pad_index(self):
         if '<PAD>' not in self.token_to_index:
-            self.token_to_index = {k:v+1 for k,v in self.token_to_index.items()}
+            self.token_to_index = \
+                {k: v+1 for k, v in self.token_to_index.items()}
             self.token_to_index['<PAD>'] = 0
 
     @property
@@ -185,13 +226,17 @@ class SequentialFeatures(FeaturesBase):
 
     def convert(self, sentence):
         # Assuming there is no need to truncate as of now
-        sentence = ['<S>'] + self._clean_text(sentence).split(" ")[:self.cutoff_len] + ["</S>"]
+        sentence = ['<S>'] \
+            + self._clean_text(sentence).split(" ")[:self.cutoff_len] \
+            + ["</S>"]
         return self.map_to_indices(sentence)
 
     def map_to_indices(self, sentence):
         # +1 for Padding
-        return list(map(lambda x: self.token_to_index[x] if x in self.token_to_index else self.token_to_index['<UNK>'], sentence))
+        return list(
+            map(lambda x: self.token_to_index[x]
+                if x in self.token_to_index
+                else self.token_to_index['<UNK>'], sentence))
 
     def __getitem__(self, index):
         return self.X[index]
- 

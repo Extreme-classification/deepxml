@@ -65,7 +65,7 @@ class DatasetBase(torch.utils.data.Dataset):
         self.model_dir = model_dir
         self.data_dir = data_dir
         self.label_padding_index = self.num_labels
-        
+    
     def _remove_samples_wo_features_and_labels(self):
         """Remove instances if they don't have any feature or label
         """

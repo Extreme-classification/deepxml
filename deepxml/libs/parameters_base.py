@@ -1,7 +1,9 @@
 import argparse
 import json
 
-__author__='X'
+
+__author__ = 'X'
+
 
 class ParametersBase():
     """
@@ -109,4 +111,3 @@ class ParametersBase():
     def save(self, fname):
         print(vars(self.params))
         json.dump(vars(self.params), open(fname, 'w'), indent=4)
-

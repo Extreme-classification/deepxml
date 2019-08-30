@@ -37,36 +37,42 @@ class Optimizer(object):
     def _get_opt(self, params, is_sparse):
         if self.opt_type == 'SGD':
             if is_sparse:
-                return SparseSGD(params,
-                                 lr=self.learning_rate,
-                                 momentum=self.momentum,
-                                 )
+                return SparseSGD(
+                    params,
+                    lr=self.learning_rate,
+                    momentum=self.momentum,
+                )
             else:
-                return torch.optim.SGD(params,
-                                       lr=self.learning_rate,
-                                       momentum=self.momentum,
-                                       weight_decay=self.weight_decay
-                                       )
+                return torch.optim.SGD(
+                    params,
+                    lr=self.learning_rate,
+                    momentum=self.momentum,
+                    weight_decay=self.weight_decay
+                )
         elif self.opt_type == 'Adam':
             if is_sparse:
-                return torch.optim.SparseAdam(params,
-                                              lr=self.learning_rate
-                                              )
+                return torch.optim.SparseAdam(
+                    params,
+                    lr=self.learning_rate
+                )
             else:
-                return torch.optim.Adam(params,
-                                        lr=self.learning_rate,
-                                        weight_decay=self.weight_decay
-                                        )
+                return torch.optim.Adam(
+                    params,
+                    lr=self.learning_rate,
+                    weight_decay=self.weight_decay
+                )
         elif self.opt_type == 'Adagrad':
             if is_sparse:
-                return SparseAdagrad(params,
-                                     lr=self.learning_rate
-                                     )
+                return SparseAdagrad(
+                    params,
+                    lr=self.learning_rate
+                )
             else:
-                return torch.optim.Adagrad(params,
-                                           lr=self.learning_rate,
-                                           weight_decay=self.weight_decay
-                                           )
+                return torch.optim.Adagrad(
+                    params,
+                    lr=self.learning_rate,
+                    weight_decay=self.weight_decay
+                )
         else:
             raise NotImplementedError("Unknown optimizer!")
 

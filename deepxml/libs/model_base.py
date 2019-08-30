@@ -70,23 +70,28 @@ class ModelBase(object):
         """
             Create dataset as per given parameters
         """
-        _dataset = construct_dataset(data_dir=data_dir,
-                                     fname_features=fname_features,
-                                     fname_labels=fname_labels,
-                                     data=data,
-                                     model_dir=self.model_dir,
-                                     mode=mode,
-                                     size_shortlist=self.shortlist_size if size_shortlist is None else size_shortlist,
-                                     normalize_features=normalize_features,
-                                     normalize_labels=normalize_labels,
-                                     keep_invalid=keep_invalid,
-                                     num_centroids=self.num_centroids,
-                                     feature_type=self.feature_type if feature_type is None else feature_type,
-                                     num_clf_partitions=self.num_clf_partitions,
-                                     feature_indices=feature_indices,
-                                     label_indices=label_indices,
-                                     shortlist_method=shortlist_method,
-                                     shorty=shorty)
+        size_shortlist = self.shortlist_size \
+            if size_shortlist is None else size_shortlist
+        feature_type = self.feature_type \
+            if feature_type is None else feature_type
+        _dataset = construct_dataset(
+            data_dir=data_dir,
+            fname_features=fname_features,
+            fname_labels=fname_labels,
+            data=data,
+            model_dir=self.model_dir,
+            mode=mode,
+            size_shortlist=size_shortlist,
+            normalize_features=normalize_features,
+            normalize_labels=normalize_labels,
+            keep_invalid=keep_invalid,
+            num_centroids=self.num_centroids,
+            feature_type=feature_type,
+            num_clf_partitions=self.num_clf_partitions,
+            feature_indices=feature_indices,
+            label_indices=label_indices,
+            shortlist_method=shortlist_method,
+            shorty=shorty)
         return _dataset
 
     def _create_data_loader(self, dataset, batch_size=128,
@@ -99,12 +104,13 @@ class ModelBase(object):
             use_shortlist = True
         else:
             use_shortlist = False
-        dt_loader = DataLoader(dataset,
-                               batch_size=batch_size,
-                               num_workers=num_workers,
-                               collate_fn=construct_collate_fn(
-                                   feature_type, use_shortlist, self.num_clf_partitions),
-                               shuffle=shuffle)
+        dt_loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            collate_fn=construct_collate_fn(
+                feature_type, use_shortlist, self.num_clf_partitions),
+            shuffle=shuffle)
         return dt_loader
 
     def get_logger(self, name='DeepXML', level=logging.INFO):
@@ -132,8 +138,8 @@ class ModelBase(object):
         # TODO: Integrate weightage
         if self.num_clf_partitions > 1:
             out = []
-            for _, (_out, _batch_data) in enumerate(zip(out_ans, batch_data['Y'])):
-                out.append(self._compute_loss_one(_out, _batch_data))
+            for _, _out in enumerate(zip(out_ans, batch_data['Y'])):
+                out.append(self._compute_loss_one(*_out))
             return torch.stack(out).mean()
         else:
             return self._compute_loss_one(out_ans, batch_data['Y'])
@@ -151,14 +157,16 @@ class ModelBase(object):
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             loss = self._compute_loss(out_ans, batch_data)
-            if batch_div:  # If loss is sum and average over samples is required
+            # If loss is sum and average over samples is required
+            if batch_div:
                 loss = loss/batch_size
             mean_loss += loss.item()*batch_size
             loss.backward()
             self.optimizer.step()
             if batch_idx % self.progress_step == 0:
                 self.logger.info(
-                    "Training progress: [{}/{}]".format(batch_idx, num_batches))
+                    "Training progress: [{}/{}]".format(
+                        batch_idx, num_batches))
             # TODO Delete items from tuple
             del batch_data
         return mean_loss / data_loader.dataset.num_instances
@@ -187,13 +195,16 @@ class ModelBase(object):
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(
-                    "Validation progress: [{}/{}]".format(batch_idx, num_batches))
+                    "Validation progress: [{}/{}]".format(
+                        batch_idx, num_batches))
             del batch_data
         return predicted_labels, mean_loss / data_loader.dataset.num_instances
 
-    def _fit(self, train_loader, validation_loader, model_dir, result_dir, init_epoch, num_epochs, validate_after=5):
+    def _fit(self, train_loader, validation_loader, model_dir, result_dir,
+             init_epoch, num_epochs, validate_after=5):
         for epoch in range(init_epoch, init_epoch+num_epochs):
-            if epoch != 0 and self.dlr_step != -1 and epoch % self.dlr_step == 0:
+            cond = self.dlr_step != -1 and epoch % self.dlr_step == 0
+            if epoch != 0 and cond:
                 self._adjust_parameters()
             batch_train_start_time = time.time()
             tr_avg_loss = self._step(train_loader)
@@ -203,13 +214,16 @@ class ModelBase(object):
                 batch_train_end_time - batch_train_start_time
 
             self.logger.info("Epoch: {}, loss: {}, time: {} sec".format(
-                epoch, tr_avg_loss, batch_train_end_time - batch_train_start_time))
+                epoch, tr_avg_loss,
+                batch_train_end_time - batch_train_start_time))
             if validation_loader is not None and epoch % validate_after == 0:
                 val_start_t = time.time()
                 predicted_labels, val_avg_loss = self._validate(
                     validation_loader)
                 val_end_t = time.time()
-                self.tracking.validation_time = self.tracking.validation_time + val_end_t - val_start_t
+                self.tracking.validation_time = self.tracking.validation_time \
+                    + val_end_t \
+                    - val_start_t
                 _prec, _ndcg = self.evaluate(
                     validation_loader.dataset.labels.Y, predicted_labels)
                 self.tracking.val_precision.append(_prec)
@@ -222,66 +236,81 @@ class ModelBase(object):
             self.tracking.last_epoch += 1
         self.save_checkpoint(model_dir, epoch+1)
         self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
-        self.logger.info("Training time: {} sec, Validation time: {} sec, Shortlist time: {} sec".format(
-            self.tracking.train_time, self.tracking.validation_time, self.tracking.shortlist_time))
+        self.logger.info(
+            "Training time: {} sec, Validation time: {} sec"
+            ", Shortlist time: {} sec".format(
+                self.tracking.train_time, self.tracking.validation_time,
+                self.tracking.shortlist_time))
 
-    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate, num_epochs, data=None,
-            tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
-            val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
-            init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
-            normalize_features=True, normalize_labels=False, validate=False, validate_after=5, **kwargs):
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
+            num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
+            tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
+            val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4,
+            shuffle=False, init_epoch=0, keep_invalid=False,
+            feature_indices=None, label_indices=None, normalize_features=True,
+            normalize_labels=False, validate=False,
+            validate_after=5, **kwargs):
         self.logger.info("Loading training data.")
-        train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                             fname_features=tr_feat_fname,
-                                             fname_labels=tr_label_fname,
-                                             data=data,
-                                             mode='train',
-                                             keep_invalid=keep_invalid,
-                                             normalize_features=normalize_features,
-                                             normalize_labels=normalize_labels,
-                                             feature_indices=feature_indices,
-                                             label_indices=label_indices)
-        train_loader = self._create_data_loader(train_dataset,
-                                                batch_size=batch_size,
-                                                num_workers=num_workers,
-                                                shuffle=shuffle)
-        if self.freeze_embeddings:  # Compute and store representation if embeddings are fixed
-            train_loader = self._create_data_loader(train_dataset,
-                                                batch_size=batch_size,
-                                                num_workers=num_workers,
-                                                shuffle=False)
+        train_dataset = self._create_dataset(
+            os.path.join(data_dir, dataset),
+            fname_features=tr_feat_fname,
+            fname_labels=tr_label_fname,
+            data=data,
+            mode='train',
+            keep_invalid=keep_invalid,
+            normalize_features=normalize_features,
+            normalize_labels=normalize_labels,
+            feature_indices=feature_indices,
+            label_indices=label_indices)
+        train_loader = self._create_data_loader(
+            train_dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            shuffle=shuffle)
+        # Compute and store representation if embeddings are fixed
+        if self.freeze_embeddings:
+            train_loader = self._create_data_loader(
+                train_dataset,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                shuffle=False)
             self.logger.info(
-                "Computing and reusing coarse document embeddings to save computations.")
+                "Computing and reusing coarse document embeddings"
+                "to save computations.")
             data = {'X': None, 'Y': None}
-            data['X'] = self._document_embeddings(train_loader, return_coarse=True)
+            data['X'] = self._document_embeddings(
+                train_loader, return_coarse=True)
             data['Y'] = train_dataset.labels.Y
-            train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                 data=data,
-                                                 fname_features=None,
-                                                 feature_type='dense',
-                                                 mode='train',
-                                                 keep_invalid=True)  # Invalid labels already removed
-            train_loader = self._create_data_loader(train_dataset,
-                                                    batch_size=batch_size,
-                                                    num_workers=num_workers,
-                                                    shuffle=shuffle)
+            train_dataset = self._create_dataset(
+                os.path.join(data_dir, dataset),
+                data=data,
+                fname_features=None,
+                feature_type='dense',
+                mode='train',
+                keep_invalid=True)  # Invalid labels already removed
+            train_loader = self._create_data_loader(
+                train_dataset,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                shuffle=shuffle)
         self.logger.info("Loading validation data.")
         validation_loader = None
         if validate:
-            validation_dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                                      fname_features=val_feat_fname,
-                                                      fname_labels=val_label_fname,
-                                                      data={
-                                                          'X': None, 'Y': None},
-                                                      mode='predict',
-                                                      keep_invalid=keep_invalid,
-                                                      normalize_features=normalize_features,
-                                                      normalize_labels=normalize_labels,
-                                                      feature_indices=feature_indices,
-                                                      label_indices=label_indices)
-            validation_loader = self._create_data_loader(validation_dataset,
-                                                         batch_size=batch_size,
-                                                         num_workers=num_workers)
+            validation_dataset = self._create_dataset(
+                os.path.join(data_dir, dataset),
+                fname_features=val_feat_fname,
+                fname_labels=val_label_fname,
+                data={'X': None, 'Y': None},
+                mode='predict',
+                keep_invalid=keep_invalid,
+                normalize_features=normalize_features,
+                normalize_labels=normalize_labels,
+                feature_indices=feature_indices,
+                label_indices=label_indices)
+            validation_loader = self._create_data_loader(
+                validation_dataset,
+                batch_size=batch_size,
+                num_workers=num_workers)
         self._fit(train_loader, validation_loader, model_dir,
                   result_dir, init_epoch, num_epochs, validate_after)
 
@@ -294,32 +323,37 @@ class ModelBase(object):
             _res = "clf: {}".format(acc[0]*100)
         return _res
 
-    def predict(self, data_dir, dataset, data=None, ts_feat_fname='tst_X_Xf.txt',
-                ts_label_fname='tst_X_Y.txt', batch_size=256, num_workers=6,
-                keep_invalid=False, feature_indices=None, label_indices=None,
-                normalize_features=True, normalize_labels=False, top_k=50, **kwargs):
-        dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                       fname_features=ts_feat_fname,
-                                       fname_labels=ts_label_fname,
-                                       data=data,
-                                       mode='predict',
-                                       keep_invalid=keep_invalid,
-                                       normalize_features=normalize_features,
-                                       normalize_labels=normalize_labels,
-                                       feature_indices=feature_indices,
-                                       label_indices=label_indices
-                                       )
-        data_loader = self._create_data_loader(dataset=dataset,
-                                               batch_size=batch_size,
-                                               num_workers=num_workers)
+    def predict(self, data_dir, dataset, data=None,
+                ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
+                batch_size=256, num_workers=6, keep_invalid=False,
+                feature_indices=None, label_indices=None, top_k=50,
+                normalize_features=True, normalize_labels=False, **kwargs):
+        dataset = self._create_dataset(
+            os.path.join(data_dir, dataset),
+            fname_features=ts_feat_fname,
+            fname_labels=ts_label_fname,
+            data=data,
+            mode='predict',
+            keep_invalid=keep_invalid,
+            normalize_features=normalize_features,
+            normalize_labels=normalize_labels,
+            feature_indices=feature_indices,
+            label_indices=label_indices)
+        data_loader = self._create_data_loader(
+            dataset=dataset,
+            batch_size=batch_size,
+            num_workers=num_workers)
         time_begin = time.time()
         predicted_labels = self._predict(data_loader, top_k, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
         acc = self.evaluate(dataset.labels.Y, predicted_labels)
         _res = self._format_acc(acc)
-        self.logger.info("Prediction time (total): {} sec., Prediction time (per sample): {} msec., P@k(%): {}".format(
-            prediction_time, prediction_time*1000/data_loader.dataset.num_instances, _res))
+        self.logger.info(
+            "Prediction time (total): {} sec.,"
+            "Prediction time (per sample): {} msec., P@k(%): {}".format(
+                prediction_time,
+                prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
 
     def _predict(self, data_loader, top_k, **kwargs):
@@ -339,18 +373,24 @@ class ModelBase(object):
             count += batch_size
             if batch_idx % self.progress_step == 0:
                 self.logger.info(
-                    "Prediction progress: [{}/{}]".format(batch_idx, num_batches))
+                    "Prediction progress: [{}/{}]".format(
+                        batch_idx, num_batches))
         return predicted_labels
 
-    def _document_embeddings(self, data_loader, return_coarse=False, fname_out=None, _dtype='float32'):
+    def _document_embeddings(self, data_loader, return_coarse=False,
+                             fname_out=None, _dtype='float32'):
         self.net.eval()
         torch.set_grad_enabled(False)
         if fname_out is not None:  # Save to disk
-            embeddings = np.memmap(fname_out, dtype=_dtype, mode='w+',
-                                   shape=(data_loader.dataset.num_instances, self.net.representation_dims))
+            embeddings = np.memmap(
+                fname_out, dtype=_dtype, mode='w+',
+                shape=(data_loader.dataset.num_instances,
+                       self.net.representation_dims))
         else:  # Keep in memory
             embeddings = np.zeros((
-                data_loader.dataset.num_instances, self.net.representation_dims), dtype=_dtype)
+                data_loader.dataset.num_instances,
+                self.net.representation_dims),
+                dtype=_dtype)
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['batch_size']
@@ -373,17 +413,19 @@ class ModelBase(object):
             Get document embeddings
         """
         if data_loader is None:
-            dataset = self._create_dataset(os.path.join(data_dir, dataset),
-                                           fname_features=fname_features,
-                                           fname_labels=fname_labels,
-                                           data=data,
-                                           mode='predict',
-                                           keep_invalid=keep_invalid,
-                                           normalize_features=normalize_features,
-                                           feature_indices=feature_indices)
-            data_loader = self._create_data_loader(dataset,
-                                                   batch_size=batch_size,
-                                                   num_workers=num_workers)
+            dataset = self._create_dataset(
+                os.path.join(data_dir, dataset),
+                fname_features=fname_features,
+                fname_labels=fname_labels,
+                data=data,
+                mode='predict',
+                keep_invalid=keep_invalid,
+                normalize_features=normalize_features,
+                feature_indices=feature_indices)
+            data_loader = self._create_data_loader(
+                dataset,
+                batch_size=batch_size,
+                num_workers=num_workers)
         return self._document_embeddings(data_loader, return_coarse, fname_out)
 
     def _adjust_parameters(self):
@@ -436,7 +478,8 @@ class ModelBase(object):
         self.net.load_state_dict(state_dict)
 
     def purge(self, model_dir):
-        if len(self.tracking.saved_checkpoints) > self.tracking.checkpoint_history:
+        if len(self.tracking.saved_checkpoints) \
+                > self.tracking.checkpoint_history:
             fname = self.tracking.saved_checkpoints.pop(0)
             self.logger.info(
                 "Purging network checkpoint: {}".format(fname['net']))
