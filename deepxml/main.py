@@ -105,6 +105,7 @@ def train(model, params):
         init_epoch=params.last_epoch,
         keep_invalid=params.keep_invalid,
         shortlist_method=params.shortlist_method,
+        validate_after=params.validate_after,
         feature_indices=params.feature_indices,
         label_indices=params.label_indices)
     # TODO: Accomodate low rank

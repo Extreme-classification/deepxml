@@ -236,6 +236,13 @@ class Parameters(ParametersBase):
             type=str,
             help='embedding file name')
         self.parser.add_argument(
+            '--validate_after',
+            dest='validate_after',
+            default=5,
+            action='store',
+            type=int,
+            help='Validate after these many epochs.')
+        self.parser.add_argument(
             '--hidden_dims',
             dest='hidden_dims',
             default=300,

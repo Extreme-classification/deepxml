@@ -2,13 +2,16 @@
 # $1 GPU DEIVCE ID
 # $2 ABLATION TYPE
 # $3 DATASET
-# eg. ./run_main 0 DeepXML EURLex-4K
-# eg. ./run_main 0 DeepXML-fr EURLex-4K
+# $4 VERSION
+# eg. ./run_main 0 DeepXML EURLex-4K 0
+# eg. ./run_main 0 DeepXML-fr EURLex-4K 0
 
 export CUDA_VISIBLE_DEVICES=$1
 model_type=$2
 dataset=$3
+
 source "../configs/${model_type}/${dataset}.sh"
+version=$4
 
 create_splits () {
     # $1: dataset

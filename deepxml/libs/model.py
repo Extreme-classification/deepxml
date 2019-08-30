@@ -140,7 +140,7 @@ class ModelShortlist(ModelBase):
             data_loader.dataset.num_instances
 
     def _fit(self, train_loader, train_loader_shuffle, validation_loader, model_dir, 
-             result_dir, init_epoch, num_epochs, beta, use_coarse):
+             result_dir, init_epoch, num_epochs, validate_after, beta, use_coarse):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             if epoch != 0 and self.dlr_step != -1 and epoch % self.dlr_step == 0:
                 self._adjust_parameters()
@@ -178,7 +178,7 @@ class ModelShortlist(ModelBase):
 
             self.logger.info("Epoch: {}, loss: {}, time: {} sec".format(
                 epoch, tr_avg_loss, batch_train_end_time - batch_train_start_time))
-            if validation_loader is not None and epoch % 2 == 0:
+            if validation_loader is not None and epoch % validate_after == 0:
                 val_start_t = time.time()
                 predicted_labels, val_avg_loss = self._validate(
                     validation_loader, beta)
@@ -205,7 +205,7 @@ class ModelShortlist(ModelBase):
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
             init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
             normalize_features=True, normalize_labels=False, validate=False, beta=0.2, 
-            use_coarse=True, shortlist_method='static'):
+            use_coarse=True, shortlist_method='static', validate_after=5):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
@@ -266,7 +266,8 @@ class ModelShortlist(ModelBase):
                                                          batch_size=batch_size,
                                                          num_workers=num_workers)
         self._fit(train_loader, train_loader_shuffle, validation_loader,
-                  model_dir, result_dir, init_epoch, num_epochs, beta, use_coarse)
+                  model_dir, result_dir, init_epoch, num_epochs, validate_after, 
+                  beta, use_coarse)
 
     def _predict(self, data_loader, top_k, use_coarse, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
@@ -368,7 +369,7 @@ class ModelNS(ModelBase):
             tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4, shuffle=False,
             init_epoch=0, keep_invalid=False, feature_indices=None, label_indices=None,
-            normalize_features=True, normalize_labels=False, validate=False, beta=0.2):
+            normalize_features=True, normalize_labels=False, validate=False, validate_after=5):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(os.path.join(data_dir, dataset),
@@ -423,5 +424,5 @@ class ModelNS(ModelBase):
                                                          batch_size=batch_size,
                                                          num_workers=num_workers)
         self._fit(train_loader, validation_loader,
-                  model_dir, result_dir, init_epoch, num_epochs)
+                  model_dir, result_dir, init_epoch, num_epochs, validate_after)
                   
