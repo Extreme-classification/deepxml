@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import math
 import models.custom_embeddings as custom_embeddings
 import models.hash_embeddings as hash_embeddings
 import models.transform_layer as transform_layer
@@ -151,6 +152,14 @@ class DeepXMLBase(nn.Module):
         self.embeddings.to()
         self.transform.to()
         self.classifier.to()
+
+    @property
+    def num_trainable_params(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    @property
+    def model_size(self):
+        return self.num_trainable_params * 4 /math.pow(2, 20)
 
 
 class DeepXMLh(DeepXMLBase):

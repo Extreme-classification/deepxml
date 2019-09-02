@@ -222,11 +222,14 @@ class ModelShortlist(ModelBase):
         self.save_checkpoint(model_dir, epoch+1)
         self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
         self.logger.info(
-            "Training time: {} sec, Validation time: {} sec,"
-            "Shortlist time: {} sec".format(
+            "Training time: {} sec, Validation time: {} sec, "
+            "Shortlist time: {} sec, Model size: {} MB".format(
                 self.tracking.train_time,
                 self.tracking.validation_time,
-                self.tracking.shortlist_time))
+                self.tracking.shortlist_time,
+                self.net.model_size+os.path.getsize(
+                    os.path.join(model_dir, 
+                    'checkpoint_ANN_{}.pkl'.format(epoch+1)))/math.pow(2, 20)))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
             num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
