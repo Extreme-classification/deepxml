@@ -63,8 +63,8 @@ DEFAULT_PARAMS="--dataset ${dataset} \
 TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
             --batch_size $batch_size \
-            --num_clf_partitions 1\
-            --trans_method ${current_working_dir}/ensemble1.json \
+            --num_clf_partitions 1 \
+            --trans_method ${current_working_dir}/ensemble.json \
             --dropout 0.5 
             --optim Adam \
             --keep_invalid \
@@ -106,5 +106,5 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${extra_params}"
 
-./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
+# ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_TEST}"

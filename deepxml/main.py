@@ -15,7 +15,7 @@ import libs.model as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
 import libs.negative_sampling as negative_sampling
-
+import pdb
 
 __author__ = 'KD'
 
@@ -213,7 +213,8 @@ def inference(model, params):
         keep_invalid=params.keep_invalid,
         feature_indices=params.feature_indices,
         label_indices=params.label_indices,
-        use_coarse=params.use_coarse_for_shorty
+        use_coarse=params.use_coarse_for_shorty,
+        shortlist_method=params.shortlist_method
     )
     # Real number of labels
     num_samples, num_labels = utils.get_header(
@@ -281,6 +282,7 @@ def construct_model(params, net, criterion, optimizer, shorty):
         - OVA (full)
         - hnsw (shortlist)
     """
+    print("Model method", params.model_method)
     if params.model_method == 'ns':  # Negative Sampling
         model = model_utils.ModelNS(
             params, net, criterion, optimizer, shorty)
@@ -289,8 +291,9 @@ def construct_model(params, net, criterion, optimizer, shorty):
             params, net, criterion, optimizer, shorty)
     elif params.model_method == 'full':
         model = model_utils.ModelFull(params, net, criterion, optimizer)
-    elif params.model_method == 'reraker':
-        model = model_utils.ModelReRanker(params, net, criterion, optimizer)
+    elif params.model_method == 'reranker':
+        model = model_utils.ModelReRanker(
+            params, net, criterion, optimizer, shorty)
     else:
         raise NotImplementedError("Unknown model_method.")
     return model
@@ -300,6 +303,7 @@ def main(params):
     """
         Main function
     """
+    print("Yes it is this file only", flush=True)
     if params.mode == 'train':
         # Use last index as padding label
         if params.num_centroids != 1:

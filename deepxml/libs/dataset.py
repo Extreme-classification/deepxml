@@ -211,12 +211,12 @@ class DatasetSparse(DatasetBase):
         self.shortlist_method = shortlist_method
         if self.mode == 'train':
             # Remove samples w/o any feature or label
-            self._remove_samples_wo_features_and_labels()
+            if self.shortlist_method != 'reranker':
+                self._remove_samples_wo_features_and_labels()
         
         if not keep_invalid:
             # Remove labels w/o any positive instance
-            if shortlist_method != "reranker":
-                self._process_labels(model_dir)
+            self._process_labels(model_dir)
             
         if shortlist_method == 'static':
             self.shortlist = ShortlistHandlerStatic(
@@ -235,7 +235,7 @@ class DatasetSparse(DatasetBase):
                 size_shortlist, num_centroids, self.multiple_cent_mapping)
         elif shortlist_method == 'reranker':
             self.shortlist = ShortlistReRanker(
-                self.num_labels, shorty, model_dir, num_clf_partitions, mode,
+                self.num_labels, model_dir, num_clf_partitions, mode,
                 size_shortlist, num_centroids, self.multiple_cent_mapping)
         else:
             raise NotImplementedError(

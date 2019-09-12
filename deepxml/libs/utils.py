@@ -22,13 +22,19 @@ def compute_svd(X, num_components):
 def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, _fnames=['knn', 'clf', 'combined'], prefix='predictions'):
     if isinstance(preds, dict):
         for _fname, _pred in preds.items():
-            predicted_labels = map_to_original(
-                _pred, valid_labels, _shape=(num_samples, num_labels))
+            if valid_labels is not None:
+                predicted_labels = map_to_original(
+                    _pred, valid_labels, _shape=(num_samples, num_labels))
+            else:
+                predicted_labels = _pred
             save_npz(os.path.join(
                 result_dir, '{}_{}.npz'.format(prefix, _fname)), predicted_labels)
     else:
-        predicted_labels = map_to_original(
-            preds, valid_labels, _shape=(num_samples, num_labels))
+        if valid_labels is not None:   
+            predicted_labels = map_to_original(
+                preds, valid_labels, _shape=(num_samples, num_labels))
+        else:
+            predicted_labels = preds
         save_npz(os.path.join(result_dir, '{}.npz'.format(prefix)), predicted_labels)
 
 def adjust_for_low_rank(state_dict, rank):

@@ -64,6 +64,7 @@ class ShortlistHandlerBase(object):
             Create partiotionar to for splitted classifier
         """
         self.partitioner = None
+        print(self.num_clf_partitions)
         if self.num_clf_partitions > 1:
             if self.mode == 'train':
                 self.partitioner = Partitioner(
@@ -435,6 +436,20 @@ class ShortlistReRanker(ShortlistHandlerBase):
         shortlist = self.shortlist[index]
         return shortlist.indices.tolist(), shortlist.data.tolist()
 
+
+    def _adjust_shortlist(self, pos_labels, shortlist, dist, min_nneg=100):
+        """
+            Adjust shortlist for a instance
+            Training: Add positive labels to the shortlist
+            Inference: Return shortlist with label mask
+        """
+        labels_mask = [0]*self.size_shortlist
+        pos_labels = set(pos_labels)
+        for idx, item in enumerate(shortlist):
+            if item in pos_labels:
+                labels_mask[idx] = 1
+        return shortlist, labels_mask, dist
+
     def _get_sl_one(self, index, pos_labels):
         shortlist, dist = self.query(index)
         if len(shortlist) < self.size_shortlist:
@@ -444,11 +459,9 @@ class ShortlistReRanker(ShortlistHandlerBase):
         
         shortlist, labels_mask, dist = self._adjust_shortlist(
             pos_labels, shortlist, dist)
-
         return shortlist, labels_mask, dist
     
     def _create_shortlist(self):
-        print("Loading from {}".format(fname))
         self.shortlist = load_npz(os.path.join(self.model_dir, self.mode + '_shortlist.npz'))
 
     def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):

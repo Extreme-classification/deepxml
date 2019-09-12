@@ -57,7 +57,6 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --val_label_fname tst_X_Y.txt \
                 --ts_feat_fname tst_X_Xf.txt \
                 --ts_label_fname tst_X_Y.txt \
-                --use_coarse_for_shorty \
                 --freeze_embeddings \
                 --top_k ${topk} \
                 --num_centroids ${num_centroids}
@@ -83,6 +82,7 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
 		    --ann_threads 12 \
             --beta 0.5 \
             --update_shortlist \
+            --use_coarse_for_shorty \
             --retrain_hnsw_after $(($num_epochs+3)) \
             ${DEFAULT_PARAMS}"
 

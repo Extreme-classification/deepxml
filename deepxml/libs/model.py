@@ -366,7 +366,7 @@ class ModelShortlist(ModelBase):
             = 'checkpoint_ANN_{}.pkl'.format(epoch)
         self.shorty.save(os.path.join(
             model_dir, self.tracking.saved_checkpoints[-1]['ANN']))
-        self.purge(model_dir)
+        self.purge(model_dir, save_ann)
 
     def load_checkpoint(self, model_dir, fname, epoch):
         super().load_checkpoint(model_dir, fname, epoch)
@@ -494,14 +494,8 @@ class ModelReRanker(ModelShortlist):
     """
 
     def __init__(self, params, net, criterion, optimizer, shorty):
-        super().__init__(params, net, criterion, optimizer)
-        self.shorty = shorty
-        self.num_centroids = params.num_centroids
-        self.feature_indices = params.feature_indices
-        self.label_indices = params.label_indices
-        self.retrain_hnsw_after = params.retrain_hnsw_after
-        self.update_shortlist = params.update_shortlist
-
+        super().__init__(params, net, criterion, optimizer, shorty)
+        
     def _combine_scores_one(self, out_logits, batch_dist, beta):
         return out_logits + batch_dist
 
@@ -515,6 +509,31 @@ class ModelReRanker(ModelShortlist):
         else:
             return self._combine_scores_one(
                 out_logits.data.cpu(), batch_dist.data, beta)
+
+
+    def _update_predicted_shortlist(self, count, batch_size, predicted_labels,
+                                    batch_out, batch_data, beta, top_k=50):
+        _score = self._combine_scores(batch_out, batch_data['Y_d'], beta)
+        # IF rev mapping exist; case of distributed classifier
+        if 'Y_m' in batch_data:
+            batch_shortlist = batch_data['Y_m'].numpy()
+            # Send this as merged?
+            _knn_score = torch.cat(batch_data['Y_d'], 1)
+            _clf_score = torch.cat(batch_out, 1).data
+            _score = torch.cat(_score, 1)
+        else:
+            batch_shortlist = batch_data['Y_s'].numpy()
+            _knn_score = batch_data['Y_d']
+            _clf_score = batch_out.data
+        utils.update_predicted_shortlist(
+            count, batch_size, _clf_score, predicted_labels['clf'],
+            batch_shortlist, top_k)
+        utils.update_predicted_shortlist(
+            count, batch_size, _knn_score, predicted_labels['knn'],
+            batch_shortlist, top_k)
+        utils.update_predicted_shortlist(
+            count, batch_size, _score, predicted_labels['combined'],
+            batch_shortlist, top_k)
 
     def _fit(self, train_loader, validation_loader, model_dir,
              result_dir, init_epoch, num_epochs,
@@ -564,7 +583,7 @@ class ModelReRanker(ModelShortlist):
                 self.tracking.train_time,
                 self.tracking.validation_time,
                 self.tracking.shortlist_time,
-                self.net.model_size)/math.pow(2, 20))
+                self.net.model_size/math.pow(2, 20)))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
             num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
@@ -624,9 +643,10 @@ class ModelReRanker(ModelShortlist):
                 fname_features=val_feat_fname,
                 fname_labels=val_label_fname,
                 data={'X': None, 'Y': None},
-                mode='predict',
+                mode='test',
                 keep_invalid=keep_invalid,
                 normalize_features=normalize_features,
+                shortlist_method=shortlist_method,
                 normalize_labels=normalize_labels,
                 feature_indices=feature_indices,
                 label_indices=label_indices)
@@ -668,19 +688,52 @@ class ModelReRanker(ModelShortlist):
                         batch_idx, num_batches))
             del batch_data
         return self._strip_padding_label(predicted_labels, num_labels)
-
+    
+    def predict(self, data_dir, dataset, data=None,
+                ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
+                batch_size=256, num_workers=6, keep_invalid=False,
+                feature_indices=None, label_indices=None, top_k=50,
+                normalize_features=True, normalize_labels=False, 
+                shortlist_method='static', **kwargs):
+        
+        dataset = self._create_dataset(
+            os.path.join(data_dir, dataset),
+            fname_features=ts_feat_fname,
+            fname_labels=ts_label_fname,
+            data=data,
+            mode='test',
+            shortlist_method=shortlist_method,
+            keep_invalid=keep_invalid,
+            normalize_features=normalize_features,
+            normalize_labels=normalize_labels,
+            feature_indices=feature_indices,
+            label_indices=label_indices)
+        data_loader = self._create_data_loader(
+            dataset=dataset,
+            batch_size=batch_size,
+            num_workers=num_workers)
+        time_begin = time.time()
+        predicted_labels = self._predict(data_loader, top_k, **kwargs)
+        time_end = time.time()
+        prediction_time = time_end - time_begin
+        acc = self.evaluate(dataset.labels.Y, predicted_labels)
+        _res = self._format_acc(acc)
+        self.logger.info(
+            "Prediction time (total): {} sec.,"
+            "Prediction time (per sample): {} msec., P@k(%): {}".format(
+                prediction_time,
+                prediction_time*1000/data_loader.dataset.num_instances, _res))
+        return predicted_labels
     def save_checkpoint(self, model_dir, epoch):
         # Avoid purge call from base class
-        super().save_checkpoint(model_dir, epoch, False)
+        super(ModelShortlist, self).save_checkpoint(model_dir, epoch, False)
         self.purge(model_dir)
 
     def load_checkpoint(self, model_dir, fname, epoch):
-        super().load_checkpoint(model_dir, fname, epoch)
-        fname = os.path.join(model_dir, 'checkpoint_ANN_{}.pkl'.format(epoch))
-        self.shorty.load(fname)
-
+        super(ModelShortlist, self).load_checkpoint(model_dir, fname, epoch)
+        
     def save(self, model_dir, fname, low_rank=-1):
-        super().save(model_dir, fname)
+        super(ModelShortlist, self).save(model_dir, fname)
         # TODO: Handle low rank
         # if low_rank != -1:
         #     utils.adjust_for_low_rank(state_dict, low_rank)
@@ -688,7 +741,7 @@ class ModelReRanker(ModelShortlist):
         #         model_dir, fname+'_network_low_rank.pkl'))
 
     def load(self, model_dir, fname, use_low_rank=False):
-        super().load(model_dir, fname)
+        super(ModelShortlist, self).load(model_dir, fname)
 
     def purge(self, model_dir):
-        super().purge(model_dir)
+        super(ModelShortlist, self).purge(model_dir)
