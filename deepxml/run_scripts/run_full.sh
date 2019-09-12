@@ -14,6 +14,9 @@ work_dir=${11}
 MODEL_NAME="${12}"
 temp_model_data="${13}"
 split_threhold="${14}"
+topk=${15}
+num_centroids=${16}
+echo $num_centroids
 use_head_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
@@ -53,6 +56,7 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --val_label_fname tst_X_Y.txt \
                 --ts_feat_fname tst_X_Xf.txt \
                 --ts_label_fname tst_X_Y.txt \
+                --top_k $topk \
                 --model_fname ${MODEL_NAME} ${extra_params}"
 
 TRAIN_PARAMS="  --trans_method ${current_working_dir}/full.json \
@@ -78,7 +82,7 @@ then
                 --efS 300 \
                 --num_clf_partitions 1\
                 --model_method full \
-                --num_centroids 1 \
+                --num_centroids ${num_centroids} \
 		        --lr $learning_rate \
                 --dlr_factor $dlr_factor \
                 --dlr_step $dlr_step \
@@ -92,18 +96,33 @@ then
                 --beta 0.5\
                 ${DEFAULT_PARAMS}"
 
-    PREDICT_PARAMS="--ts_feat_fname tst_X_Xf.txt \
-                    --efS 300 \
+    PREDICT_PARAMS="--efS 300 \
                     --model_method shortlist \
-                    --num_centroids 1 \
+                    --num_centroids ${num_centroids} \
                     --num_nbrs 300 \
                     --ann_threads 12 \
                     --normalize \
                     --use_shortlist \
                     --batch_size 256 \
-                    --out_fname predictions.txt \
+                    --pred_fname test_predictions \
+                    --out_fname test_predictions.txt \
                     --update_shortlist \
                     ${DEFAULT_PARAMS}"
+    
+    PREDICT_PARAMS_train="--efS 300 \
+                        --model_method shortlist \
+                        --num_centroids ${num_centroids} \
+                        --num_nbrs 300 \
+                        --ann_threads 12 \
+                        --normalize \
+                        --use_shortlist \
+                        --batch_size 256 \
+                        --pred_fname train_predictions \
+                        --out_fname train_predictions.txt \
+                        --update_shortlist \
+                        ${DEFAULT_PARAMS} \
+                        --ts_feat_fname trn_X_Xf.txt \
+                        --ts_label_fname trn_X_Y.txt"
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
@@ -117,6 +136,7 @@ else
     PREDICT_PARAMS="--model_method full \
                     --normalize \
                     --model_fname ${MODEL_NAME}\
+                    --pred_fname test_predictions \
                     --out_fname predictions.txt \
                     --batch_size 256 \
                     ${DEFAULT_PARAMS}"
@@ -137,8 +157,9 @@ then
     echo "Retraining with shortlist.."
    ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS_post}"
 fi
-
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
+./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
+
 ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
 
 if [ $quantile -gt -1 ]

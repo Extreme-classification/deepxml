@@ -19,17 +19,17 @@ def compute_svd(X, num_components):
     return U@s, Vh
 
 
-def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, _fnames=['knn', 'clf', 'combined']):
+def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, _fnames=['knn', 'clf', 'combined'], prefix='predictions'):
     if isinstance(preds, dict):
         for _fname, _pred in preds.items():
             predicted_labels = map_to_original(
                 _pred, valid_labels, _shape=(num_samples, num_labels))
             save_npz(os.path.join(
-                result_dir, 'predictions_{}.npz'.format(_fname)), predicted_labels)
+                result_dir, '{}_{}.npz'.format(prefix, _fname)), predicted_labels)
     else:
         predicted_labels = map_to_original(
             preds, valid_labels, _shape=(num_samples, num_labels))
-        save_npz(os.path.join(result_dir, 'predictions.npz'), predicted_labels)
+        save_npz(os.path.join(result_dir, '{}.npz'.format(prefix)), predicted_labels)
 
 def adjust_for_low_rank(state_dict, rank):
     clf_wts = state_dict['classifier.weight']

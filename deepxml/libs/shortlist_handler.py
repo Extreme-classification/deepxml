@@ -5,6 +5,7 @@ import operator
 import os
 from .lookup import Table, PartitionedTable
 from .negative_sampling import NegativeSampler
+from scipy.sparse import load_npz
 
 
 class ShortlistHandlerBase(object):
@@ -394,3 +395,71 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
             self.model_dir, fname+'.shortlist.indices'))
         self.dist.load(os.path.join(
             self.model_dir, fname+'.shortlist.dist'))
+
+
+
+class ShortlistReRanker(ShortlistHandlerBase):
+    """ShortlistHandler with static shortlist
+    - save/load/update/process shortlist
+    - support for partitioned classifier
+    - support for multiple representations for labels
+    Parameters
+    ----------
+    num_labels: int
+        number of labels
+    model_dir: str, optional, default=''
+        save the data in model_dir
+    num_clf_partitions: int, optional, default=''
+        #classifier splits
+    mode: str: optional, default=''
+        mode i.e. train or test or val
+    size_shortlist:int, optional, default=-1
+        get shortlist of this size
+    num_centroids: int, optional, default=1
+        #centroids (useful when using multiple rep)
+    in_memory: bool: optional, default=True
+        Keep the shortlist in memory or on-disk
+    label_mapping: None or dict: optional, default=None
+        map labels as per this mapping
+    """
+
+    def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
+                 mode='train', size_shortlist=-1, num_centroids=1,
+                 in_memory=True, label_mapping=None):
+        super().__init__(num_labels, None, model_dir, num_clf_partitions,
+                         mode, size_shortlist, num_centroids, label_mapping)
+        self.in_memory = in_memory
+        self._create_shortlist()
+
+    def query(self, index):
+        shortlist = self.shortlist[index]
+        return shortlist.indices.tolist(), shortlist.data.tolist()
+
+    def _get_sl_one(self, index, pos_labels):
+        shortlist, dist = self.query(index)
+        if len(shortlist) < self.size_shortlist:
+            diff = self.size_shortlist - len(shortlist)
+            shortlist = shortlist + [self.num_labels]*diff
+            dist = dist + [0]*diff
+        
+        shortlist, labels_mask, dist = self._adjust_shortlist(
+            pos_labels, shortlist, dist)
+
+        return shortlist, labels_mask, dist
+    
+    def _create_shortlist(self):
+        print("Loading from {}".format(fname))
+        self.shortlist = load_npz(os.path.join(self.model_dir, self.mode + '_shortlist.npz'))
+
+    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
+        print("Not implemented")
+    
+    def save_shortlist(self, fname):
+        print("Not implemented")
+
+    def load_shortlist(self, fname):
+        """
+            Load label shortlist and distance for each instance
+        """
+        self.shortlist = load_npz(os.path.join(self.model_dir, fname+'_shortlist.npz'))
+        

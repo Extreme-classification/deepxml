@@ -486,3 +486,209 @@ class ModelNS(ModelBase):
         self._fit(train_loader, validation_loader,
                   model_dir, result_dir, init_epoch, 
                   num_epochs, validate_after)
+
+
+class ModelReRanker(ModelShortlist):
+    """
+        Models with label shortlist
+    """
+
+    def __init__(self, params, net, criterion, optimizer, shorty):
+        super().__init__(params, net, criterion, optimizer)
+        self.shorty = shorty
+        self.num_centroids = params.num_centroids
+        self.feature_indices = params.feature_indices
+        self.label_indices = params.label_indices
+        self.retrain_hnsw_after = params.retrain_hnsw_after
+        self.update_shortlist = params.update_shortlist
+
+    def _combine_scores_one(self, out_logits, batch_dist, beta):
+        return out_logits + batch_dist
+
+    def _combine_scores(self, out_logits, batch_dist, beta):
+        if isinstance(out_logits, list):  # For distributed classifier
+            out = []
+            for _, (_logits, _dist) in enumerate(zip(out_logits, batch_dist)):
+                out.append(self._combine_scores_one(
+                    _logits.data.cpu(), _dist.data, beta))
+            return out
+        else:
+            return self._combine_scores_one(
+                out_logits.data.cpu(), batch_dist.data, beta)
+
+    def _fit(self, train_loader, validation_loader, model_dir,
+             result_dir, init_epoch, num_epochs,
+             validate_after, beta, use_coarse):
+        for epoch in range(init_epoch, init_epoch+num_epochs):
+            cond = self.dlr_step != -1 and epoch % self.dlr_step == 0
+            if epoch != 0 and cond:
+                self._adjust_parameters()
+            batch_train_start_time = time.time()
+            tr_avg_loss = self._step(train_loader, batch_div=True)
+            self.tracking.mean_train_loss.append(tr_avg_loss)
+            batch_train_end_time = time.time()
+            self.tracking.train_time = self.tracking.train_time + \
+                batch_train_end_time - batch_train_start_time
+
+            self.logger.info(
+                "Epoch: {}, loss: {}, time: {} sec".format(
+                    epoch, tr_avg_loss,
+                    batch_train_end_time - batch_train_start_time))
+            if validation_loader is not None and epoch % validate_after == 0:
+                val_start_t = time.time()
+                predicted_labels, val_avg_loss = self._validate(
+                    validation_loader, beta)
+                val_end_t = time.time()
+                _acc = self.evaluate(
+                    validation_loader.dataset.labels.Y, predicted_labels)
+                self.tracking.validation_time = self.tracking.validation_time \
+                    + val_end_t - val_start_t
+                self.tracking.val_precision.append(_acc['combined'][0])
+                self.tracking.val_ndcg.append(_acc['combined'][1])
+                self.logger.info("Model saved after epoch: {}".format(epoch))
+                self.save_checkpoint(model_dir, epoch+1)
+                self.tracking.last_saved_epoch = epoch
+                self.logger.info(
+                    "P@1 (combined): {}, P@1 (knn): {},"
+                    "P@1 (clf): {}, loss: {}, time: {} sec".format(
+                        _acc['combined'][0][0]*100, _acc['knn'][0][0]*100,
+                        _acc['clf'][0][0]*100, val_avg_loss,
+                        val_end_t-val_start_t))
+            self.tracking.last_epoch += 1
+
+        self.save_checkpoint(model_dir, epoch+1)
+        self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
+        self.logger.info(
+            "Training time: {} sec, Validation time: {} sec, "
+            "Shortlist time: {} sec, Model size: {} MB".format(
+                self.tracking.train_time,
+                self.tracking.validation_time,
+                self.tracking.shortlist_time,
+                self.net.model_size)/math.pow(2, 20))
+
+    def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
+            num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
+            tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
+            val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4,
+            shuffle=False, init_epoch=0, keep_invalid=False,
+            feature_indices=None, label_indices=None, normalize_features=True,
+            normalize_labels=False, validate=False, beta=0.2, use_coarse=True,
+            shortlist_method='static', validate_after=5):
+        self.logger.info("Loading training data.")
+
+        train_dataset = self._create_dataset(
+            os.path.join(data_dir, dataset),
+            fname_features=tr_feat_fname,
+            fname_labels=tr_label_fname,
+            data=data,
+            mode='train',
+            keep_invalid=keep_invalid,
+            normalize_features=normalize_features,
+            normalize_labels=normalize_labels,
+            feature_indices=feature_indices,
+            shortlist_method=shortlist_method,
+            label_indices=label_indices)
+        train_loader = self._create_data_loader(
+            train_dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            shuffle=shuffle)
+        # No need to update embeddings
+        if self.freeze_embeddings:
+            self.logger.info(
+                "Computing and reusing coarse document embeddings"
+                "to save computations.")
+            data = {'X': None, 'Y': None}
+            data['X'] = self._document_embeddings(
+                train_loader, return_coarse=True)
+            data['Y'] = train_dataset.labels.Y
+            train_dataset = self._create_dataset(
+                os.path.join(data_dir, dataset),
+                data=data,
+                fname_features=None,
+                mode='train',
+                shortlist_method=shortlist_method,
+                feature_type='dense',
+                keep_invalid=True)  # Invalid labels already removed
+            train_loader = self._create_data_loader(
+                train_dataset,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                shuffle=shuffle)
+
+        self.logger.info("Loading validation data.")
+        validation_loader = None
+        if validate:
+            validation_dataset = self._create_dataset(
+                os.path.join(data_dir, dataset),
+                fname_features=val_feat_fname,
+                fname_labels=val_label_fname,
+                data={'X': None, 'Y': None},
+                mode='predict',
+                keep_invalid=keep_invalid,
+                normalize_features=normalize_features,
+                normalize_labels=normalize_labels,
+                feature_indices=feature_indices,
+                label_indices=label_indices)
+            validation_loader = self._create_data_loader(
+                validation_dataset,
+                batch_size=batch_size,
+                num_workers=num_workers)
+        self._fit(train_loader, validation_loader,
+                  model_dir, result_dir, init_epoch, num_epochs,
+                  validate_after, beta, use_coarse)
+
+    def _predict(self, data_loader, top_k, use_coarse, **kwargs):
+        beta = kwargs['beta'] if 'beta' in kwargs else 0.5
+        self.logger.info("Loading test data.")
+        self.net.eval()
+        num_labels = data_loader.dataset.num_labels
+        offset = 1 if self.label_padding_index is not None else 0
+        _num_labels = data_loader.dataset.num_labels + offset
+        torch.set_grad_enabled(False)
+        num_instances = data_loader.dataset.num_instances
+        num_batches = num_instances//data_loader.batch_size
+
+        predicted_labels = {}
+        predicted_labels['combined'] = lil_matrix((num_instances, _num_labels))
+        predicted_labels['knn'] = lil_matrix((num_instances, _num_labels))
+        predicted_labels['clf'] = lil_matrix((num_instances, _num_labels))
+
+        count = 0
+        for batch_idx, batch_data in enumerate(data_loader):
+            batch_size = batch_data['batch_size']
+            out_ans = self.net.forward(batch_data)
+            self._update_predicted_shortlist(
+                count, batch_size, predicted_labels,
+                out_ans, batch_data, beta, top_k)
+            count += batch_size
+            if batch_idx % self.progress_step == 0:
+                self.logger.info(
+                    "Prediction progress: [{}/{}]".format(
+                        batch_idx, num_batches))
+            del batch_data
+        return self._strip_padding_label(predicted_labels, num_labels)
+
+    def save_checkpoint(self, model_dir, epoch):
+        # Avoid purge call from base class
+        super().save_checkpoint(model_dir, epoch, False)
+        self.purge(model_dir)
+
+    def load_checkpoint(self, model_dir, fname, epoch):
+        super().load_checkpoint(model_dir, fname, epoch)
+        fname = os.path.join(model_dir, 'checkpoint_ANN_{}.pkl'.format(epoch))
+        self.shorty.load(fname)
+
+    def save(self, model_dir, fname, low_rank=-1):
+        super().save(model_dir, fname)
+        # TODO: Handle low rank
+        # if low_rank != -1:
+        #     utils.adjust_for_low_rank(state_dict, low_rank)
+        #     torch.save(state_dict, os.path.join(
+        #         model_dir, fname+'_network_low_rank.pkl'))
+
+    def load(self, model_dir, fname, use_low_rank=False):
+        super().load(model_dir, fname)
+
+    def purge(self, model_dir):
+        super().purge(model_dir)

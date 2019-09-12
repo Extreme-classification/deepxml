@@ -232,7 +232,7 @@ def inference(model, params):
         num_labels = temp['num_labels']
     utils.save_predictions(
         predicted_labels, params.result_dir,
-        label_mapping, num_samples, num_labels)
+        label_mapping, num_samples, num_labels, prefix=params.pred_fname)
 
 
 def construct_network(params):
@@ -251,6 +251,9 @@ def construct_shortlist(params):
         - hnsw
         - parallel shortlist
     """
+    if params.shortlist_method == 'reranker':
+        return None
+    
     if params.use_shortlist == -1:
         return None
     if params.ann_method == 'ns':  # Negative Sampling
@@ -286,6 +289,8 @@ def construct_model(params, net, criterion, optimizer, shorty):
             params, net, criterion, optimizer, shorty)
     elif params.model_method == 'full':
         model = model_utils.ModelFull(params, net, criterion, optimizer)
+    elif params.model_method == 'reraker':
+        model = model_utils.ModelReRanker(params, net, criterion, optimizer)
     else:
         raise NotImplementedError("Unknown model_method.")
     return model

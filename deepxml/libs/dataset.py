@@ -11,7 +11,7 @@ from .dist_utils import Partitioner
 import operator
 from .lookup import Table, PartitionedTable
 from .shortlist_handler import ShortlistHandlerStatic, ShortlistHandlerDynamic
-from .shortlist_handler import ShortlistHandlerHybrid
+from .shortlist_handler import ShortlistHandlerHybrid, ShortlistReRanker
 
 
 def construct_dataset(data_dir, fname_features, fname_labels, data=None,
@@ -212,9 +212,12 @@ class DatasetSparse(DatasetBase):
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             self._remove_samples_wo_features_and_labels()
+        
         if not keep_invalid:
             # Remove labels w/o any positive instance
-            self._process_labels(model_dir)
+            if shortlist_method != "reranker":
+                self._process_labels(model_dir)
+            
         if shortlist_method == 'static':
             self.shortlist = ShortlistHandlerStatic(
                 self.num_labels, model_dir, num_clf_partitions,
@@ -228,6 +231,10 @@ class DatasetSparse(DatasetBase):
                 _corruption=200)
         elif shortlist_method == 'dynamic':
             self.shortlist = ShortlistHandlerDynamic(
+                self.num_labels, shorty, model_dir, num_clf_partitions, mode,
+                size_shortlist, num_centroids, self.multiple_cent_mapping)
+        elif shortlist_method == 'reranker':
+            self.shortlist = ShortlistReRanker(
                 self.num_labels, shorty, model_dir, num_clf_partitions, mode,
                 size_shortlist, num_centroids, self.multiple_cent_mapping)
         else:
