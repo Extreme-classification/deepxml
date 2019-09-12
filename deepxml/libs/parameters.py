@@ -373,3 +373,10 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Use coarse representation for shortlist'
         )
+        self.parser.add_argument(
+            '--get_only',
+            nargs = '+',
+            type=str,
+            default = ['knn', 'clf', 'combined'],
+            help='What do you have to output'
+        )

@@ -15,9 +15,10 @@ import libs.model as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
 import libs.negative_sampling as negative_sampling
-import pdb
+
 
 __author__ = 'KD'
+
 
 torch.manual_seed(22)
 torch.cuda.manual_seed_all(22)
@@ -233,7 +234,7 @@ def inference(model, params):
         num_labels = temp['num_labels']
     utils.save_predictions(
         predicted_labels, params.result_dir,
-        label_mapping, num_samples, num_labels, prefix=params.pred_fname)
+        label_mapping, num_samples, num_labels, prefix=params.pred_fname, get_fnames=params.get_only)
 
 
 def construct_network(params):
@@ -282,7 +283,6 @@ def construct_model(params, net, criterion, optimizer, shorty):
         - OVA (full)
         - hnsw (shortlist)
     """
-    print("Model method", params.model_method)
     if params.model_method == 'ns':  # Negative Sampling
         model = model_utils.ModelNS(
             params, net, criterion, optimizer, shorty)
@@ -303,7 +303,6 @@ def main(params):
     """
         Main function
     """
-    print("Yes it is this file only", flush=True)
     if params.mode == 'train':
         # Use last index as padding label
         if params.num_centroids != 1:

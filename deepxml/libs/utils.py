@@ -19,16 +19,17 @@ def compute_svd(X, num_components):
     return U@s, Vh
 
 
-def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, _fnames=['knn', 'clf', 'combined'], prefix='predictions'):
+def save_predictions(preds, result_dir, valid_labels, num_samples, num_labels, get_fnames=['knn', 'clf', 'combined'], prefix='predictions'):
     if isinstance(preds, dict):
         for _fname, _pred in preds.items():
-            if valid_labels is not None:
-                predicted_labels = map_to_original(
-                    _pred, valid_labels, _shape=(num_samples, num_labels))
-            else:
-                predicted_labels = _pred
-            save_npz(os.path.join(
-                result_dir, '{}_{}.npz'.format(prefix, _fname)), predicted_labels)
+            if _fname in get_fnames:
+                if valid_labels is not None:
+                    predicted_labels = map_to_original(
+                        _pred, valid_labels, _shape=(num_samples, num_labels))
+                else:
+                    predicted_labels = _pred
+                save_npz(os.path.join(
+                    result_dir, '{}_{}.npz'.format(prefix, _fname)), predicted_labels)
     else:
         if valid_labels is not None:   
             predicted_labels = map_to_original(

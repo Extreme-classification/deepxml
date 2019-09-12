@@ -16,6 +16,7 @@ temp_model_data="${13}"
 split_threhold="${14}"
 topk=${15}
 num_centroids=${16}
+use_ensemble=${17}
 use_head_embeddings=1
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
@@ -59,8 +60,9 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --ts_label_fname tst_X_Y.txt \
                 --freeze_embeddings \
                 --top_k ${topk} \
-                --num_centroids ${num_centroids}
-                --model_fname ${MODEL_NAME} ${extra_params}"
+                --num_centroids ${num_centroids} \
+                --model_fname ${MODEL_NAME} ${extra_params} \
+                --get_only knn clf"
 
 TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
@@ -93,7 +95,7 @@ PREDICT_PARAMS="--efS 300 \
                 --normalize \
                 --use_shortlist \
                 --batch_size 256 \
-                --beta 0.5 ${extra_params}\
+                --beta 0.5 ${extra_params} \
                 --out_fname predictions.txt \
                 --pred_fname test_predictions \
                 --update_shortlist \
@@ -124,13 +126,20 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --batch_size 512 ${extra_params}"
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
+./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --use_coarse_for_shorty"
+
+if [ $use_ensemble -eq 1 ]
+then
+    echo "Fetching data for ensemble"
+    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --pred_fname test_predictions_ensemble"
+    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train} --get_only clf"
+fi
+
 ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
 
-for doc in ${docs[*]}
-do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
-done
+# for doc in ${docs[*]}
+# do 
+#     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
+#     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
+# done
 

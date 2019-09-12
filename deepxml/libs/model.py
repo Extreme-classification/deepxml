@@ -366,7 +366,7 @@ class ModelShortlist(ModelBase):
             = 'checkpoint_ANN_{}.pkl'.format(epoch)
         self.shorty.save(os.path.join(
             model_dir, self.tracking.saved_checkpoints[-1]['ANN']))
-        self.purge(model_dir, save_ann)
+        self.purge(model_dir)
 
     def load_checkpoint(self, model_dir, fname, epoch):
         super().load_checkpoint(model_dir, fname, epoch)
@@ -734,11 +734,6 @@ class ModelReRanker(ModelShortlist):
         
     def save(self, model_dir, fname, low_rank=-1):
         super(ModelShortlist, self).save(model_dir, fname)
-        # TODO: Handle low rank
-        # if low_rank != -1:
-        #     utils.adjust_for_low_rank(state_dict, low_rank)
-        #     torch.save(state_dict, os.path.join(
-        #         model_dir, fname+'_network_low_rank.pkl'))
 
     def load(self, model_dir, fname, use_low_rank=False):
         super(ModelShortlist, self).load(model_dir, fname)

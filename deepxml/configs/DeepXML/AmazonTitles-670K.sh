@@ -13,24 +13,24 @@ B=2.6
 use_ensemble=1
 
 lr_full=(0.02)
-num_epochs_full=1
+num_epochs_full=25
 num_centroids_full=1
 batch_size_full=255
 dlr_step_full=14
 
 
 lr_shortlist=(0.002)
-num_epochs_shortlist=1
+num_epochs_shortlist=20
 num_centroids_shortlist=1
 batch_size_shortlist=255
 dlr_step_shortlist=10
 
 
 lr_ensemble=(0.005)
-num_epochs_ensemble=1
+num_epochs_ensemble=10
 num_centroids_ensemble=1
 batch_size_ensemble=510
-dlr_step_ensemble=10
+dlr_step_ensemble=8
 
 
 order=("shortlist" "full")

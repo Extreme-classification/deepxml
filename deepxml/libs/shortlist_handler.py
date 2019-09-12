@@ -6,7 +6,7 @@ import os
 from .lookup import Table, PartitionedTable
 from .negative_sampling import NegativeSampler
 from scipy.sparse import load_npz
-
+from xclib.utils import sparse as sp
 
 class ShortlistHandlerBase(object):
     """Base class for ShortlistHandler
@@ -64,7 +64,6 @@ class ShortlistHandlerBase(object):
             Create partiotionar to for splitted classifier
         """
         self.partitioner = None
-        print(self.num_clf_partitions)
         if self.num_clf_partitions > 1:
             if self.mode == 'train':
                 self.partitioner = Partitioner(
@@ -399,7 +398,7 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
 
 
 
-class ShortlistReRanker(ShortlistHandlerBase):
+class ShortlistReRanker(ShortlistHandlerStatic):
     """ShortlistHandler with static shortlist
     - save/load/update/process shortlist
     - support for partitioned classifier
@@ -427,52 +426,22 @@ class ShortlistReRanker(ShortlistHandlerBase):
     def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
                  mode='train', size_shortlist=-1, num_centroids=1,
                  in_memory=True, label_mapping=None):
-        super().__init__(num_labels, None, model_dir, num_clf_partitions,
+        super().__init__(num_labels, model_dir, num_clf_partitions,
                          mode, size_shortlist, num_centroids, label_mapping)
         self.in_memory = in_memory
         self._create_shortlist()
 
-    def query(self, index):
-        shortlist = self.shortlist[index]
-        return shortlist.indices.tolist(), shortlist.data.tolist()
-
-
-    def _adjust_shortlist(self, pos_labels, shortlist, dist, min_nneg=100):
-        """
-            Adjust shortlist for a instance
-            Training: Add positive labels to the shortlist
-            Inference: Return shortlist with label mask
-        """
-        labels_mask = [0]*self.size_shortlist
-        pos_labels = set(pos_labels)
-        for idx, item in enumerate(shortlist):
-            if item in pos_labels:
-                labels_mask[idx] = 1
-        return shortlist, labels_mask, dist
-
-    def _get_sl_one(self, index, pos_labels):
-        shortlist, dist = self.query(index)
-        if len(shortlist) < self.size_shortlist:
-            diff = self.size_shortlist - len(shortlist)
-            shortlist = shortlist + [self.num_labels]*diff
-            dist = dist + [0]*diff
-        
-        shortlist, labels_mask, dist = self._adjust_shortlist(
-            pos_labels, shortlist, dist)
-        return shortlist, labels_mask, dist
-    
     def _create_shortlist(self):
-        self.shortlist = load_npz(os.path.join(self.model_dir, self.mode + '_shortlist.npz'))
-
-    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
-        print("Not implemented")
-    
-    def save_shortlist(self, fname):
-        print("Not implemented")
+        super()._create_shortlist()
+        self.load_shortlist(self.mode)
 
     def load_shortlist(self, fname):
         """
             Load label shortlist and distance for each instance
         """
-        self.shortlist = load_npz(os.path.join(self.model_dir, fname+'_shortlist.npz'))
-        
+        shortlist = load_npz(os.path.join(self.model_dir,
+                            fname+'_shortlist.npz'))
+        _shortlist, _dist = sp.topk(shortlist,
+                    self.size_shortlist, self.num_labels, -1000,
+                    return_values=True)
+        self.update_shortlist(_shortlist, _dist, fname='tmp_reranker')

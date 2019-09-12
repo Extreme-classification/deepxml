@@ -96,7 +96,8 @@ run(){
     echo "Training $file split.. with lr:" ${learning_rate} "epochs:" ${!num_epochs}  
     args="$dataset $version $splitid $use_post $learning_rate $embedding_dims \
             ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
-            $model_type ${temp_model_data} ${split_threshold} ${topk} ${!num_centriods}"
+            $model_type ${temp_model_data} ${split_threshold} ${topk} ${!num_centriods} \
+            ${use_ensemble}"
     echo $args
     ./run_"${file}".sh $args
 }
@@ -104,9 +105,9 @@ run(){
 run_ensemble1(){
     lr_arr="lr_ensemble"
     run "ensemble" $version "-1" ${!lr_arr}
-    mv "$results_dir/test_predictions_clf.npz" "$results_dir/test_predictions_level=0_clf.npz"
-    mv "$results_dir/train_predictions_clf.npz" "$results_dir/train_predictions_level=0_clf.npz"
-    cp "$results_dir/-1/test_predictions_combined.npz" "$results_dir/test_predictions_clf.npz"
+    mv "$results_dir/test_predictions_ensemble_clf.npz" "$results_dir/test_predictions_ensemble_level=0_clf.npz"
+    mv "$results_dir/train_predictions_clf.npz" "$results_dir/train_predictions_ensemble_level=0_clf.npz"
+    cp "$results_dir/-1/test_predictions_ensemble_combined.npz" "$results_dir/test_predictions_ensemble_clf.npz"
 }
 
 for((lr_idx=0; lr_idx<$learning_rates; lr_idx++));
@@ -130,7 +131,6 @@ do
         fi
 
     else
-        echo "Random"
         for((sp_idx=$num_splits; sp_idx>0; sp_idx--));
         do
             arg=$(expr $sp_idx - 1 |bc)
@@ -146,16 +146,23 @@ do
         fi
         echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
         run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
-    fi
         if [ $use_ensemble -eq 1 ]
         then
+            ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_ensemble_clf.npz"
+            ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_ensemble_knn.npz"
+            merge_split_predictions "${results_dir}" "0,1" "test_predictions_ensemble_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "test_predictions_ensemble_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            run_beta "shortlist" $dataset $work_dir $version "test_predictions_ensemble" $A $B $evaluation_type
+            
             merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+
             mkdir -p "$models_dir/-1"
-            cp "$results_dir/test_predictions_clf.npz" "$models_dir/-1/test_shortlist.npz"
+            cp "$results_dir/test_predictions_ensemble_clf.npz" "$models_dir/-1/test_shortlist.npz"
             cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
             run_ensemble1
-            run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
+            run_beta "shortlist" $dataset $work_dir $version "test_predictions_ensemble" $A $B $evaluation_type
         fi
+    fi
     ((version++))
 done       
 
