@@ -71,7 +71,7 @@ def pp_with_shorty(model, params, shorty):
         normalize_features=params.normalize,
         normalize_labels=params.nbn_rel,
         batch_size=params.batch_size,
-        num_workers=4,
+        num_workers=params.num_workers,
         label_indices=params.label_indices,
         feature_indices=params.feature_indices)
     # shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
@@ -211,6 +211,7 @@ def inference(model, params):
         normalize_features=params.normalize,
         normalize_labels=params.nbn_rel,
         beta=params.beta,
+        num_workers=params.num_workers,
         top_k=params.top_k,
         data={'X': None, 'Y': None},
         keep_invalid=params.keep_invalid,

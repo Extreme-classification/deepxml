@@ -61,7 +61,7 @@ class ModelFull(ModelBase):
         shortlist_utils.update(
             data_loader, self, self.embedding_dims, shorty, flag=1)
         end_time = time.time()
-        fname = os.path.join(params.model_dir, params.model_fname+'_ANN.pkl')
+        fname = os.path.join(model_dir, model_fname+'_ANN.pkl')
         shorty.save(fname)
         self.logger.info(
             "Time in post-process: {} sec., Model size: {} MB".format(
