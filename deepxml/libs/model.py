@@ -23,6 +23,7 @@ class ModelFull(ModelBase):
         self.feature_indices = params.feature_indices
 
     def _pp_with_shortlist(self, shorty, data_dir, dataset,
+                           model_dir, model_fname,
                            tr_feat_fname='trn_X_Xf.txt',
                            tr_label_fname='trn_X_Y.txt',
                            normalize_features=True,
@@ -56,8 +57,15 @@ class ModelFull(ModelBase):
 
         self.logger.info("Post-processing with shortlist!")
         shorty.reset()
+        start_time = time.time()
         shortlist_utils.update(
             data_loader, self, self.embedding_dims, shorty, flag=1)
+        end_time = time.time()
+        fname = os.path.join(params.model_dir, params.model_fname+'_ANN.pkl')
+        shorty.save(fname)
+        self.logger.info(
+            "Time in post-process: {} sec., Model size: {} MB".format(
+                end_time-start_time, os.path.getsize(fname)/math.pow(2, 20)))
         return shorty
 
 

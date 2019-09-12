@@ -60,6 +60,8 @@ def pp_with_shorty(model, params, shorty):
     Train a shortlist for a already trained model (typically from OVA) 
     """
     model._pp_with_shortlist(
+        model_dir=params.model_dir,
+        model_fname=params.model_fname,
         shorty=shorty,
         data_dir=params.data_dir,
         dataset=params.dataset,
@@ -72,7 +74,7 @@ def pp_with_shorty(model, params, shorty):
         num_workers=4,
         label_indices=params.label_indices,
         feature_indices=params.feature_indices)
-    shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
+    # shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
 
 
 def train(model, params):
