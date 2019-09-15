@@ -156,15 +156,15 @@ fi
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
 if [ $use_post -eq 1 ]
 then
-    echo "Retraining with shortlist.."
-   ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS_post}"
+   echo "Retraining with shortlist.."
+  ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS_post}"
 fi
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
 
 if [ $use_ensemble -eq 1 ]
 then
-    echo "Fetching data for ensemble"
-    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
+   echo "Fetching data for ensemble"
+   ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
 fi
 
 

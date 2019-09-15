@@ -591,7 +591,7 @@ class ModelReRanker(ModelShortlist):
                 self.tracking.train_time,
                 self.tracking.validation_time,
                 self.tracking.shortlist_time,
-                self.net.model_size/math.pow(2, 20)))
+                self.net.model_size))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
             num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
