@@ -125,9 +125,9 @@ do
         cp -r ${results_dir}/"-1"/* ${results_dir}
         if [ $use_post -eq 1 ]
         then
-            run_beta "shortlist" $dataset $work_dir $version "predictions" $A $B $evaluation_type
+            run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
         else
-            run_beta ${!type} $dataset $work_dir $version "predictions" $A $B $evaluation_type
+            run_beta ${!type} $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
         fi
 
     else
