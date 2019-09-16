@@ -19,7 +19,7 @@ batch_size_full=255
 dlr_step_full=14
 
 
-lr_shortlist=(0.001)
+lr_shortlist=(0.003)
 num_epochs_shortlist=20
 num_centroids_shortlist=1
 batch_size_shortlist=255

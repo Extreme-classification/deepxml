@@ -74,9 +74,9 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --model_method shortlist \
             --shortlist_method hybrid \
             --lr ${learning_rate} \
-            --efS 300 \
+            --efS 500 \
             --normalize \
-            --num_nbrs 300 \
+            --num_nbrs 500 \
             --efC 300 \
             --M 100 \
             --use_shortlist \
@@ -88,8 +88,8 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --retrain_hnsw_after $(($num_epochs+3)) \
             ${DEFAULT_PARAMS}"
 
-PREDICT_PARAMS="--efS 300 \
-                --num_nbrs 300 \
+PREDICT_PARAMS="--efS 500 \
+                --num_nbrs 500 \
                 --model_method shortlist \
                 --ann_threads 12\
                 --normalize \
@@ -102,7 +102,7 @@ PREDICT_PARAMS="--efS 300 \
                 ${DEFAULT_PARAMS}"
 
 
-PREDICT_PARAMS_train="--efS 300 \
+PREDICT_PARAMS_train="--efS 500 \
                     --num_nbrs 300 \
                     --model_method shortlist \
                     --ann_threads 12\
@@ -125,13 +125,13 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --model_fname ${MODEL_NAME} \
                 --batch_size 512 ${extra_params}"
 
-./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --use_coarse_for_shorty"
+# ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
+# ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --use_coarse_for_shorty"
 
 if [ $use_ensemble -eq 1 ]
 then
     echo "Fetching data for ensemble"
-    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --pred_fname test_predictions_ensemble"
+    # ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --pred_fname test_predictions_ensemble"
     ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train} --get_only clf"
 fi
 

@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# echo "Not training head...."
+exit
 dataset=$1
 dir_version=$2
 quantile=$3
