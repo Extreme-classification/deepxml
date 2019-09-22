@@ -1,6 +1,5 @@
 #!/bin/bash
-# echo "Not training head...."
-exit
+
 dataset=$1
 dir_version=$2
 quantile=$3
@@ -18,7 +17,6 @@ split_threhold="${14}"
 topk=${15}
 num_centroids=${16}
 use_ensemble=${17}
-echo $num_centroids
 use_head_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
@@ -155,6 +153,7 @@ else
 fi
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
+
 if [ $use_post -eq 1 ]
 then
    echo "Retraining with shortlist.."
@@ -177,8 +176,8 @@ then
     ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "export/wrd_emb.npy" $quantile $embedding_dims "${temp_model_data}/${split_threhold}"
 fi
 
-# for doc in ${docs[*]} 
-# do 
-#     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-#     # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$quantile "export/${doc}_emb.npy" "${doc}"
-# done
+for doc in ${docs[*]} 
+do 
+    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
+    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$quantile "export/${doc}_emb.npy" "${doc}"
+done

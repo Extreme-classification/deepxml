@@ -428,7 +428,7 @@ class ModelNS(ModelBase):
             batch_size=128, num_workers=4, shuffle=False, init_epoch=0,
             keep_invalid=False, feature_indices=None, label_indices=None,
             normalize_features=True, normalize_labels=False, validate=False,
-            validate_after=5):
+            validate_after=5, *args, **kwargs):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(
@@ -732,6 +732,7 @@ class ModelReRanker(ModelShortlist):
                 prediction_time,
                 prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
+    
     def save_checkpoint(self, model_dir, epoch):
         # Avoid purge call from base class
         super(ModelShortlist, self).save_checkpoint(model_dir, epoch, False)
@@ -739,7 +740,7 @@ class ModelReRanker(ModelShortlist):
 
     def load_checkpoint(self, model_dir, fname, epoch):
         super(ModelShortlist, self).load_checkpoint(model_dir, fname, epoch)
-        
+       
     def save(self, model_dir, fname, low_rank=-1):
         super(ModelShortlist, self).save(model_dir, fname)
 

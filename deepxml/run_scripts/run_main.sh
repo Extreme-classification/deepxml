@@ -3,8 +3,8 @@
 # $2 ABLATION TYPE
 # $3 DATASET
 # $4 VERSION
-# eg. ./run_main 0 DeepXML EURLex-4K 0
-# eg. ./run_main 0 DeepXML-fr EURLex-4K 0
+# eg. ./run_main.sh 0 DeepXML EURLex-4K 0
+# eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0
 
 export CUDA_VISIBLE_DEVICES=$1
 model_type=$2
@@ -40,7 +40,6 @@ clean_up(){
 run_beta(){
     flag=$1
     shift
-    echo $6
     if [ "${flag}" == "shortlist" ]
     then
         BETA="0.1 0.15 0.2 0.3 0.4 0.5 0.6"
@@ -98,7 +97,6 @@ run(){
             ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
             $model_type ${temp_model_data} ${split_threshold} ${topk} ${!num_centriods} \
             ${use_ensemble}"
-    echo $args
     ./run_"${file}".sh $args
 }
 
