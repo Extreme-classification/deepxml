@@ -112,7 +112,7 @@ def train(model, params):
         feature_indices=params.feature_indices,
         label_indices=params.label_indices)
     # TODO: Accomodate low rank
-    model.save(params.model_dir, params.model_fname, params.low_rank)
+    model.save(params.model_dir, params.model_fname)
 
 
 def get_document_embeddings(model, params, _save=True):
@@ -126,12 +126,17 @@ def get_document_embeddings(model, params, _save=True):
     _save: boolean, optional, default=True
         Save embeddings as well (fname=params.out_fname)
     """
+    fname_temp = None
+    if params.huge_dataset:
+        fname_temp = os.path.join(
+            params.result_dir, params.out_fname + ".memmap.npy")
     doc_embeddings = model.get_document_embeddings(
         data_dir=params.data_dir,
         dataset=params.dataset,
         fname_features=params.ts_feat_fname,
         fname_labels=params.ts_label_fname,
         data={'X': None, 'Y': None},
+        fname_out=fname_temp,
         keep_invalid=params.keep_invalid,
         batch_size=params.batch_size,
         normalize_features=params.normalize,
@@ -140,6 +145,10 @@ def get_document_embeddings(model, params, _save=True):
     fname = os.path.join(params.result_dir, params.out_fname)
     if _save:  # Save
         np.save(fname, doc_embeddings)
+    if fname_temp is not None and os.path.exists(fname_temp):
+        os.remove(fname_temp)
+        del doc_embeddings
+        doc_embeddings = None
     return doc_embeddings
 
 
@@ -152,16 +161,9 @@ def get_word_embeddings(model, params):
     params: NameSpace
         parameter of the model
     """
-    if params.use_hash_embeddings:
-        _embeddings, importance_wts = model.net.embeddings.get_weights()
-        fname = os.path.join(params.result_dir, params.out_fname)
-        np.save(fname, _embeddings)
-        fname = os.path.join(params.result_dir, params.out_fname+"_imp_wts")
-        np.save(fname, importance_wts)
-    else:
-        _embeddings = model.net.embeddings.get_weights()
-        fname = os.path.join(params.result_dir, params.out_fname)
-        np.save(fname, _embeddings)
+    _embeddings = model.net.embeddings.get_weights()
+    fname = os.path.join(params.result_dir, params.out_fname)
+    np.save(fname, _embeddings)
 
 
 def get_classifier_wts(model, params):
@@ -311,12 +313,11 @@ def main(params):
         if params.num_centroids != 1:
             params.label_padding_index = params.num_labels
         net = construct_network(params)
-        if not params.use_hash_embeddings:
-            embeddings = load_emeddings(params)
-            net.initialize_embeddings(
-                utils.append_padding_embedding(embeddings))
-            del embeddings
-            print("Initialized embeddings!")
+        embeddings = load_emeddings(params)
+        net.initialize_embeddings(
+            utils.append_padding_embedding(embeddings))
+        del embeddings
+        print("Initialized embeddings!")
         criterion = torch.nn.BCEWithLogitsLoss(
             reduction='sum' if params.use_shortlist else 'mean')
         print("Model parameters: ", params)
@@ -375,7 +376,7 @@ def main(params):
         shorty = construct_shortlist(params)
         model = construct_model(params, net, None, None, shorty)
         model.transfer_to_devices()
-        model.load(params.model_dir, params.model_fname, params.use_low_rank)
+        model.load(params.model_dir, params.model_fname)
         inference(model, params)
 
     elif params.mode == 'retrain_w_shorty':
@@ -391,7 +392,7 @@ def main(params):
         shorty = construct_shortlist(params)
         model = construct_model(
             params, net, criterion=None, optimizer=None, shorty=shorty)
-        model.load(params.model_dir, params.model_fname, params.use_low_rank)
+        model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
         pp_with_shorty(model, params, shorty)
         utils.save_parameters(fname, params)

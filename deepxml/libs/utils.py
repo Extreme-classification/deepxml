@@ -119,16 +119,12 @@ def save_parameters(fname, params):
     json.dump({'num_labels': params.num_labels,
                'vocabulary_dims': params.vocabulary_dims,
                'use_shortlist': params.use_shortlist,
-               'use_residual': params.use_residual,
                'ann_method': params.ann_method,
                'num_nbrs': params.num_nbrs,
                'embedding_dims': params.embedding_dims,
                'num_clf_partitions': params.num_clf_partitions,
                'label_padding_index': params.label_padding_index,
                'hidden_dims': params.hidden_dims,
-               'use_hash_embeddings': params.use_hash_embeddings,
-               'num_buckets': params.num_buckets,
-               'num_hashes': params.num_hashes,
                'trans_method': params.trans_method,
                'keep_invalid': params.keep_invalid},
               open(fname, 'w'),
@@ -140,14 +136,10 @@ def load_parameters(fname, params):
     temp = json.load(open(fname, 'r'))
     params.num_labels = temp['num_labels']
     params.vocabulary_dims = temp['vocabulary_dims']
-    params.use_residual = temp['use_residual']
     params.num_nbrs = temp['num_nbrs']
     params.ann_method = temp['ann_method']
-    params.num_hashes = temp['num_hashes']
-    params.num_buckets = temp['num_buckets']
     params.num_clf_partitions = temp['num_clf_partitions']
     params.label_padding_index = temp['label_padding_index']
-    params.use_hash_embeddings = temp['use_hash_embeddings'] 
     params.ann_method = temp['ann_method']
     params.embedding_dims = temp['embedding_dims']
     params.trans_method = temp['trans_method']

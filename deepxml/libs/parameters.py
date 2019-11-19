@@ -97,20 +97,6 @@ class Parameters(ParametersBase):
             type=int,
             help='#Partitioned classifier')
         self.parser.add_argument(
-            '--num_hashes',
-            dest='num_hashes',
-            default=-1,
-            action='store',
-            type=int,
-            help='#Hash functions to use')
-        self.parser.add_argument(
-            '--num_buckets',
-            dest='num_buckets',
-            default=-1,
-            action='store',
-            type=int,
-            help='#buckets to hash vocabulary')
-        self.parser.add_argument(
             '--label_indices',
             dest='label_indices',
             default=None,
@@ -271,13 +257,6 @@ class Parameters(ParametersBase):
             action='store',
             help='#Centroids (Use multiple for ext head if more than 1)')
         self.parser.add_argument(
-            '--low_rank',
-            dest='low_rank',
-            default=-1,
-            type=int,
-            action='store',
-            help='#dim of low dimensional space')
-        self.parser.add_argument(
             '--beta',
             dest='beta',
             default=0.2,
@@ -314,21 +293,9 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Do not train word embeddings.')
         self.parser.add_argument(
-            '--use_residual',
-            action='store_true',
-            help='Use residual connection')
-        self.parser.add_argument(
-            '--use_low_rank',
-            action='store_true',
-            help='Use low rank on classifier')
-        self.parser.add_argument(
             '--use_shortlist',
             action='store_true',
             help='Use shortlist or full')
-        self.parser.add_argument(
-            '--use_head_embeddings',
-            action='store_true',
-            help='Use embeddings from head or default')
         self.parser.add_argument(
             '--validate',
             action='store_true',
@@ -347,11 +314,6 @@ class Parameters(ParametersBase):
             help='Device for embeddings'
         )
         self.parser.add_argument(
-            '--use_hash_embeddings',
-            action='store_true',
-            help='Use embeddings'
-        )
-        self.parser.add_argument(
             '--normalize',
             action='store_true',
             help='Normalize features or not!')
@@ -360,13 +322,19 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Non binary label relevanxe')
         self.parser.add_argument(
-            '--use_sparse',
-            action='store_true',
-            help='Use Sparse Features')
-        self.parser.add_argument(
             '--update_shortlist',
             action='store_true',
             help='Update shortlist while predicting'
+        )
+        self.parser.add_argument(
+            '--use_head_embeddings',
+            action='store_true',
+            help='Use head embeddings?'
+        )
+        self.parser.add_argument(
+            '--huge_dataset',
+            action='store_true',
+            help='Is it a really large dataset?'
         )
         self.parser.add_argument(
             '--use_coarse_for_shorty',
