@@ -226,8 +226,9 @@ class ModelBase(object):
                     - val_start_t
                 _prec, _ndcg = self.evaluate(
                     validation_loader.dataset.labels.Y, predicted_labels)
+                self.tracking.mean_val_loss.append(val_avg_loss)
                 self.tracking.val_precision.append(_prec)
-                self.tracking.val_precision.append(_ndcg)
+                self.tracking.val_ndcg.append(_ndcg)
                 self.logger.info("Model saved after epoch: {}".format(epoch))
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch

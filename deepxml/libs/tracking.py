@@ -21,7 +21,7 @@ class Tracking(object):
         self.last_epoch = 0
 
     def save(self, fname):
-        pickle.dump(self, open(fname, 'wb'))
+        pickle.dump(self.__dict__, open(fname, 'wb'))
 
     def load(self, fname):
-        self = pickle.load(open(fname, 'rb'))
+        self.__dict__ = pickle.load(open(fname, 'rb'))
