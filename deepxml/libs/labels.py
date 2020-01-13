@@ -3,6 +3,8 @@ import numpy as np
 import _pickle as pickle
 from xclib.data import data_utils
 import os
+from scipy.sparse import load_npz
+from xclib.utils.sparse import binarize
 
 
 def construct(data_dir, fname, Y=None, normalize=False, _type='sparse'):
@@ -68,6 +70,8 @@ class LabelsBase(object):
             elif fname.lower().endswith('.txt'):
                 return data_utils.read_sparse_file(
                     fname, dtype=np.float32)
+            elif fname.lower().endswith('.npz'):
+                return load_npz(fname)
             else:
                 raise NotImplementedError("Unknown file extension")
 
@@ -84,7 +88,7 @@ class LabelsBase(object):
 
     def binarize(self):
         if self._valid:
-            self.Y.data[:] = 1.0
+            self.Y = binarize(self.Y, copy=False)
 
     def index_select(self, indices, axis=1, fname=None):
         """

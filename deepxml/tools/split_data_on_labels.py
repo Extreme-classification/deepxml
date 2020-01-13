@@ -1,4 +1,5 @@
 import numpy as np
+from xclib.utils.sparse import binarize
 
 
 class splitData(object):
@@ -28,7 +29,7 @@ class splitData(object):
 
 
     def get_valid(self, freq):
-        return np.where(freq!=0)[0]
+        return np.where(freq != 0)[0]
 
     def split_based_on_topk(self, labels):
         """
@@ -94,7 +95,7 @@ class splitData(object):
         """
             Get frequency of data such as labels
         """
-        _, num = data.shape
+        data = binarize(data, copy=True) #Useful in case of non-binary labels
         freq = np.array(data.sum(axis=0)).ravel()
         return freq
 

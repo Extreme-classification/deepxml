@@ -93,6 +93,8 @@ class FeaturesBase(object):
             elif fname.lower().endswith('.txt'):
                 return data_utils.read_sparse_file(
                     fname, dtype=np.float32)
+            elif fname.lower().endswith('.npy'):
+                return np.load(fname)
             else:
                 raise NotImplementedError("Unknown file extension")
 
@@ -172,71 +174,3 @@ class SparseFeatures(FeaturesBase):
         x = list(map(lambda item: item+1, self.X[index, :].indices))
         w = self.X[index, :].data.tolist()
         return x, w
-
-
-class SequentialFeatures(FeaturesBase):
-    """Class for Sequential features; useful for sequential models
-    Parameters
-    ---------
-    data_dir: str
-        data directory
-    fname: str
-        load data from this file
-    X: ?: ?
-    * 0: Reserved for padding index; 1: UNK, 2: Start token and 3: end token
-    """
-
-    def __init__(self, data_dir, fname, X=None,
-                 vocabulary_file=None, cutoff_len=300):
-        self.load(data_dir, fname)
-        self.cutoff_len = cutoff_len
-        if vocabulary_file is not None:
-            self.token_to_index = json.load(
-                open(os.path.join(data_dir, vocabulary_file)))
-            self._check_pad_index()
-            #  Assumes text is already vectorized if no vocab file is supplied
-            self.process_text()
-
-    def _check_pad_index(self):
-        if '<PAD>' not in self.token_to_index:
-            self.token_to_index = \
-                {k: v+1 for k, v in self.token_to_index.items()}
-            self.token_to_index['<PAD>'] = 0
-
-    @property
-    def num_instances(self):
-        return len(self.X)
-
-    @property
-    def num_features(self):
-        return len(self.token_to_index)+1
-
-    def process_text(self):
-        self.X = [self.convert(item) for item in self.X]
-
-    def load(self, data_dir, fname):
-        with open(os.path.join(data_dir, fname), 'r', encoding='latin') as fp:
-            self.X = fp.readlines()
-
-    def _clean_text(self, sentence):
-        sentence = sentence.lower().strip()
-        sentence = re.sub(r"([.!?])", r" \1", sentence)
-        sentence = re.sub(r"[^a-zA-Z0-9.!?]+", r" ", sentence)
-        return sentence
-
-    def convert(self, sentence):
-        # Assuming there is no need to truncate as of now
-        sentence = ['<S>'] \
-            + self._clean_text(sentence).split(" ")[:self.cutoff_len] \
-            + ["</S>"]
-        return self.map_to_indices(sentence)
-
-    def map_to_indices(self, sentence):
-        # +1 for Padding
-        return list(
-            map(lambda x: self.token_to_index[x]
-                if x in self.token_to_index
-                else self.token_to_index['<UNK>'], sentence))
-
-    def __getitem__(self, index):
-        return self.X[index]
