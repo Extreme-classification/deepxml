@@ -10,7 +10,7 @@ dlr_factor=0.5
 num_labels=501070
 A=0.5
 B=0.4
-use_ensemble=1
+use_reranker=1
 
 lr_full=(0.005)
 num_epochs_full=25
@@ -26,10 +26,10 @@ batch_size_shortlist=255
 dlr_step_shortlist=10
 
 
-lr_ensemble=(0.002)
-num_epochs_ensemble=10
-num_centroids_ensemble=1
-batch_size_ensemble=510
-dlr_step_ensemble=8
+lr_reranker=(0.002)
+num_epochs_reranker=10
+num_centroids_reranker=1
+batch_size_reranker=510
+dlr_step_reranker=8
 
 order=("shortlist" "full")

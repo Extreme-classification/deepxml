@@ -4,7 +4,6 @@
 # $3 DATASET
 # $4 VERSION
 # eg. ./run_main.sh 0 DeepXML EURLex-4K 0
-# eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0
 
 export CUDA_VISIBLE_DEVICES=$1
 model_type=$2
@@ -12,6 +11,7 @@ dataset=$3
 
 source "../configs/${model_type}/${dataset}.sh"
 version=$4
+split_threshold=$5
 
 create_splits () {
     # $1: dataset
@@ -50,6 +50,20 @@ run_beta(){
     fi
 }
 
+print_for_beta(){
+    flag=$1
+    shift
+    echo $6
+    if [ "${flag}" == "shortlist" ]
+    then
+        BETA="$8"
+        ./run_base.sh "print_mat" $1 $2 $3 $model_type $4 $5 $6 "${7} ${BETA}"
+    else
+        BETA="-1"
+        ./run_base.sh "print_mat" $1 $2 $3 $model_type $4 $5 $6 "${7} ${BETA}"
+    fi
+}
+
 work_dir="$HOME/scratch/Workspace"
 data_dir="${work_dir}/data/${dataset}"
 temp_model_data="deep-xml_data"
@@ -70,8 +84,6 @@ convert() {
 if [ ! -e "${trn_ft_file}" ]; then
     convert ${train_file} ${trn_ft_file} ${trn_lbl_file} ${test_file} ${tst_ft_file} ${tst_lbl_file}
 fi
-
-
 
 if [ ! -e "${data_dir}/$temp_model_data/$split_threshold/split_stats.json" ]
 then
@@ -108,60 +120,48 @@ run_reranker(){
     cp "$results_dir/-1/test_predictions_reranker_combined.npz" "$results_dir/test_predictions_reranker_clf.npz"
 }
 
-for((lr_idx=0; lr_idx<$learning_rates; lr_idx++));
-do 
 
-    results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
-    models_dir="${work_dir}/models/$model_type/${dataset}/v_${version}"
+results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
+models_dir="${work_dir}/models/$model_type/${dataset}/v_${version}"
 
-    if [ $num_splits -eq 0 ]; then
-        echo "Not using any split to train."
-        type="order[$num_splits]"
-        epc_arr="num_epochs_${!type}"
-        lr_arr="lr_${!type}[${lr_idx}]"
-        run "${!type}" $version "-1" ${!lr_arr} ${!epc_arr}
-        cp -r ${results_dir}/"-1"/* ${results_dir}
-        if [ $use_post -eq 1 ]
-        then
-            run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
-        else
-            run_beta ${!type} $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
-        fi
+for((sp_idx=$num_splits; sp_idx>0; sp_idx--));
+do
+    arg=$(expr $sp_idx - 1 |bc)
+    type="order[$arg]"
+    lr_arr="lr_${!type}"
+    run "${!type}" $version $arg ${!lr_arr}
+done
+exit
 
-    else
-        for((sp_idx=$num_splits; sp_idx>0; sp_idx--));
-        do
-            arg=$(expr $sp_idx - 1 |bc)
-            type="order[$arg]"
-            lr_arr="lr_${!type}[${lr_idx}]"
-            #run "${!type}" $version $arg ${!lr_arr}
-        done
+if [ $use_post -eq 1 ]
+then
+    merge_split_predictions "${results_dir}" "0,1" "test_predictions_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+    merge_split_predictions "${results_dir}" "0,1" "test_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
 
-        # if [ $use_post -eq 1 ]
-        # then
-        #     merge_split_predictions "${results_dir}" "0,1" "test_predictions_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-        #     merge_split_predictions "${results_dir}" "0,1" "test_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-        # fi
-        # echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
-        # run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
-        if [ $use_reranker -eq 1 ]
-        then
-            # ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_reranker_clf.npz"
-            # ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
-            # merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            # merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            #run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
-            
-            # merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+else
+    echo "Can not run without post-processing; exiting..."
+    exit
+fi
 
-            # mkdir -p "$models_dir/-1"
-            # cp "$results_dir/test_predictions_reranker_clf.npz" "$models_dir/-1/test_shortlist.npz"
-            # cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
-            run_reranker
-            run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
-        fi
-    fi
-    ((version++))
-done       
+echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
+run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
+print_for_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type "0.1"
 
-#clean_up
+if [ $use_reranker -eq 1 ]
+then
+    ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_reranker_clf.npz"
+    ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
+    merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+    merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+    run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
+    
+    merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+
+    mkdir -p "$models_dir/-1"
+    cp "$results_dir/test_predictions_reranker_clf.npz" "$models_dir/-1/test_shortlist.npz"
+    cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
+    run_reranker
+    run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
+    print_for_beta "shortlist" $dataset $work_dir $version "test_predictions_ensemble" $A $B $evaluation_type "0.1"
+fi
+

@@ -16,7 +16,7 @@ temp_model_data="${13}"
 split_threhold="${14}"
 topk=${15}
 num_centroids=${16}
-use_ensemble=${17}
+use_reranker=${17}
 use_head_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
@@ -77,7 +77,6 @@ then
 
     TRAIN_PARAMS_post="--trans_method  ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
-                --low_rank -1 \
                 --freeze_embeddings \
                 --efC 300 \
                 --efS 300 \
@@ -156,14 +155,14 @@ fi
 
 if [ $use_post -eq 1 ]
 then
-   echo "Retraining with shortlist.."
+   echo "\nRetraining with shortlist.."
   ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS_post}"
 fi
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
 
-if [ $use_ensemble -eq 1 ]
+if [ $use_reranker -eq 1 ]
 then
-   echo "Fetching data for ensemble"
+   echo "\nFetching data for reranker"
    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
 fi
 
@@ -172,7 +171,7 @@ fi
 
 if [ $quantile -gt -1 ]
 then
-    echo "Generating Head Embeddings"
+    echo "\nGenerating Head Embeddings"
     ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "export/wrd_emb.npy" $quantile $embedding_dims "${temp_model_data}/${split_threhold}"
 fi
 

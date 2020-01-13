@@ -14,10 +14,8 @@ work_dir=${11}
 MODEL_NAME="${12}"
 temp_model_data="${13}"
 split_threhold="${14}"
-topk=${15}
-num_centroids=${16}
-use_reranker=${17}
-use_head_embeddings=1
+topk="${15}"
+use_head_embeddings=0
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
 docs=("trn" "tst")
@@ -26,8 +24,8 @@ docs=("trn" "tst")
 stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/split_stats.json'))['${quantile}'])"` 
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
-num_labels=${stats[2]}
-echo $num_labels $(wc -l ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt)
+num_labels=${stats[1]}
+
 extra_params="--feature_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/features_split_${quantile}.txt \
                 --label_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt"
 
@@ -58,88 +56,56 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --val_label_fname tst_X_Y.txt \
                 --ts_feat_fname tst_X_Xf.txt \
                 --ts_label_fname tst_X_Y.txt \
-                --freeze_embeddings \
+                --label_padding_index ${num_labels} \
                 --top_k ${topk} \
-                --num_centroids ${num_centroids} \
                 --model_fname ${MODEL_NAME} ${extra_params} \
-                --get_only knn clf"
+                --get_only combined"
 
 TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
             --batch_size $batch_size \
-            --num_clf_partitions 1\
-            --trans_method ${current_working_dir}/shortlist.json \
+            --num_clf_partitions 1 \
+            --trans_method ${current_working_dir}/reranker.json \
             --dropout 0.5 
             --optim Adam \
-            --model_method shortlist \
-            --shortlist_method hybrid \
-            --lr ${learning_rate} \
+            --keep_invalid \
+            --model_method reranker \
+            --shortlist_method reranker \
+            --lr $learning_rate \
             --efS 300 \
             --normalize \
-            --num_nbrs 300 \
+            --num_nbrs $((2 * topk)) \
             --efC 300 \
             --M 100 \
             --use_shortlist \
             --validate \
 		    --ann_threads 12 \
             --beta 0.5 \
-            --update_shortlist \
-            --use_coarse_for_shorty \
             --retrain_hnsw_after $(($num_epochs+3)) \
             ${DEFAULT_PARAMS}"
 
-PREDICT_PARAMS="--efS 300 \
-                --num_nbrs 300 \
-                --model_method shortlist \
-                --ann_threads 12\
-                --normalize \
-                --use_shortlist \
-                --batch_size 256 \
-                --beta 0.5 ${extra_params} \
-                --out_fname predictions.txt \
-                --pred_fname test_predictions \
-                --update_shortlist \
-                ${DEFAULT_PARAMS}"
-
-
-PREDICT_PARAMS_train="--efS 300 \
-                    --num_nbrs 300 \
-                    --model_method shortlist \
-                    --ann_threads 12\
+PREDICT_PARAMS_TEST="--efS 300 \
+                    --model_method reranker \
+                    --shortlist_method reranker \
+                    --num_centroids 1 \
+                    --num_nbrs $((2 * topk)) \
+                    --ann_threads 12 \
                     --normalize \
+                    --keep_invalid \
                     --use_shortlist \
                     --batch_size 256 \
-                    --beta 0.5 ${extra_params}\
-                    --out_fname predictions.txt \
-                    --pred_fname train_predictions \
+                    --pred_fname test_predictions_reranker \
                     --update_shortlist \
-                    ${DEFAULT_PARAMS} \
-                    --ts_feat_fname trn_X_Xf.txt \
-                    --ts_label_fname trn_X_Y.txt"
+                    ${DEFAULT_PARAMS}"
+
 
 EXTRACT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --use_shortlist \
                 --model_method shortlist \
                 --normalize \
-                --model_fname ${MODEL_NAME} \
+                --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${extra_params}"
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --use_coarse_for_shorty"
-
-if [ $use_reranker -eq 1 ]
-then
-    echo -e "\nFetching data for reranker"
-    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --pred_fname test_predictions_reranker"
-    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train} --get_only clf"
-fi
-
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
-
-for doc in ${docs[*]}
-do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
-done
-
+./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_TEST}"
