@@ -19,6 +19,7 @@ class Residual(nn.Module):
     init: str, default='eye'
         initialization strategy
     """
+
     def __init__(self, input_size, output_size, dropout, init='eye'):
         super(Residual, self).__init__()
         self.input_size = input_size
@@ -26,11 +27,10 @@ class Residual(nn.Module):
         self.init = init
         self.dropout = dropout
         self.padding_size = self.output_size - self.input_size
-        self.hidden_layer = nn.Sequential(nn.Linear(self.input_size,
-                                          self.output_size),
-                                          nn.BatchNorm1d(self.output_size),
-                                          nn.ReLU(),
-                                          nn.Dropout(self.dropout))
+        self.hidden_layer = nn.Sequential(
+            nn.utils.spectral_norm(nn.Linear(self.input_size, self.output_size)),
+            nn.ReLU(),
+            nn.Dropout(self.dropout))
         self.initialize(self.init)
 
     def forward(self, embed):
