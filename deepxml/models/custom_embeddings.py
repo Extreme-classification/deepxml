@@ -46,13 +46,13 @@ class CustomEmbedding(torch.nn.Module):
 
     def forward(self, features, weights, _div=False):
         """
-            Forward pass for embedding layer
-            Args:
-                features: torch.LongTensor: (batch_size, max_features_in_a_batch)
-                weights: torch.Tensor: (batch_size, max_features_in_a_batch)
-                _div: boolean: weighted sum or weighted average.
-            Returns:
-                out: torch.Tensor: embedding for each sample (batch_size, embedding_dims)
+        Forward pass for embedding layer
+        Args:
+            features: torch.LongTensor: (batch_size, max_features_in_a_batch)
+            weights: torch.Tensor: (batch_size, max_features_in_a_batch)
+            _div: boolean: weighted sum or weighted average.
+        Returns:
+            out: torch.Tensor: embedding for each sample (batch_size, embedding_dims)
         """
         out = []
         batch_size = features.size()[0]

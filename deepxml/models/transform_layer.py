@@ -43,8 +43,9 @@ class Transform(nn.Module):
 
     @property
     def representation_dims(self):
-        #TODO: Hardcoded for now; compute it
+        # TODO: Hardcoded for now; compute it
         return 300
+
 
 def resolve_schema_args(jfile, ARGS):
     arguments = re.findall(r"#ARGS\.(.+?);", jfile)

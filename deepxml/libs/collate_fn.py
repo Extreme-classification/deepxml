@@ -5,27 +5,21 @@ import numpy as np
 def construct_collate_fn(feature_type, use_shortlist=False, num_partitions=1):
     def _collate_fn_dense_full(batch):
         return collate_fn_dense_full(batch, num_partitions)
+
     def _collate_fn_dense_sl(batch):
         return collate_fn_dense_sl(batch, num_partitions)
+
     def _collate_fn_sparse_full(batch):
         return collate_fn_sparse_full(batch, num_partitions)
+
     def _collate_fn_sparse_sl(batch):
         return collate_fn_sparse_sl(batch, num_partitions)
-    def _collate_fn_seq_full(batch):
-        return collate_fn_seq_full(batch, num_partitions)
-    def _collate_fn_seq_sl(batch):
-        raise NotImplementedError
 
-    if feature_type=='dense':
+    if feature_type == 'dense':
         if use_shortlist:
             return _collate_fn_dense_sl
         else:
             return _collate_fn_dense_full
-    if feature_type=='sequential':
-        if use_shortlist:
-            return _collate_fn_seq_sl
-        else:
-            return _collate_fn_seq_full
     else:
         if use_shortlist:
             return _collate_fn_sparse_sl

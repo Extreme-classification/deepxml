@@ -277,7 +277,7 @@ class ModelBase(object):
                 shuffle=False)
             self.logger.info(
                 "Computing and reusing coarse document embeddings"
-                "to save computations.")
+                " to save computations.")
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(
                 train_loader, return_coarse=True)
@@ -510,3 +510,4 @@ class ModelBase(object):
             component_size[key] = _size
             total += _size
         return total, component_size
+        

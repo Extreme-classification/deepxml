@@ -3,7 +3,6 @@ import torch.nn as nn
 import numpy as np
 import math
 import models.custom_embeddings as custom_embeddings
-import models.hash_embeddings as hash_embeddings
 import models.transform_layer as transform_layer
 import models.linear_layer as linear_layer
 
@@ -308,4 +307,3 @@ class DeepXMLt(DeepXMLBase):
         """
         self.transform_fine.to()
         super().to()
-        
