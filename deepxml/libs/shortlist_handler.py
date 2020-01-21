@@ -8,6 +8,7 @@ from .negative_sampling import NegativeSampler
 from scipy.sparse import load_npz
 from xclib.utils import sparse as sp
 
+
 class ShortlistHandlerBase(object):
     """Base class for ShortlistHandler
     - support for partitioned classifier
@@ -226,12 +227,12 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         if self.num_clf_partitions > 1:
             self.shortlist = PartitionedTable(
                 num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.int32)
+                _type=_type, _dtype=np.int64)
             self.dist = PartitionedTable(
                 num_partitions=self.num_clf_partitions,
                 _type=_type, _dtype=np.float32)
         else:
-            self.shortlist = Table(_type=_type, _dtype=np.int32)
+            self.shortlist = Table(_type=_type, _dtype=np.int64)
             self.dist = Table(_type=_type, _dtype=np.float32)
 
     def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
@@ -356,12 +357,12 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
         if self.num_clf_partitions > 1:
             self.shortlist = PartitionedTable(
                 num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.int32)
+                _type=_type, _dtype=np.int64)
             self.dist = PartitionedTable(
                 num_partitions=self.num_clf_partitions,
                 _type=_type, _dtype=np.float32)
         else:
-            self.shortlist = Table(_type=_type, _dtype=np.int32)
+            self.shortlist = Table(_type=_type, _dtype=np.int64)
             self.dist = Table(_type=_type, _dtype=np.float32)
 
     def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
@@ -395,7 +396,6 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
             self.model_dir, fname+'.shortlist.indices'))
         self.dist.load(os.path.join(
             self.model_dir, fname+'.shortlist.dist'))
-
 
 
 class ShortlistReRanker(ShortlistHandlerStatic):
@@ -440,8 +440,8 @@ class ShortlistReRanker(ShortlistHandlerStatic):
             Load label shortlist and distance for each instance
         """
         shortlist = load_npz(os.path.join(self.model_dir,
-                            fname+'_shortlist.npz'))
+                                          fname+'_shortlist.npz'))
         _shortlist, _dist = sp.topk(shortlist,
-                    self.size_shortlist, self.num_labels, -1000,
-                    return_values=True)
+                                    self.size_shortlist, self.num_labels,
+                                    -1000, return_values=True)
         self.update_shortlist(_shortlist, _dist, fname='tmp_reranker')

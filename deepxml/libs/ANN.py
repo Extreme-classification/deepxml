@@ -85,7 +85,7 @@ class HNSW(object):
             )
 
     def _filter(self, output):
-        indices = np.zeros((len(output), self.efS), dtype=np.int32)
+        indices = np.zeros((len(output), self.efS), dtype=np.int64)
         distances = np.zeros((len(output), self.efS), dtype=np.float32)
         for idx, item in enumerate(output):
             indices[idx] = item[0]
@@ -95,7 +95,7 @@ class HNSW(object):
     def predict(self, data):
         self.index.setQueryTimeParams({'efSearch': self.efS})
         output = self.index.knnQueryBatch(
-            data, k=self.num_neighbours, num_threads=self.num_threads
+            data, k=self.efS, num_threads=self.num_threads
             )
         indices, distances = self._filter(output)
         return indices, distances
