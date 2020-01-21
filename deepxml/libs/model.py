@@ -83,20 +83,20 @@ class ModelShortlist(ModelBase):
         self.retrain_hnsw_after = params.retrain_hnsw_after
         self.update_shortlist = params.update_shortlist
 
-    def _combine_scores_one(self, out_logits, batch_dist, beta):
+    def _combine_scores_one(self, out_logits, batch_sim, beta):
         return beta*torch.sigmoid(out_logits) \
-            + (1-beta)*torch.sigmoid(1-batch_dist)
+            + (1-beta)*torch.sigmoid(batch_sim)
 
-    def _combine_scores(self, out_logits, batch_dist, beta):
+    def _combine_scores(self, out_logits, batch_sim, beta):
         if isinstance(out_logits, list):  # For distributed classifier
             out = []
-            for _, (_logits, _dist) in enumerate(zip(out_logits, batch_dist)):
+            for _, (_logits, _sim) in enumerate(zip(out_logits, batch_sim)):
                 out.append(self._combine_scores_one(
-                    _logits.data.cpu(), _dist.data, beta))
+                    _logits.data.cpu(), _sim.data, beta))
             return out
         else:
             return self._combine_scores_one(
-                out_logits.data.cpu(), batch_dist.data, beta)
+                out_logits.data.cpu(), batch_sim.data, beta)
 
     def _strip_padding_label(self, mat, num_labels):
         stripped_vals = {}
@@ -112,12 +112,12 @@ class ModelShortlist(ModelBase):
         if 'Y_m' in batch_data:
             batch_shortlist = batch_data['Y_m'].numpy()
             # Send this as merged?
-            _knn_score = 1 - torch.cat(batch_data['Y_d'], 1)
+            _knn_score = torch.cat(batch_data['Y_d'], 1)
             _clf_score = torch.cat(batch_out, 1).data
             _score = torch.cat(_score, 1)
         else:
             batch_shortlist = batch_data['Y_s'].numpy()
-            _knn_score = 1-batch_data['Y_d']
+            _knn_score = batch_data['Y_d']
             _clf_score = batch_out.data
         utils.update_predicted_shortlist(
             count, batch_size, _clf_score, predicted_labels['clf'],
@@ -188,13 +188,6 @@ class ModelShortlist(ModelBase):
                 self.tracking.shortlist_time = self.tracking.shortlist_time \
                     + shorty_end_t - shorty_start_t
                 batch_train_start_time = time.time()
-                if validation_loader is not None:
-                    try:
-                        _fname = kwargs['shorty_fname']
-                    except:
-                        _fname = 'validation'
-                    validation_loader.dataset.save_shortlist(
-                        os.path.join(model_dir, _fname))
             tr_avg_loss = self._step(train_loader_shuffle, batch_div=True)
             self.tracking.mean_train_loss.append(tr_avg_loss)
             batch_train_end_time = time.time()
@@ -214,13 +207,14 @@ class ModelShortlist(ModelBase):
                     validation_loader.dataset.labels.Y, predicted_labels)
                 self.tracking.validation_time = self.tracking.validation_time \
                     + val_end_t - val_start_t
+                self.tracking.mean_val_loss.append(val_avg_loss)
                 self.tracking.val_precision.append(_acc['combined'][0])
                 self.tracking.val_ndcg.append(_acc['combined'][1])
                 self.logger.info("Model saved after epoch: {}".format(epoch))
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
                 self.logger.info(
-                    "P@1 (combined): {}, P@1 (knn): {},"
+                    "P@1 (combined): {}, P@1 (knn): {}, "
                     "P@1 (clf): {}, loss: {}, time: {} sec".format(
                         _acc['combined'][0][0]*100, _acc['knn'][0][0]*100,
                         _acc['clf'][0][0]*100, val_avg_loss,
@@ -274,7 +268,7 @@ class ModelShortlist(ModelBase):
         # No need to update embeddings
         if self.freeze_embeddings:
             self.logger.info(
-                "Computing and reusing coarse document embeddings"
+                "Computing and reusing coarse document embeddings "
                 "to save computations.")
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(
@@ -329,21 +323,11 @@ class ModelShortlist(ModelBase):
         offset = 1 if self.label_padding_index is not None else 0
         _num_labels = data_loader.dataset.num_labels + offset
         torch.set_grad_enabled(False)
-        # TODO Add flag for loading or training
-        if self.update_shortlist:
-            shortlist_utils.update(
-                data_loader, self, self.embedding_dims,
-                self.shorty, flag=2, num_graphs=self.num_clf_partitions,
-                use_coarse=use_coarse)
-        else:
-            try:
-                _fname = kwargs['shorty_fname']
-            except:
-                _fname = 'validation'
-            self.logger.info(
-                "Loading Pre-computer shortlist from file: {}".format(_fname))
-            data_loader.dataset.load_shortlist(
-                os.path.join(self.model_dir, _fname))
+        self.logger.info("Fetching shortlist.")
+        shortlist_utils.update(
+            data_loader, self, self.embedding_dims,
+            self.shorty, flag=2, num_graphs=self.num_clf_partitions,
+            use_coarse=use_coarse)
         num_instances = data_loader.dataset.num_instances
         num_batches = num_instances//data_loader.batch_size
 
@@ -498,21 +482,20 @@ class ModelReRanker(ModelShortlist):
 
     def __init__(self, params, net, criterion, optimizer, shorty):
         super().__init__(params, net, criterion, optimizer, shorty)
-        
-    def _combine_scores_one(self, out_logits, batch_dist, beta):
-        return out_logits + batch_dist
+      
+    def _combine_scores_one(self, out_logits, batch_sim, beta):
+        return out_logits + batch_sim
 
-    def _combine_scores(self, out_logits, batch_dist, beta):
+    def _combine_scores(self, out_logits, batch_sim, beta):
         if isinstance(out_logits, list):  # For distributed classifier
             out = []
-            for _, (_logits, _dist) in enumerate(zip(out_logits, batch_dist)):
+            for _, (_logits, _sim) in enumerate(zip(out_logits, batch_sim)):
                 out.append(self._combine_scores_one(
-                    _logits.data.cpu(), _dist.data, beta))
+                    _logits.data.cpu(), _sim.data, beta))
             return out
         else:
             return self._combine_scores_one(
-                out_logits.data.cpu(), batch_dist.data, beta)
-
+                out_logits.data.cpu(), batch_sim.data, beta)
 
     def _update_predicted_shortlist(self, count, batch_size, predicted_labels,
                                     batch_out, batch_data, beta, top_k=50):
@@ -565,6 +548,7 @@ class ModelReRanker(ModelShortlist):
                     validation_loader.dataset.labels.Y, predicted_labels)
                 self.tracking.validation_time = self.tracking.validation_time \
                     + val_end_t - val_start_t
+                self.tracking.mean_val_loss.append(val_avg_loss)
                 self.tracking.val_precision.append(_acc['combined'][0])
                 self.tracking.val_ndcg.append(_acc['combined'][1])
                 self.logger.info("Model saved after epoch: {}".format(epoch))
@@ -696,7 +680,7 @@ class ModelReRanker(ModelShortlist):
                 ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
-                normalize_features=True, normalize_labels=False, 
+                normalize_features=True, normalize_labels=False,
                 shortlist_method='static', **kwargs):
         
         dataset = self._create_dataset(
@@ -727,15 +711,15 @@ class ModelReRanker(ModelShortlist):
                 prediction_time,
                 prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
-    
+
     def save_checkpoint(self, model_dir, epoch):
         # Avoid purge call from base class
-        super(ModelShortlist, self).save_checkpoint(model_dir, epoch, False)
+        super(ModelShortlist, self).save_checkpoint(model_dir, epoch)
         self.purge(model_dir)
 
     def load_checkpoint(self, model_dir, fname, epoch):
         super(ModelShortlist, self).load_checkpoint(model_dir, fname, epoch)
-       
+
     def save(self, model_dir, fname):
         super(ModelShortlist, self).save(model_dir, fname)
 

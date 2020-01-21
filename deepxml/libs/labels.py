@@ -125,6 +125,10 @@ class LabelsBase(object):
     def shape(self):
         return (self.num_instances, self.num_labels)
 
+    @property
+    def data(self):
+        return self.Y
+
     def __getitem__(self, index):
         return self.Y[index] if self._valid else None
 

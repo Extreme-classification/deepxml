@@ -194,6 +194,7 @@ class DatasetSparse(DatasetBase):
             Args:
                 data_file: str: File name for the set
         """
+        self._ext_head = None
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
                          keep_invalid, normalize_features, normalize_labels,

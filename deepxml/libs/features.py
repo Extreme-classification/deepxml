@@ -107,6 +107,10 @@ class FeaturesBase(object):
         return self.X.shape[1]
 
     @property
+    def data(self):
+        return self.X
+
+    @property
     def shape(self):
         return (self.num_instances, self.num_features)
 
