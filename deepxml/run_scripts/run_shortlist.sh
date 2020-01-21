@@ -17,6 +17,7 @@ split_threhold="${14}"
 topk=${15}
 num_centroids=${16}
 use_reranker=${17}
+ns_method=${18}
 use_head_embeddings=1
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
@@ -50,6 +51,7 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --num_labels ${num_labels} \
                 --vocabulary_dims ${vocabulary_dims} \
                 --embeddings $embedding_file \
+                --ns_method ${ns_method} \
                 --embedding_dims ${embedding_dims} \
                 --num_epochs $num_epochs \
                 --tr_feat_fname trn_X_Xf.txt \

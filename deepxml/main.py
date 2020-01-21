@@ -74,7 +74,6 @@ def pp_with_shorty(model, params, shorty):
         num_workers=params.num_workers,
         label_indices=params.label_indices,
         feature_indices=params.feature_indices)
-    # shorty.save(os.path.join(params.model_dir, params.model_fname+'_ANN.pkl'))
 
 
 def train(model, params):
@@ -111,7 +110,6 @@ def train(model, params):
         validate_after=params.validate_after,
         feature_indices=params.feature_indices,
         label_indices=params.label_indices)
-    # TODO: Accomodate low rank
     model.save(params.model_dir, params.model_fname)
 
 
@@ -137,6 +135,7 @@ def get_document_embeddings(model, params, _save=True):
         fname_labels=params.ts_label_fname,
         data={'X': None, 'Y': None},
         fname_out=fname_temp,
+        return_coarse=params.use_coarse_for_shorty,
         keep_invalid=params.keep_invalid,
         batch_size=params.batch_size,
         normalize_features=params.normalize,
@@ -239,7 +238,8 @@ def inference(model, params):
         num_labels = temp['num_labels']
     utils.save_predictions(
         predicted_labels, params.result_dir,
-        label_mapping, num_samples, num_labels, prefix=params.pred_fname, get_fnames=params.get_only)
+        label_mapping, num_samples, num_labels,
+        prefix=params.pred_fname, get_fnames=params.get_only)
 
 
 def construct_network(params):
@@ -260,24 +260,27 @@ def construct_shortlist(params):
     """
     if params.shortlist_method == 'reranker':
         return None
-    
+
     if params.use_shortlist == -1:
         return None
-    if params.ann_method == 'ns':  # Negative Sampling
+
+    if params.ns_method == 'ns':  # Negative Sampling
         if params.num_clf_partitions > 1:
             raise NotImplementedError("Not tested yet!")
         else:
             shorty = negative_sampling.NegativeSampler(
                 params.num_labels, params.num_nbrs, None, False)
-    else:  # Approximate Nearest Neighbor
+    elif params.ns_method == 'kcentroid':
         if params.num_clf_partitions > 1:
             shorty = shortlist.ParallelShortlist(
                 params.ann_method, params.num_nbrs, params.M, params.efC,
                 params.efS, params.ann_threads, params.num_clf_partitions)
         else:
-            shorty = shortlist.Shortlist(
+            shorty = shortlist.ShortlistCentroids(
                 params.ann_method, params.num_nbrs, params.M,
                 params.efC, params.efS, params.ann_threads)
+    else:
+        raise NotImplementedError("Not yet implemented!")
     return shorty
 
 
@@ -288,7 +291,7 @@ def construct_model(params, net, criterion, optimizer, shorty):
         - OVA (full)
         - hnsw (shortlist)
     """
-    if params.model_method == 'ns':  # Negative Sampling
+    if params.model_method == 'ns':  # Random negative Sampling
         model = model_utils.ModelNS(
             params, net, criterion, optimizer, shorty)
     elif params.model_method == 'shortlist':  # Approximate Nearest Neighbor
@@ -319,7 +322,7 @@ def main(params):
         del embeddings
         print("Initialized embeddings!")
         criterion = torch.nn.BCEWithLogitsLoss(
-            reduction='sum' if params.use_shortlist else 'mean')
+           reduction='sum' if params.use_shortlist else 'mean')
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         optimizer = optimizer_utils.Optimizer(

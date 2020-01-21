@@ -10,6 +10,7 @@ dlr_factor=0.5
 num_labels=352072
 A=0.55
 B=1.5
+ns_method=kcentroid
 use_reranker=1
 
 lr_full=(0.005)

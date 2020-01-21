@@ -62,6 +62,13 @@ class Parameters(ParametersBase):
             type=str,
             help='Model method (full/shortlist/ns)')
         self.parser.add_argument(
+            '--ns_method',
+            dest='ns_method',
+            default='kcentroid',
+            action='store',
+            type=str,
+            help='Sample negatives using this method')
+        self.parser.add_argument(
             '--ann_method',
             dest='ann_method',
             default='hnsw',
@@ -229,13 +236,6 @@ class Parameters(ParametersBase):
             type=int,
             help='Validate after these many epochs.')
         self.parser.add_argument(
-            '--hidden_dims',
-            dest='hidden_dims',
-            default=300,
-            action='store',
-            type=int,
-            help='units in penultimate layer')
-        self.parser.add_argument(
             '--num_epochs',
             dest='num_epochs',
             default=20,
@@ -343,8 +343,8 @@ class Parameters(ParametersBase):
         )
         self.parser.add_argument(
             '--get_only',
-            nargs = '+',
+            nargs='+',
             type=str,
-            default = ['knn', 'clf', 'combined'],
+            default=['knn', 'clf', 'combined'],
             help='What do you have to output'
         )

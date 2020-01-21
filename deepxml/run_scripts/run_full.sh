@@ -17,6 +17,7 @@ split_threhold="${14}"
 topk=${15}
 num_centroids=${16}
 use_reranker=${17}
+ns_method=${18}
 use_head_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
@@ -80,6 +81,7 @@ then
                 --freeze_embeddings \
                 --efC 300 \
                 --efS 300 \
+                --ns_method ${ns_method} \
                 --num_clf_partitions 1\
                 --model_method full \
                 --num_centroids ${num_centroids} \
@@ -92,7 +94,7 @@ then
                 --use_shortlist \
                 --normalize \
                 --validate \
-                --ann_threads 12\
+                --ann_threads 24\
                 --beta 0.5\
                 ${DEFAULT_PARAMS}"
 
@@ -100,7 +102,8 @@ then
                     --model_method shortlist \
                     --num_centroids ${num_centroids} \
                     --num_nbrs 300 \
-                    --ann_threads 12 \
+                    --ns_method ${ns_method} \
+                    --ann_threads 24 \
                     --normalize \
                     --use_shortlist \
                     --batch_size 256 \
@@ -113,7 +116,8 @@ then
                         --model_method shortlist \
                         --num_centroids ${num_centroids} \
                         --num_nbrs 300 \
-                        --ann_threads 12 \
+                        --ann_threads 24 \
+                        --ns_method ${ns_method} \
                         --normalize \
                         --use_shortlist \
                         --batch_size 256 \
@@ -128,6 +132,7 @@ then
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
                     --normalize \
+                    --ns_method ${ns_method} \
                     --model_method shortlist \
                     --use_shortlist \
                     --model_fname ${MODEL_NAME}\
@@ -155,14 +160,15 @@ fi
 
 if [ $use_post -eq 1 ]
 then
-   echo "\nRetraining with shortlist.."
+   echo -e "\nRetraining with shortlist.."
   ./run_base.sh "retrain_w_shortlist" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS_post}"
 fi
+
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
 
 if [ $use_reranker -eq 1 ]
 then
-   echo "\nFetching data for reranker"
+   echo -e "\nFetching data for reranker"
    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
 fi
 
@@ -171,7 +177,7 @@ fi
 
 if [ $quantile -gt -1 ]
 then
-    echo "\nGenerating Head Embeddings"
+    echo -e "\nGenerating Head Embeddings"
     ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "export/wrd_emb.npy" $quantile $embedding_dims "${temp_model_data}/${split_threhold}"
 fi
 

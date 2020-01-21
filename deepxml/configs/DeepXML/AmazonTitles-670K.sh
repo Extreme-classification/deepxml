@@ -11,6 +11,7 @@ num_labels=670091
 A=0.6
 B=2.6
 use_reranker=1
+ns_method=kcentroid
 
 lr_full=(0.02)
 num_epochs_full=25

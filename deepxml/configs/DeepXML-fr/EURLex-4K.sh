@@ -10,7 +10,7 @@ dlr_factor=0.5
 num_labels=3993
 A=0.55
 B=1.5
-use_ensemble=0
+use_reranker=0
 
 lr_full=(0.02)
 num_epochs_full=25

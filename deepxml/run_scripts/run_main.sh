@@ -96,7 +96,7 @@ run(){
     args="$dataset $version $splitid $use_post $learning_rate $embedding_dims \
            ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
            $model_type ${temp_model_data} ${split_threshold} ${topk} ${!num_centriods} \
-           ${use_reranker}"
+           ${use_reranker} ${ns_method}"
     ./run_"${file}".sh $args
 }
 
@@ -134,29 +134,29 @@ do
             arg=$(expr $sp_idx - 1 |bc)
             type="order[$arg]"
             lr_arr="lr_${!type}[${lr_idx}]"
-            #run "${!type}" $version $arg ${!lr_arr}
+            run "${!type}" $version $arg ${!lr_arr}
         done
 
-        # if [ $use_post -eq 1 ]
-        # then
-        #     merge_split_predictions "${results_dir}" "0,1" "test_predictions_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-        #     merge_split_predictions "${results_dir}" "0,1" "test_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-        # fi
-        # echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
-        # run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
+        if [ $use_post -eq 1 ]
+        then
+            merge_split_predictions "${results_dir}" "0,1" "test_predictions_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "test_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+        fi
+        echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
+        run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
         if [ $use_reranker -eq 1 ]
         then
-            # ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_reranker_clf.npz"
-            # ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
-            # merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            # merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            #run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
+            ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_reranker_clf.npz"
+            ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
+            merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
             
-            # merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
+            merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
 
-            # mkdir -p "$models_dir/-1"
-            # cp "$results_dir/test_predictions_reranker_clf.npz" "$models_dir/-1/test_shortlist.npz"
-            # cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
+            mkdir -p "$models_dir/-1"
+            cp "$results_dir/test_predictions_reranker_clf.npz" "$models_dir/-1/test_shortlist.npz"
+            cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
             run_reranker
             run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
         fi
