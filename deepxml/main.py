@@ -109,7 +109,8 @@ def train(model, params):
         shortlist_method=params.shortlist_method,
         validate_after=params.validate_after,
         feature_indices=params.feature_indices,
-        label_indices=params.label_indices)
+        label_indices=params.label_indices,
+        use_coarse=params.use_coarse_for_shorty)
     model.save(params.model_dir, params.model_fname)
 
 

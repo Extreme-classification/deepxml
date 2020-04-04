@@ -134,6 +134,8 @@ class DenseFeatures(FeaturesBase):
 
     def __init__(self, data_dir, fname, X=None, normalize=False):
         super().__init__(data_dir, fname, X)
+        if normalize:
+            self.normalize()
 
     def _select_features(self, indices):
         self.X = self.X[:, indices]
