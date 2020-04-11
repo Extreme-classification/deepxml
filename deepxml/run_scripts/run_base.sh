@@ -82,7 +82,7 @@ evaluate () {
         # $4 pred_fname path
         # $5 A
         # $6 B
-        # $7 TYPE and BETAS
+        # $7 TYPE SAVE and BETAS
         log_eval_file="${1}/log_eval.txt"
         python -u ${work_dir}/programs/deepxml/deepxml/tools/evaluate.py "${2}" "${3}" "${4}" $5 $6 $7 | tee -a $log_eval_file
 }
@@ -121,18 +121,6 @@ gen_tail_emb ()
     python ${work_dir}/programs/deepxml/deepxml/tools/init_embedding_from_head.py $original_emb $gen_emb $feat_idx $out_emb
 }
 
-print_mat () {
-        # $1 result_dir
-        # $2 train
-        # $3 test
-        # $4 pred_fname path
-        # $5 A
-        # $6 B
-        # $7 TYPE and BETAS
-        log_eval_file="${1}/log_print.txt"
-        python -u ${work_dir}/programs/deepxml/deepxml/tools/print_score_for_beta.py "${2}" "${3}" "${4}" $5 $6 $7 | tee -a $log_eval_file
-}
-
 
 # $1 Flag
 # $2 dataset
@@ -167,17 +155,8 @@ then
     # $1 Out_file
     # $2 A
     # $3 B
-    # $4 TYPE and BETAS
+    # $4 TYPE, SAVE and BETAS
     evaluate $result_dir $data_dir'/trn_X_Y.txt' $data_dir'/tst_X_Y.txt' "${result_dir}/${1}" ${2} ${3} "${4}"
-
-elif [ "${FLAG}" == "print_mat" ]
-then
-    # $1 Out_file
-    # $2 A
-    # $3 B
-    # $4 TYPE and BETAS
-    echo "Printing Mat"
-    print_mat $result_dir $data_dir'/trn_X_Y.txt' $data_dir'/tst_X_Y.txt' "${result_dir}/${1}" ${2} ${3} "${4}"
 
 elif [ "${FLAG}" == "extract" ]
 then

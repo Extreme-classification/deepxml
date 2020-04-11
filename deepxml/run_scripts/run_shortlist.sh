@@ -1,5 +1,4 @@
 #!/bin/bash
-
 dataset=$1
 dir_version=$2
 quantile=$3
@@ -18,6 +17,7 @@ topk=${15}
 num_centroids=${16}
 use_reranker=${17}
 ns_method=${18}
+seed=${19}
 use_head_embeddings=1
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
@@ -62,6 +62,7 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --ts_label_fname tst_X_Y.txt \
                 --freeze_embeddings \
                 --top_k ${topk} \
+                --seed ${seed} \
                 --num_centroids ${num_centroids} \
                 --model_fname ${MODEL_NAME} ${extra_params} \
                 --get_only knn clf"

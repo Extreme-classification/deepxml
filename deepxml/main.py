@@ -20,9 +20,11 @@ import libs.negative_sampling as negative_sampling
 __author__ = 'KD'
 
 
-torch.manual_seed(22)
-torch.cuda.manual_seed_all(22)
-np.random.seed(22)
+def set_seed(value):
+    print("Setting the seed value: {}".format(value))
+    torch.manual_seed(value)
+    torch.cuda.manual_seed_all(value)
+    np.random.seed(value)
 
 
 def load_emeddings(params):
@@ -109,8 +111,8 @@ def train(model, params):
         shortlist_method=params.shortlist_method,
         validate_after=params.validate_after,
         feature_indices=params.feature_indices,
-        label_indices=params.label_indices,
-        use_coarse=params.use_coarse_for_shorty)
+        use_coarse=params.use_coarse_for_shorty,
+        label_indices=params.label_indices)
     model.save(params.model_dir, params.model_fname)
 
 
@@ -312,6 +314,7 @@ def main(params):
     """
         Main function
     """
+    set_seed(params.seed)
     if params.mode == 'train':
         # Use last index as padding label
         if params.num_centroids != 1:

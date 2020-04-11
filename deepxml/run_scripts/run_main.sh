@@ -3,8 +3,8 @@
 # $2 ABLATION TYPE
 # $3 DATASET
 # $4 VERSION
-# eg. ./run_main.sh 0 DeepXML EURLex-4K 0
-# eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0
+# eg. ./run_main.sh 0 DeepXML EURLex-4K 0 22
+# eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0 22
 
 export CUDA_VISIBLE_DEVICES=$1
 model_type=$2
@@ -12,6 +12,8 @@ dataset=$3
 
 source "../configs/${model_type}/${dataset}.sh"
 version=$4
+seed=$5
+save_predictions=0
 
 create_splits () {
     # $1: dataset
@@ -38,17 +40,9 @@ clean_up(){
 }
 
 run_beta(){
-    flag=$1
-    shift
-    if [ "${flag}" == "shortlist" ]
-    then
-        BETA="0.1 0.15 0.2 0.3 0.4 0.5 0.6"
-        ./run_base.sh "evaluate" $1 $2 $3 $model_type $4 $5 $6 "${7} ${BETA}"
-    else
-        BETA="-1"
-        ./run_base.sh "evaluate" $1 $2 $3 $model_type $4 $5 $6 "${7} ${BETA}"
-    fi
+    ./run_base.sh "evaluate" $1 $2 $3 $model_type $4 $5 $6 "${7} ${8} ${9}"
 }
+
 
 work_dir="$HOME/scratch/Workspace"
 data_dir="${work_dir}/data/${dataset}"
@@ -96,7 +90,7 @@ run(){
     args="$dataset $version $splitid $use_post $learning_rate $embedding_dims \
            ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
            $model_type ${temp_model_data} ${split_threshold} ${topk} ${!num_centriods} \
-           ${use_reranker} ${ns_method}"
+           ${use_reranker} ${ns_method} ${seed}"
     ./run_"${file}".sh $args
 }
 
@@ -123,9 +117,9 @@ do
         cp -r ${results_dir}/"-1"/* ${results_dir}
         if [ $use_post -eq 1 ]
         then
-            run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
+            run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
         else
-            run_beta ${!type} $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
+            run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} -1
         fi
 
     else
@@ -143,14 +137,14 @@ do
             merge_split_predictions "${results_dir}" "0,1" "test_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
         fi
         echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
-        run_beta "shortlist" $dataset $work_dir $version "test_predictions" $A $B $evaluation_type
+        run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
         if [ $use_reranker -eq 1 ]
         then
             ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_reranker_clf.npz"
             ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
             merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
             merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
+            run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
             
             merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
 
@@ -158,7 +152,7 @@ do
             cp "$results_dir/test_predictions_reranker_clf.npz" "$models_dir/-1/test_shortlist.npz"
             cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
             run_reranker
-            run_beta "shortlist" $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
+            run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
         fi
     fi
     ((version++))

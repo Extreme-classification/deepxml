@@ -1,5 +1,4 @@
 #!/bin/bash
-
 dataset=$1
 dir_version=$2
 quantile=$3
@@ -18,6 +17,7 @@ topk=${15}
 num_centroids=${16}
 use_reranker=${17}
 ns_method=${18}
+seed=${19}
 use_head_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
@@ -58,6 +58,7 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --ts_feat_fname tst_X_Xf.txt \
                 --ts_label_fname tst_X_Y.txt \
                 --top_k $topk \
+                --seed ${seed} \
                 --model_fname ${MODEL_NAME} ${extra_params} \
                 --get_only knn clf"
 

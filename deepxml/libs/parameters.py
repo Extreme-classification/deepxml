@@ -76,6 +76,13 @@ class Parameters(ParametersBase):
             type=str,
             help='Approximate nearest neighbor method')
         self.parser.add_argument(
+            '--seed',
+            dest='seed',
+            default=22,
+            action='store',
+            type=int,
+            help='seed values')
+        self.parser.add_argument(
             '--top_k',
             dest='top_k',
             default=50,

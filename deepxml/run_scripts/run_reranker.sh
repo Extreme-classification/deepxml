@@ -1,5 +1,4 @@
 #!/bin/bash
-
 dataset=$1
 dir_version=$2
 quantile=$3
@@ -15,6 +14,7 @@ MODEL_NAME="${12}"
 temp_model_data="${13}"
 split_threhold="${14}"
 topk="${15}"
+seed=${19}
 use_head_embeddings=0
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
@@ -56,6 +56,7 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --val_label_fname tst_X_Y.txt \
                 --ts_feat_fname tst_X_Xf.txt \
                 --ts_label_fname tst_X_Y.txt \
+                --seed ${seed} \
                 --label_padding_index ${num_labels} \
                 --top_k ${topk} \
                 --model_fname ${MODEL_NAME} ${extra_params} \

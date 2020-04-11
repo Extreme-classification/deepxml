@@ -279,6 +279,7 @@ class ModelShortlist(ModelBase):
                 data=data,
                 fname_features=None,
                 mode='train',
+                normalize_features=False,  # do not normalize dense features
                 shortlist_method=shortlist_method,
                 feature_type='dense',
                 keep_invalid=True)  # Invalid labels already removed
@@ -613,6 +614,7 @@ class ModelReRanker(ModelShortlist):
                 data=data,
                 fname_features=None,
                 mode='train',
+                normalize_features=False,
                 shortlist_method=shortlist_method,
                 feature_type='dense',
                 keep_invalid=True)  # Invalid labels already removed
