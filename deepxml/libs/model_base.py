@@ -487,7 +487,7 @@ class ModelBase(object):
             os.remove(os.path.join(model_dir, fname['net']))
 
     def _evaluate(self, true_labels, predicted_labels):
-        acc = xc_metrics.Metrices(true_labels)
+        acc = xc_metrics.Metrics(true_labels)
         acc = acc.eval(predicted_labels.tocsr(), 5)
         return acc
 

@@ -194,7 +194,6 @@ class DatasetSparse(DatasetBase):
             Args:
                 data_file: str: File name for the set
         """
-        self._ext_head = None
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
                          keep_invalid, normalize_features, normalize_labels,
@@ -208,36 +207,34 @@ class DatasetSparse(DatasetBase):
         self.num_clf_partitions = num_clf_partitions
         self.shortlist_in_memory = shortlist_in_memory
         self.size_shortlist = size_shortlist
-        self.multiple_cent_mapping = None
         self.shortlist_method = shortlist_method
         if self.mode == 'train':
             # Remove samples w/o any feature or label
             if self.shortlist_method != 'reranker':
                 self._remove_samples_wo_features_and_labels()
-        
+
         if not keep_invalid:
             # Remove labels w/o any positive instance
             self._process_labels(model_dir)
-            
+
         if shortlist_method == 'static':
             self.shortlist = ShortlistHandlerStatic(
                 self.num_labels, model_dir, num_clf_partitions,
                 mode, size_shortlist, num_centroids,
-                shortlist_in_memory, self.multiple_cent_mapping)
+                shortlist_in_memory)
         elif shortlist_method == 'hybrid':
             self.shortlist = ShortlistHandlerHybrid(
                 self.num_labels, model_dir, num_clf_partitions,
                 mode, size_shortlist, num_centroids,
-                shortlist_in_memory, self.multiple_cent_mapping,
-                _corruption=200)
+                shortlist_in_memory, _corruption=200)
         elif shortlist_method == 'dynamic':
             self.shortlist = ShortlistHandlerDynamic(
                 self.num_labels, shorty, model_dir, num_clf_partitions, mode,
-                size_shortlist, num_centroids, self.multiple_cent_mapping)
+                size_shortlist, num_centroids)
         elif shortlist_method == 'reranker':
             self.shortlist = ShortlistReRanker(
                 self.num_labels, model_dir, num_clf_partitions, mode,
-                size_shortlist, num_centroids, self.multiple_cent_mapping)
+                size_shortlist, num_centroids)
         else:
             raise NotImplementedError(
                 "Unknown shortlist method: {}!".format(shortlist_method))
@@ -259,74 +256,27 @@ class DatasetSparse(DatasetBase):
         """
         self.shortlist.load_shortlist(fname)
 
-    def _get_ext_head(self, freq, threshold):
-        """Get super-head labels i.e. too many positive points
-        """
-        return np.where(freq >= threshold)[0]
-
-    def _process_labels_train(self, data_obj, _ext_head_threshold):
-        """Process labels for train data
-            - Remove labels without any training instance
-            - Handle multiple centroids
-        """
-        super()._process_labels_train(data_obj)
-        data_obj['ext_head'] = None
-        data_obj['multiple_cent_mapping'] = None
-        print("Valid labels after processing: ", self.num_labels)
-        if self.num_centroids != 1:
-            freq = self.labels.frequency()
-            self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
-            self.multiple_cent_mapping = np.arange(self.num_labels)
-            for idx in self._ext_head:
-                self.multiple_cent_mapping = np.append(
-                    self.multiple_cent_mapping, [idx]*self.num_centroids)
-            data_obj['ext_head'] = self._ext_head
-            data_obj['multiple_cent_mapping'] = self.multiple_cent_mapping
-
-    def _process_labels_predict(self, data_obj):
-        """Process labels for test data
-        """
-        super()._process_labels_predict(data_obj)
-        try:
-            self._ext_head = data_obj['ext_head']
-            self.multiple_cent_mapping = data_obj['multiple_cent_mapping']
-        except KeyError:
-            self._ext_head = None
-            self.multiple_cent_mapping = None
-
-    def _process_labels_retrain_w_shortlist(self, data_obj,
-                                            _ext_head_threshold):
+    def _process_labels_retrain_w_shortlist(self, data_obj):
         """Process labels for retrain with shortlist
         Useful for training labels shortlist after OVA training
         """
         super()._process_labels_predict(data_obj)
-        if self.num_centroids != 1:
-            print("Creating multiple centroid mappings..")
-            freq = self.labels.frequency()
-            self._ext_head = self._get_ext_head(freq, _ext_head_threshold)
-            self.multiple_cent_mapping = np.arange(self.num_labels)
-            for idx in self._ext_head:
-                self.multiple_cent_mapping = np.append(
-                    self.multiple_cent_mapping, [idx]*self.num_centroids)
-            data_obj['ext_head'] = self._ext_head
-            data_obj['multiple_cent_mapping'] = self.multiple_cent_mapping
 
-    def _process_labels(self, model_dir, _ext_head_threshold=10000):
+    def _process_labels(self, model_dir):
         """
-            Process labels to handle labels without any training instance;
-            Handle multiple centroids if required
+            Process labels to handle labels without any training instance
         """
         data_obj = {}
         fname = os.path.join(
             model_dir, 'labels_params.pkl' if self._split is None else
             "labels_params_split_{}.pkl".format(self._split))
         if self.mode == 'train':
-            self._process_labels_train(data_obj, _ext_head_threshold)
+            self._process_labels_train(data_obj)
             pickle.dump(data_obj, open(fname, 'wb'))
         elif self.mode == 'retrain_w_shortlist':
             data_obj = pickle.load(open(fname, 'rb'))
             self._process_labels_retrain_w_shortlist(
-                data_obj, _ext_head_threshold)
+                data_obj)
             pickle.dump(data_obj, open(fname, 'wb'))
         else:
             data_obj = pickle.load(open(fname, 'rb'))

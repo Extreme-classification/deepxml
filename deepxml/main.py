@@ -272,16 +272,29 @@ def construct_shortlist(params):
             raise NotImplementedError("Not tested yet!")
         else:
             shorty = negative_sampling.NegativeSampler(
-                params.num_labels, params.num_nbrs, None, False)
+                num_labels=params.num_labels,
+                num_negatives=params.num_nbrs,
+                prob=None,
+                replace=False)
     elif params.ns_method == 'kcentroid':
         if params.num_clf_partitions > 1:
             shorty = shortlist.ParallelShortlist(
-                params.ann_method, params.num_nbrs, params.M, params.efC,
-                params.efS, params.ann_threads, params.num_clf_partitions)
+                method=params.ann_method,
+                num_neighbours=params.num_nbrs,
+                M=params.M,
+                efC=params.efC,
+                efS=params.efS,
+                num_threads=params.ann_threads,
+                num_graphs=params.num_clf_partitions)
         else:
             shorty = shortlist.ShortlistCentroids(
-                params.ann_method, params.num_nbrs, params.M,
-                params.efC, params.efS, params.ann_threads)
+                method=params.ann_method,
+                num_neighbours=params.num_nbrs,
+                M=params.M,
+                efC=params.efC,
+                efS=params.efS,
+                num_threads=params.ann_threads,
+                num_clusters=params.num_centroids)
     else:
         raise NotImplementedError("Not yet implemented!")
     return shorty
@@ -365,11 +378,6 @@ def main(params):
         model.optimizer = optimizer
         model.optimizer.construct(model.net)
 
-        # fname = os.path.join(
-        #   params.model_dir, 'checkpoint_net_{}.pkl'.format(
-        #   params.last_epoch))
-        # checkpoint = torch.load(open(fname, 'rb'))
-        # model.optimizer.load_state_dict(checkpoint['optimizer'])
         print("Model configuration is: ", params)
         train(model, params)
 

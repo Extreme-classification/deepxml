@@ -32,7 +32,7 @@ class Shortlist(object):
         use multiple threads to cluster
     """
 
-    def __init__(self, method, num_neighbours, M, efC, efS, num_threads=12):
+    def __init__(self, method, num_neighbours, M, efC, efS, num_threads=24):
         self.method = method
         self.num_neighbours = num_neighbours
         self.M = M
@@ -65,7 +65,7 @@ class Shortlist(object):
 
     def query(self, data, *args, **kwargs):
         indices, distances = self.index.predict(data, *args, **kwargs)
-        return indices, distances
+        return indices, 1-distances
 
     def save(self, fname):
         self.index.save(fname)
@@ -81,20 +81,26 @@ class Shortlist(object):
 
 class ShortlistCentroids(Shortlist):
     def __init__(self, method, num_neighbours, M, efC, efS,
-                 num_threads=12, space='cosine', verbose=False,
-                 num_clusters=300):
+                 num_threads=24, space='cosine', verbose=False,
+                 num_clusters=1):
         super().__init__(method, num_neighbours, M, efC, efS, num_threads)
         self.num_clusters = num_clusters
         self.space = space
+        self.padding_index = -1
+        self.mapping = None
+        self.ext_head = None
 
-    def _adjust_for_multiple_centroids(self, features, labels, label_centroids, multi_centroid_indices):
+    def _cluster_multiple_rep(self, features, labels, label_centroids,
+                              multi_centroid_indices):
         embedding_dims = features.shape[1]
         _cluster_obj = Cluster(
-            indices=multi_centroid_indices, embedding_dims=embedding_dims,
-            num_clusters=self.num_clusters, max_iter=50, n_init=2, num_threads=-1)
+            indices=multi_centroid_indices,
+            embedding_dims=embedding_dims,
+            num_clusters=self.num_clusters,
+            max_iter=50, n_init=2, num_threads=-1)
         _cluster_obj.fit(features, labels)
         label_centroids = np.vstack(
-                [label_centroids, _cluster_obj.predict()])
+            [label_centroids, _cluster_obj.predict()])
         return label_centroids
 
     def _compute_centroid(self, features, labels):
@@ -102,16 +108,74 @@ class ShortlistCentroids(Shortlist):
         freq = np.ravel(np.sum(labels, axis=0)).reshape(-1, 1)
         return label_centroids/freq
 
-    def fit(self, features, labels, multi_centroid_indices=None):
+    def process_multiple_rep(self, features, labels, label_centroids,
+                             threshold=7500):
+        freq = np.array(labels.sum(axis=0)).ravel()
+        if np.max(freq) > threshold and self.num_clusters > 1:
+            self.ext_head = np.where(freq >= threshold)[0]
+            print("Found {} super-head labels".format(len(self.ext_head)))
+            self.mapping = np.arange(label_centroids.shape[0])
+            for idx in self.ext_head:
+                self.mapping = np.append(
+                    self.mapping, [idx]*self.num_clusters)
+            return self._cluster_multiple_rep(
+                features, labels, label_centroids, self.ext_head)
+        else:
+            return label_centroids
+
+    def fit(self, features, labels, *args, **kwargs):
+        self.padding_index = labels.shape[1]
         label_centroids = self._compute_centroid(features, labels)
-        if multi_centroid_indices is not None:
-            label_centroids = self._adjust_for_multiple_centroids(
-                features, labels, label_centroids, multi_centroid_indices)
+        label_centroids = self.process_multiple_rep(
+            features, labels, label_centroids)
+        norms = np.sum(np.square(label_centroids), axis=1)
         super().fit(label_centroids)
 
     def query(self, data, *args, **kwargs):
-        indices, distances = super().query(data, *args, **kwargs)
-        return indices, 1-distances
+        indices, sim = super().query(data, *args, **kwargs)
+        return self._remap(indices, sim)
+
+    def _remap(self, indices, sims):
+        if self.mapping is None:
+            return indices, sims
+        print("Re-mapping code not optimized")
+        mapped_indices = np.full_like(indices, self.padding_index)
+        # minimum similarity for padding index
+        mapped_sims = np.full_like(sims, -1000.0)
+        for idx, (ind, sim) in enumerate(zip(indices, sims)):
+            _ind, _sim = self._remap_one(ind, sim)
+            mapped_indices[idx, :len(_ind)] = _ind
+            mapped_sims[idx, :len(_sim)] = _sim
+        return mapped_indices, mapped_sims
+
+    def _remap_one(self, indices, vals,
+                   _func=max, _limit=-1000):
+        """
+            Remap multiple centroids to original labels
+        """
+        indices = map(lambda x: self.mapping[x], indices)
+        _dict = dict({})
+        for idx, ind in enumerate(indices):
+            _dict[ind] = _func(_dict.get(ind, _limit), vals[idx])
+        indices, values = zip(*_dict.items())
+        return np.fromiter(indices, dtype=np.int64), \
+            np.fromiter(values, dtype=np.float32)
+
+    def load(self, fname):
+        temp = pickle.load(open(fname+".metadata", 'rb'))
+        self.padding_index = temp['padding_index']
+        self.mapping = temp['mapping']
+        self.ext_head = temp['ext_head']
+        super().load(fname)
+
+    def save(self, fname):
+        metadata = {
+            'padding_index': self.padding_index,
+            'mapping': self.mapping,
+            'ext_head': self.ext_head
+        }
+        pickle.dump(metadata, open(fname+".metadata", 'wb'))
+        super().save(fname)
 
 
 class ParallelShortlist(object):
@@ -156,14 +220,14 @@ class ParallelShortlist(object):
         # Parallelize with return values?
         # Data is same for everyone
         if idx != -1:  # Query from particular graph only
-            indices, distances = self._query(idx, data)
+            indices, similarities = self._query(idx, data)
         else:
-            indices, distances = [], []
+            indices, sims = [], []
             for idx in range(self.num_graphs):
-                _indices, _distances = self._query(idx, data)
+                _indices, _sims = self._query(idx, data)
                 indices.append(_indices)
-                distances.append(_distances)
-        return indices, distances
+                sims.append(_sims)
+        return indices, similarities
 
     def save(self, fname):
         pickle.dump({'num_graphs': self.num_graphs},

@@ -445,6 +445,7 @@ class ModelNS(ModelBase):
                 mode='train',
                 shortlist_method='dynamic',
                 feature_type='dense',
+                normalize_features=False,
                 keep_invalid=True)
             train_loader = self._create_data_loader(
                 train_dataset,

@@ -41,13 +41,11 @@ def update(data_loader, model, embedding_dim, shorty, flag=0,
     # Do not normalize if kmeans clustering needs to be done!
     # doc_embeddings = normalize(doc_embeddings, copy=False)
     if flag == 0:
-        shorty.fit(doc_embeddings, data_loader.dataset.labels.data,
-                   data_loader.dataset._ext_head)
+        shorty.fit(doc_embeddings, data_loader.dataset.labels.data)
         get_and_update_shortlist(doc_embeddings, shorty, data_loader)
     elif flag == 1:
         # train and don't get shortlist
-        shorty.fit(doc_embeddings, data_loader.dataset.labels.data,
-                   data_loader.dataset._ext_head)
+        shorty.fit(doc_embeddings, data_loader.dataset.labels.data)
     else:
         # get shortlist
         get_and_update_shortlist(doc_embeddings, shorty, data_loader)

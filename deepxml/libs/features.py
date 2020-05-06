@@ -177,6 +177,6 @@ class SparseFeatures(FeaturesBase):
 
     def __getitem__(self, index):
         # Treat idx:0 as Padding
-        x = list(map(lambda item: item+1, self.X[index, :].indices))
-        w = self.X[index, :].data.tolist()
+        x = self.X[index].indices + 1
+        w = self.X[index].data
         return x, w
