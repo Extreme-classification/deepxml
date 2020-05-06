@@ -36,7 +36,10 @@ class Linear(nn.Module):
         self.reset_parameters()
 
     def forward(self, input):
-        return F.linear(input.to(self.device), self.weight, self.bias.view(-1))
+        if self.bias is not None:
+            return F.linear(input.to(self.device), self.weight, self.bias.view(-1))
+        else:
+            return F.linear(input.to(self.device), self.weight)
 
     def to(self):
         """Transfer to device
@@ -56,8 +59,10 @@ class Linear(nn.Module):
         Bias is appended in the end
         """
         _wts = self.weight.detach().cpu().numpy()
-        _bias = self.bias.detach().cpu().numpy()
-        return np.hstack([_wts, _bias])
+        if self.bias is not None:
+            _bias = self.bias.detach().cpu().numpy()
+            _wts = np.hstack([_wts, _bias])
+        return _wts
 
     def __repr__(self):
         s = '{name}({input_size}, {output_size}, {device}'
@@ -87,9 +92,9 @@ class SparseLinear(Linear):
                  bias=True, device="cuda:0"):
         self.padding_idx = padding_idx
         super(SparseLinear, self).__init__(
-            input_size=input_size, 
+            input_size=input_size,
             output_size=output_size,
-            bias=bias, 
+            bias=bias,
             device=device)
         self.sparse = True  # Required for optimizer
 
@@ -146,11 +151,14 @@ class SparseLinear(Linear):
         Bias is appended in the end
         """
         _wts = self.weight.detach().cpu().numpy()
-        _bias = self.bias.detach().cpu().numpy()
         if self.padding_idx is not None:
             _wts = _wts[:-1, :]
-            _bias = _bias[:-1, :]
-        return np.hstack([_wts, _bias])
+        if (self.bias is not None):
+            _bias = self.bias.detach().cpu().numpy()
+            if self.padding_idx is not None:
+                _bias = _bias[:-1, :]
+            _wts = np.hstack([_wts, _bias])
+        return _wts
 
 
 class ParallelLinear(nn.Module):

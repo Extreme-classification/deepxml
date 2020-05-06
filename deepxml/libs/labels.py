@@ -151,9 +151,8 @@ class DenseLabels(LabelsBase):
         super().__init__(data_dir, fname, Y)
 
     def __getitem__(self, index):
-        return np.array(
-            super().__getitem__(index).todense(),
-            dtype=np.float32).reshape(self.num_labels)
+        return super().__getitem__(
+            index).toarray().flatten().astype(np.float32)
 
 
 class SparseLabels(LabelsBase):
@@ -173,6 +172,6 @@ class SparseLabels(LabelsBase):
         super().__init__(data_dir, fname, Y)
 
     def __getitem__(self, index):
-        y = self.Y[index].indices.tolist()
-        w = self.Y[index].data.tolist()
+        y = self.Y[index].indices
+        w = self.Y[index].data
         return y, w

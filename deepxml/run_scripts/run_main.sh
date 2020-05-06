@@ -144,7 +144,7 @@ do
             ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
             merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
             merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
+            ##run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
             
             merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
 
