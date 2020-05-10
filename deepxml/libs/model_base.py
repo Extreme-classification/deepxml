@@ -30,7 +30,6 @@ class ModelBase(object):
         self.learning_rate = params.learning_rate
         self.current_epoch = 0
         self.nbn_rel = params.nbn_rel
-        self.num_centroids = params.num_centroids
         self.last_saved_epoch = -1
         self.num_clf_partitions = params.num_clf_partitions
         self.model_dir = params.model_dir
@@ -66,7 +65,8 @@ class ModelBase(object):
                         normalize_labels=False, feature_type=None,
                         keep_invalid=False, feature_indices=None,
                         label_indices=None, size_shortlist=None,
-                        shortlist_method='static', shorty=None):
+                        shortlist_method='static', shorty=None,
+                        aux_mapping=None):
         """
             Create dataset as per given parameters
         """
@@ -85,13 +85,13 @@ class ModelBase(object):
             normalize_features=normalize_features,
             normalize_labels=normalize_labels,
             keep_invalid=keep_invalid,
-            num_centroids=self.num_centroids,
             feature_type=feature_type,
             num_clf_partitions=self.num_clf_partitions,
             feature_indices=feature_indices,
             label_indices=label_indices,
             shortlist_method=shortlist_method,
-            shorty=shorty)
+            shorty=shorty,
+            aux_mapping=aux_mapping)
         return _dataset
 
     def _create_data_loader(self, dataset, batch_size=128,
@@ -250,7 +250,7 @@ class ModelBase(object):
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
             normalize_labels=False, validate=False,
-            validate_after=5, **kwargs):
+            validate_after=5, aux_mapping=None, **kwargs):
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
@@ -262,7 +262,8 @@ class ModelBase(object):
             normalize_features=normalize_features,
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
-            label_indices=label_indices)
+            label_indices=label_indices,
+            aux_mapping=aux_mapping)
         train_loader = self._create_data_loader(
             train_dataset,
             batch_size=batch_size,
@@ -307,7 +308,8 @@ class ModelBase(object):
                 normalize_features=normalize_features,
                 normalize_labels=normalize_labels,
                 feature_indices=feature_indices,
-                label_indices=label_indices)
+                label_indices=label_indices,
+                aux_mapping=aux_mapping)
             validation_loader = self._create_data_loader(
                 validation_dataset,
                 batch_size=batch_size,
@@ -328,7 +330,8 @@ class ModelBase(object):
                 ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
-                normalize_features=True, normalize_labels=False, **kwargs):
+                normalize_features=True, normalize_labels=False,
+                aux_mapping=None, **kwargs):
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=ts_feat_fname,
@@ -339,7 +342,8 @@ class ModelBase(object):
             normalize_features=normalize_features,
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
-            label_indices=label_indices)
+            label_indices=label_indices,
+            aux_mapping=aux_mapping)
         data_loader = self._create_data_loader(
             dataset=dataset,
             batch_size=batch_size,

@@ -9,6 +9,7 @@ from .dataset_base import DatasetBase
 import xclib.data.data_utils as data_utils
 from .dist_utils import Partitioner
 import operator
+from xclib.utils.sparse import _map
 from .lookup import Table, PartitionedTable
 from .shortlist_handler import ShortlistHandlerStatic, ShortlistHandlerDynamic
 from .shortlist_handler import ShortlistHandlerHybrid, ShortlistReRanker
@@ -17,22 +18,22 @@ from .shortlist_handler import ShortlistHandlerHybrid, ShortlistReRanker
 def construct_dataset(data_dir, fname_features, fname_labels, data=None,
                       model_dir='', mode='train', size_shortlist=-1,
                       normalize_features=True, normalize_labels=True,
-                      keep_invalid=False, num_centroids=1,
-                      feature_type='sparse', num_clf_partitions=1,
-                      feature_indices=None, label_indices=None,
-                      shortlist_method='static', shorty=None):
+                      keep_invalid=False, feature_type='sparse',
+                      num_clf_partitions=1, feature_indices=None,
+                      label_indices=None, shortlist_method='static',
+                      shorty=None, aux_mapping=None):
     if size_shortlist == -1:
         return DatasetDense(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
-            normalize_labels, num_clf_partitions, feature_type)
+            normalize_labels, num_clf_partitions, feature_type, aux_mapping)
     else:
         #  Construct dataset for sparse data
         return DatasetSparse(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
             normalize_labels, num_clf_partitions, size_shortlist,
-            num_centroids, feature_type, shortlist_method, shorty)
+            feature_type, shortlist_method, shorty, aux_mapping)
 
 
 class DatasetDense(DatasetBase):
@@ -71,6 +72,9 @@ class DatasetDense(DatasetBase):
         sparse or dense features
     label_type: str, optional, default='dense'
         sparse (i.e. with shortlist) or dense (OVA) labels
+    aux_mapping: str, optional, default=None
+        Re-map clusters as per given mapping
+        e.g. when labels are clustered
     """
 
     def __init__(self, data_dir, fname_features, fname_labels, data=None,
@@ -78,13 +82,7 @@ class DatasetDense(DatasetBase):
                  label_indices=None, keep_invalid=False,
                  normalize_features=True, normalize_labels=False,
                  num_clf_partitions=1, feature_type='sparse',
-                 label_type='dense'):
-        """
-            Expects 'libsvm' format with header
-            Args:
-                data_file: str: File name for the set
-            Can Support datasets w/o any label
-        """
+                 aux_mapping=None, label_type='dense'):
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
                          keep_invalid, normalize_features, normalize_labels,
@@ -94,7 +92,7 @@ class DatasetDense(DatasetBase):
             self._remove_samples_wo_features_and_labels()
         if not keep_invalid and self.labels._valid:
             # Remove labels w/o any positive instance
-            self._process_labels(model_dir)
+            self._process_labels(model_dir, aux_mapping)
         self.feature_type = feature_type
         self.partitioner = None
         self.num_clf_partitions = 1
@@ -118,6 +116,19 @@ class DatasetDense(DatasetBase):
 
         # TODO Take care of this select and padding index
         self.label_padding_index = self.num_labels
+
+    def _process_labels(self, model_dir, aux_mapping):
+        super()._process_labels(model_dir)
+        # if auxiliary task is clustered labels
+        if aux_mapping is not None:
+            print("Aux mapping is not None, mapping labels")
+            aux_mapping = np.loadtxt(aux_mapping, dtype=np.int)
+            _num_labels = len(np.unique(aux_mapping))
+            mapping = dict(zip(range(len(aux_mapping)), aux_mapping))
+            self.labels.Y = _map(self.labels.Y, mapping=mapping,
+                                 shape=(self.num_instances, _num_labels),
+                                 axis=1)
+            self.labels.binarize()
 
     def __getitem__(self, index):
         """
@@ -168,8 +179,6 @@ class DatasetSparse(DatasetBase):
     num_clf_partitions: int, optional, default=1
         Partition classifier in multiple
         Support for multiple GPUs
-    num_centroids: int, optional, default=1
-        Multiple representations for labels
     feature_type: str, optional, default='sparse'
         sparse or dense features
     shortlist_type: str, optional, default='static'
@@ -178,6 +187,9 @@ class DatasetSparse(DatasetBase):
         Useful in-case of dynamic shortlist
     label_type: str, optional, default='dense'
         sparse (i.e. with shortlist) or dense (OVA) labels
+    aux_mapping: str, optional, default=None
+        Re-map clusters as per given mapping
+        e.g. when labels are clustered
     shortlist_in_memory: boolean, optional, default=True
         Keep shortlist in memory if True otherwise keep on disk
     """
@@ -186,14 +198,10 @@ class DatasetSparse(DatasetBase):
                  model_dir='', mode='train', feature_indices=None,
                  label_indices=None, keep_invalid=False,
                  normalize_features=True, normalize_labels=False,
-                 num_clf_partitions=1, size_shortlist=-1, num_centroids=1,
+                 num_clf_partitions=1, size_shortlist=-1,
                  feature_type='sparse', shortlist_method='static',
-                 shorty=None, label_type='sparse', shortlist_in_memory=True):
-        """
-            Expects 'libsvm' format with header
-            Args:
-                data_file: str: File name for the set
-        """
+                 shorty=None, aux_mapping=None, label_type='sparse',
+                 shortlist_in_memory=True):
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
                          keep_invalid, normalize_features, normalize_labels,
@@ -203,7 +211,6 @@ class DatasetSparse(DatasetBase):
                 "No support for shortlist w/o any label, \
                     consider using dense dataset.")
         self.feature_type = feature_type
-        self.num_centroids = num_centroids
         self.num_clf_partitions = num_clf_partitions
         self.shortlist_in_memory = shortlist_in_memory
         self.size_shortlist = size_shortlist
@@ -215,26 +222,25 @@ class DatasetSparse(DatasetBase):
 
         if not keep_invalid:
             # Remove labels w/o any positive instance
-            self._process_labels(model_dir)
+            self._process_labels(model_dir, aux_mapping)
 
         if shortlist_method == 'static':
             self.shortlist = ShortlistHandlerStatic(
                 self.num_labels, model_dir, num_clf_partitions,
-                mode, size_shortlist, num_centroids,
-                shortlist_in_memory)
+                mode, size_shortlist, shortlist_in_memory)
         elif shortlist_method == 'hybrid':
             self.shortlist = ShortlistHandlerHybrid(
                 self.num_labels, model_dir, num_clf_partitions,
-                mode, size_shortlist, num_centroids,
-                shortlist_in_memory, _corruption=200)
+                mode, size_shortlist, shortlist_in_memory,
+                _corruption=75)
         elif shortlist_method == 'dynamic':
             self.shortlist = ShortlistHandlerDynamic(
-                self.num_labels, shorty, model_dir, num_clf_partitions, mode,
-                size_shortlist, num_centroids)
+                self.num_labels, shorty, model_dir, num_clf_partitions,
+                mode, size_shortlist)
         elif shortlist_method == 'reranker':
             self.shortlist = ShortlistReRanker(
                 self.num_labels, model_dir, num_clf_partitions, mode,
-                size_shortlist, num_centroids)
+                size_shortlist)
         else:
             raise NotImplementedError(
                 "Unknown shortlist method: {}!".format(shortlist_method))
@@ -262,7 +268,7 @@ class DatasetSparse(DatasetBase):
         """
         super()._process_labels_predict(data_obj)
 
-    def _process_labels(self, model_dir):
+    def _process_labels(self, model_dir, aux_mapping=None):
         """
             Process labels to handle labels without any training instance
         """

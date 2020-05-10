@@ -75,7 +75,8 @@ def pp_with_shorty(model, params, shorty):
         batch_size=params.batch_size,
         num_workers=params.num_workers,
         label_indices=params.label_indices,
-        feature_indices=params.feature_indices)
+        feature_indices=params.feature_indices,
+        aux_mapping=params.aux_mapping)
 
 
 def train(model, params):
@@ -112,7 +113,8 @@ def train(model, params):
         validate_after=params.validate_after,
         feature_indices=params.feature_indices,
         use_coarse=params.use_coarse_for_shorty,
-        label_indices=params.label_indices)
+        label_indices=params.label_indices,
+        aux_mapping=params.aux_mapping)
     model.save(params.model_dir, params.model_fname)
 
 
@@ -180,22 +182,8 @@ def get_classifier_wts(model, params):
     params: NameSpace
         parameter of the model
     """
-    _split = None
-    if params.label_indices is not None:
-        _split = params.label_indices.split("_")[-1].split(".")[0]
-
-    fname = os.path.join(params.model_dir,
-                         'labels_params.pkl' if _split is None
-                         else "labels_params_split_{}.pkl".format(_split))
-    temp = pickle.load(open(fname, 'rb'))
-    label_mapping = temp['valid_labels']
-    num_labels = temp['num_labels']
-    clf_wts = np.zeros((num_labels, params.embedding_dims+1),
-                       dtype=np.float32)  # +1 for bias
-    clf_wts[:, -1] = -1e5  # -inf bias for untrained classifiers
-    clf_wts[label_mapping, :] = model.net.get_clf_weights()
-    fname = os.path.join(params.result_dir, 'export/classifier.npy')
-    np.save(fname, clf_wts)
+    print("TODO: Classifier weights.")
+    exit()
 
 
 def inference(model, params):
@@ -222,12 +210,14 @@ def inference(model, params):
         feature_indices=params.feature_indices,
         label_indices=params.label_indices,
         use_coarse=params.use_coarse_for_shorty,
-        shortlist_method=params.shortlist_method
+        shortlist_method=params.shortlist_method,
+        aux_mapping=params.aux_mapping
     )
     # Real number of labels
     num_samples, num_labels = utils.get_header(
         os.path.join(params.data_dir, params.dataset, params.ts_label_fname))
     label_mapping = None
+    print("TODO: predictions with aux mapping.")
     if not params.keep_invalid:
         _split = None
         if params.label_indices is not None:
@@ -330,12 +320,11 @@ def main(params):
     set_seed(params.seed)
     if params.mode == 'train':
         # Use last index as padding label
-        if params.num_centroids != 1:
+        if params.use_shortlist:
             params.label_padding_index = params.num_labels
         net = construct_network(params)
         embeddings = load_emeddings(params)
-        net.initialize_embeddings(
-            utils.append_padding_embedding(embeddings))
+        net.initialize_embeddings(embeddings)
         del embeddings
         print("Initialized embeddings!")
         criterion = torch.nn.BCEWithLogitsLoss(
@@ -348,8 +337,7 @@ def main(params):
             momentum=params.momentum,
             freeze_embeddings=params.freeze_embeddings,
             weight_decay=params.weight_decay)
-        params.lrs = {"embeddings": params.learning_rate*1.0}
-        optimizer.construct(net, params)
+        optimizer.construct(net)
         shorty = construct_shortlist(params)
         model = construct_model(params, net, criterion, optimizer, shorty)
         model.transfer_to_devices()

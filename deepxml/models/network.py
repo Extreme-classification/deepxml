@@ -127,7 +127,7 @@ class DeepXMLBase(nn.Module):
         word_embeddings: numpy array
             existing embeddings
         """
-        self.embeddings.weight.data.copy_(torch.from_numpy(word_embeddings))
+        self.embeddings.from_pretrained(word_embeddings)
 
     def initialize_classifier(self, clf_weights):
         """Initialize classifier from existing weights

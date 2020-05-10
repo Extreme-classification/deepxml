@@ -27,6 +27,13 @@ class Parameters(ParametersBase):
             type=float,
             help='Learning rate')
         self.parser.add_argument(
+            '--aux_mapping',
+            dest='aux_mapping',
+            default=None,
+            action='store',
+            type=str,
+            help='aux_mapping')
+        self.parser.add_argument(
             '--dlr_step',
             dest='dlr_step',
             default=7,

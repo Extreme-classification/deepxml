@@ -22,17 +22,14 @@ class ModelFull(ModelBase):
         super().__init__(params, net, criterion, optimizer)
         self.feature_indices = params.feature_indices
 
-    def _pp_with_shortlist(self, shorty, data_dir, dataset,
-                           model_dir, model_fname,
-                           tr_feat_fname='trn_X_Xf.txt',
+    def _pp_with_shortlist(self, shorty, data_dir, dataset, model_dir,
+                           model_fname, tr_feat_fname='trn_X_Xf.txt',
                            tr_label_fname='trn_X_Y.txt',
-                           normalize_features=True,
-                           normalize_labels=False,
-                           data={'X': None, 'Y': None},
-                           keep_invalid=False,
-                           feature_indices=None,
-                           label_indices=None, batch_size=128,
-                           num_workers=4, data_loader=None):
+                           normalize_features=True, normalize_labels=False,
+                           data={'X': None, 'Y': None}, keep_invalid=False,
+                           feature_indices=None, label_indices=None,
+                           batch_size=128, num_workers=4, data_loader=None,
+                           aux_mapping=None):
         """Post-process with shortlist.
         Train an ANN without touching the classifier
         """
@@ -47,7 +44,8 @@ class ModelFull(ModelBase):
                 normalize_features=normalize_features,
                 normalize_labels=normalize_labels,
                 feature_indices=feature_indices,
-                label_indices=label_indices)
+                label_indices=label_indices,
+                aux_mapping=aux_mapping)
 
             data_loader = self._create_data_loader(
                 dataset,
@@ -77,7 +75,6 @@ class ModelShortlist(ModelBase):
     def __init__(self, params, net, criterion, optimizer, shorty):
         super().__init__(params, net, criterion, optimizer)
         self.shorty = shorty
-        self.num_centroids = params.num_centroids
         self.feature_indices = params.feature_indices
         self.label_indices = params.label_indices
         self.retrain_hnsw_after = params.retrain_hnsw_after
@@ -230,7 +227,7 @@ class ModelShortlist(ModelBase):
                 self.tracking.validation_time,
                 self.tracking.shortlist_time,
                 self.net.model_size+os.path.getsize(
-                    os.path.join(model_dir, 
+                    os.path.join(model_dir,
                     'checkpoint_ANN_{}.pkl'.format(epoch+1)))/math.pow(2, 20)))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
@@ -240,7 +237,7 @@ class ModelShortlist(ModelBase):
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
             normalize_labels=False, validate=False, beta=0.2, use_coarse=True,
-            shortlist_method='static', validate_after=5):
+            shortlist_method='static', validate_after=5, aux_mapping=None):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(
@@ -254,7 +251,8 @@ class ModelShortlist(ModelBase):
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
             shortlist_method=shortlist_method,
-            label_indices=label_indices)
+            label_indices=label_indices,
+            aux_mapping=aux_mapping)
         train_loader = self._create_data_loader(
             train_dataset,
             batch_size=batch_size,
@@ -307,7 +305,8 @@ class ModelShortlist(ModelBase):
                 normalize_features=normalize_features,
                 normalize_labels=normalize_labels,
                 feature_indices=feature_indices,
-                label_indices=label_indices)
+                label_indices=label_indices,
+                aux_mapping=aux_mapping)
             validation_loader = self._create_data_loader(
                 validation_dataset,
                 batch_size=batch_size,
@@ -390,7 +389,6 @@ class ModelNS(ModelBase):
     def __init__(self, params, net, criterion, optimizer, shorty):
         super().__init__(params, net, criterion, optimizer)
         self.shorty = shorty
-        self.num_centroids = params.num_centroids
         self.feature_indices = params.feature_indices
         self.label_indices = params.label_indices
 
@@ -557,7 +555,7 @@ class ModelReRanker(ModelShortlist):
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
                 self.logger.info(
-                    "P@1 (combined): {}, P@1 (knn): {},"
+                    "P@1 (combined): {}, P@1 (knn): {}, "
                     "P@1 (clf): {}, loss: {}, time: {} sec".format(
                         _acc['combined'][0][0]*100, _acc['knn'][0][0]*100,
                         _acc['clf'][0][0]*100, val_avg_loss,
@@ -581,7 +579,7 @@ class ModelReRanker(ModelShortlist):
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
             normalize_labels=False, validate=False, beta=0.2, use_coarse=True,
-            shortlist_method='static', validate_after=5):
+            shortlist_method='static', validate_after=5, aux_mapping=None):
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(
@@ -595,7 +593,8 @@ class ModelReRanker(ModelShortlist):
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
             shortlist_method=shortlist_method,
-            label_indices=label_indices)
+            label_indices=label_indices,
+            aux_mapping=aux_mapping)
         train_loader = self._create_data_loader(
             train_dataset,
             batch_size=batch_size,
@@ -639,7 +638,8 @@ class ModelReRanker(ModelShortlist):
                 shortlist_method=shortlist_method,
                 normalize_labels=normalize_labels,
                 feature_indices=feature_indices,
-                label_indices=label_indices)
+                label_indices=label_indices,
+                aux_mapping=aux_mapping)
             validation_loader = self._create_data_loader(
                 validation_dataset,
                 batch_size=batch_size,
@@ -678,14 +678,14 @@ class ModelReRanker(ModelShortlist):
                         batch_idx, num_batches))
             del batch_data
         return self._strip_padding_label(predicted_labels, num_labels)
-    
+
     def predict(self, data_dir, dataset, data=None,
                 ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
-                shortlist_method='static', **kwargs):
-        
+                shortlist_method='static', aux_mapping=None, **kwargs):
+
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=ts_feat_fname,
@@ -697,7 +697,8 @@ class ModelReRanker(ModelShortlist):
             normalize_features=normalize_features,
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
-            label_indices=label_indices)
+            label_indices=label_indices,
+            aux_mapping=aux_mapping)
         data_loader = self._create_data_loader(
             dataset=dataset,
             batch_size=batch_size,
