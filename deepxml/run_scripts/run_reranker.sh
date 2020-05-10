@@ -12,27 +12,19 @@ batch_size=${10}
 work_dir=${11}
 MODEL_NAME="${12}"
 temp_model_data="${13}"
-split_threhold="${14}"
-topk="${15}"
-seed=${19}
+topk="${14}"
+seed=${18}
 use_head_embeddings=0
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
 docs=("trn" "tst")
 
 
-stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/split_stats.json'))['${quantile}'])"` 
+# Do not remove invalid labels
+stats=`python3 -c "import sys, json; print(json.load(open('${temp_model_data}/aux_stats.json'))['org'])"`
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[1]}
-
-extra_params="--feature_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/features_split_${quantile}.txt \
-                --label_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt"
-
-if [ $quantile -eq -1 ]
-then
-    extra_params=""    
-fi
 
 if [ $use_head_embeddings -eq 1 ]
 then
@@ -75,7 +67,7 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --lr $learning_rate \
             --efS 300 \
             --normalize \
-            --num_nbrs $((2 * topk)) \
+            --num_nbrs $topk \
             --efC 300 \
             --M 100 \
             --use_shortlist \
@@ -89,7 +81,7 @@ PREDICT_PARAMS_TEST="--efS 300 \
                     --model_method reranker \
                     --shortlist_method reranker \
                     --num_centroids 1 \
-                    --num_nbrs $((2 * topk)) \
+                    --num_nbrs $topk \
                     --ann_threads 12 \
                     --normalize \
                     --keep_invalid \

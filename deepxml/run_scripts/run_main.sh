@@ -15,14 +15,13 @@ version=$4
 seed=$5
 save_predictions=0
 
-create_splits () {
-    # $1: dataset
-    # $2: train_feat_fname
-    # $3: train_label_fname
-    # $4: split thresholds
+gen_aux_mapping () {
+    # $1: train_feat_fname
+    # $2: train_label_fname
+    # $3: method
+    # $4: threshold
     # $5: temp model data directory
-    echo "Creating data splits.."
-    python3 ../tools/run_split_data.py $1 $2 $3 $4 $5
+    python3 ../tools/run_aux_mapping.py $1 $2 $3 $4 $5
 }
 
 merge_split_predictions () {
@@ -44,9 +43,9 @@ run_beta(){
 }
 
 
-work_dir="$HOME/scratch/Workspace"
+work_dir="${HOME}/scratch/Workspace"
 data_dir="${work_dir}/data/${dataset}"
-temp_model_data="deep-xml_data"
+temp_model_data="${data_dir}/deepxml.aux/${aux_threshold}"
 
 train_file="${data_dir}/train.txt"
 test_file="${data_dir}/test.txt"
@@ -54,7 +53,7 @@ trn_ft_file="${data_dir}/trn_X_Xf.txt"
 trn_lbl_file="${data_dir}/trn_X_Y.txt"
 tst_ft_file="${data_dir}/tst_X_Xf.txt"
 tst_lbl_file="${data_dir}/tst_X_Y.txt"
-mkdir -p "${data_dir}/${temp_model_data}"
+mkdir -p "${temp_model_data}"
 
 convert() {
     perl ../tools/convert_format.pl $1 $2 $3
@@ -66,96 +65,63 @@ if [ ! -e "${trn_ft_file}" ]; then
 fi
 
 
-
-if [ ! -e "${data_dir}/$temp_model_data/$split_threshold/split_stats.json" ]
+if [ ! -e "${temp_model_data}/aux_stats.json" ]
 then
-    mkdir -p "${data_dir}/$temp_model_data/$split_threshold"
-    echo "Splitting data."
-    create_splits $data_dir "${trn_ft_file}" "${trn_lbl_file}" $split_threshold $temp_model_data
+    gen_aux_mapping "${trn_ft_file}" "${trn_lbl_file}" $aux_method $aux_threshold $temp_model_data
 else
-    echo "Using old" "${data_dir}/$temp_model_data/$split_threshold/split_stats.json"
+    echo "Using old" "${temp_model_data}/aux_stats.json"
 fi
 
 run(){
-    file=$1
+    type=$1
     version=$2
-    splitid=$3
-    learning_rate=$4
-    num_epochs=$5
-    dlr_step="dlr_step_${file}"
-    num_epochs="num_epochs_${file}"
-    batch_size="batch_size_${file}"
-    num_centriods="num_centroids_${file}"
-    echo "Training $file split.. with lr:" ${learning_rate} "epochs:" ${!num_epochs}  
-    args="$dataset $version $splitid $use_post $learning_rate $embedding_dims \
+    quantile=$3
+    extra_params="${4}"
+    learning_rate="lr_${quantile}"
+    num_epochs="num_epochs_${quantile}"
+    dlr_step="dlr_step_${quantile}"
+    num_epochs="num_epochs_${quantile}"
+    batch_size="batch_size_${quantile}"
+    num_centriods="num_centroids_${quantile}"
+    echo "Training ${quantile} .. with lr:" ${!learning_rate} "epochs:" ${!num_epochs}  
+    ./run_"${type}".sh $dataset $version $quantile $use_post ${!learning_rate} $embedding_dims \
            ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
-           $model_type ${temp_model_data} ${split_threshold} ${topk} ${!num_centriods} \
-           ${use_reranker} ${ns_method} ${seed}"
-    ./run_"${file}".sh $args
+           $model_type ${temp_model_data} ${topk} ${!num_centriods} \
+           ${use_reranker} ${ns_method} ${seed} "${extra_params}"
 }
 
-run_reranker(){
-    lr_arr="lr_reranker"
-    run "reranker" $version "-1" ${!lr_arr}
-    mv "$results_dir/test_predictions_reranker_clf.npz" "$results_dir/test_predictions_reranker_level=0_clf.npz"
-    mv "$results_dir/train_predictions_clf.npz" "$results_dir/train_predictions_reranker_level=0_clf.npz"
-    cp "$results_dir/-1/test_predictions_reranker_combined.npz" "$results_dir/test_predictions_reranker_clf.npz"
-}
+results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
+models_dir="${work_dir}/models/$model_type/${dataset}/v_${version}"
 
-for((lr_idx=0; lr_idx<$learning_rates; lr_idx++));
-do 
+if [ $num_splits -eq 0 ]; then
+    echo "Not using any split to train."
+    #run "full" $version "org" ""
+    run "shortlist" $version "org" ""
 
-    results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
-    models_dir="${work_dir}/models/$model_type/${dataset}/v_${version}"
-
-    if [ $num_splits -eq 0 ]; then
-        echo "Not using any split to train."
-        type="order[$num_splits]"
-        epc_arr="num_epochs_${!type}"
-        lr_arr="lr_${!type}[${lr_idx}]"
-        run "${!type}" $version "-1" ${!lr_arr} ${!epc_arr}
-        cp -r ${results_dir}/"-1"/* ${results_dir}
-        if [ $use_post -eq 1 ]
-        then
-            run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
-        else
-            run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} -1
-        fi
-
-    else
-        for((sp_idx=$num_splits; sp_idx>0; sp_idx--));
-        do
-            arg=$(expr $sp_idx - 1 |bc)
-            type="order[$arg]"
-            lr_arr="lr_${!type}[${lr_idx}]"
-            run "${!type}" $version $arg ${!lr_arr}
-        done
-
-        if [ $use_post -eq 1 ]
-        then
-            merge_split_predictions "${results_dir}" "0,1" "test_predictions_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            merge_split_predictions "${results_dir}" "0,1" "test_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-        fi
-        echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
+    cp -r ${results_dir}/org/* ${results_dir}
+    if [ $use_post -eq 1 ] || [] ; then
         run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
-        if [ $use_reranker -eq 1 ]
-        then
-            ln -s "$results_dir/1/test_predictions_clf.npz" "$results_dir/1/test_predictions_reranker_clf.npz"
-            ln -s "$results_dir/1/test_predictions_knn.npz" "$results_dir/1/test_predictions_reranker_knn.npz"
-            merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            merge_split_predictions "${results_dir}" "0,1" "test_predictions_reranker_knn.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-            ##run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type
-            
-            merge_split_predictions "${results_dir}" "0,1" "train_predictions_clf.npz" "${data_dir}/$temp_model_data/$split_threshold" $num_labels
-
-            mkdir -p "$models_dir/-1"
-            cp "$results_dir/test_predictions_reranker_clf.npz" "$models_dir/-1/test_shortlist.npz"
-            cp "$results_dir/train_predictions_clf.npz" "$models_dir/-1/train_shortlist.npz"
-            run_reranker
-            run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
-        fi
+    else
+        run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} -1
     fi
-    ((version++))
-done       
+
+else
+    run "full" $version "aux" "--aux_mapping ${temp_model_data}/aux_mapping.txt"
+    run "shortlist" $version "org" ""
+    ln -s "$results_dir/org/test_predictions_clf.npz" "$results_dir/test_predictions_clf.npz"
+    ln -s "$results_dir/org/test_predictions_knn.npz" "$results_dir/test_predictions_knn.npz"
+    echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
+    run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
+    if [ $use_reranker -eq 1 ]
+    then            
+        mkdir -p "$models_dir/rnk"
+        ln -s "$results_dir/org/test_predictions_reranker_clf.npz" "$models_dir/rnk/test_shortlist.npz"
+        ln -s "$results_dir/org/train_predictions_clf.npz" "$models_dir/rnk/train_shortlist.npz"
+        run "reranker" $version "rnk" ""
+        ln -s "$results_dir/org/test_predictions_reranker_knn.npz" "$results_dir/test_predictions_reranker_knn.npz"
+        ln -s "$results_dir/rnk/test_predictions_reranker_combined.npz" "$results_dir/test_predictions_reranker_clf.npz"
+        run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
+    fi
+fi
 
 #clean_up

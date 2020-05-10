@@ -12,12 +12,12 @@ batch_size=${10}
 work_dir=${11}
 MODEL_NAME="${12}"
 temp_model_data="${13}"
-split_threhold="${14}"
-topk=${15}
-num_centroids=${16}
-use_reranker=${17}
-ns_method=${18}
-seed=${19}
+topk=${14}
+num_centroids=${15}
+use_reranker=${16}
+ns_method=${17}
+seed=${18}
+extra_params="${19}"
 use_head_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
@@ -31,18 +31,10 @@ else
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
 fi
 
-stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/split_stats.json'))['${quantile}'])"` 
+stats=`python3 -c "import sys, json; print(json.load(open('${temp_model_data}/aux_stats.json'))['${quantile}'])"` 
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[2]}
-
-extra_params="--feature_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/features_split_${quantile}.txt \
-                --label_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt"
-
-if [ $quantile -eq -1 ]
-then
-    extra_params=""    
-fi
 
 DEFAULT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
@@ -158,6 +150,14 @@ else
 fi
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
+./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
+
+if [ "${quantile}" == "aux" ]
+then
+    echo -e "\nGenerating embeddings from auxiliary task."
+    cp "${work_dir}/results/DeepXML/${dataset}/v_${dir_version}/aux/export/wrd_emb.npy" "${work_dir}/models/DeepXML/${dataset}/v_${dir_version}/wrd_emb.npy"
+    exit
+fi
 
 if [ $use_post -eq 1 ]
 then
@@ -167,23 +167,7 @@ fi
 
 ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
 
-if [ $use_reranker -eq 1 ]
-then
-   echo -e "\nFetching data for reranker"
-   ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train}"
-fi
-
-
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
-
-if [ $quantile -gt -1 ]
-then
-    echo -e "\nGenerating Head Embeddings"
-    ./run_base.sh "gen_tail_emb" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "export/wrd_emb.npy" $quantile $embedding_dims "${temp_model_data}/${split_threhold}"
-fi
-
 for doc in ${docs[*]} 
 do 
     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$quantile "export/${doc}_emb.npy" "${doc}"
 done

@@ -12,35 +12,27 @@ batch_size=${10}
 work_dir=${11}
 MODEL_NAME="${12}"
 temp_model_data="${13}"
-split_threhold="${14}"
-topk=${15}
-num_centroids=${16}
-use_reranker=${17}
-ns_method=${18}
-seed=${19}
+topk=${14}
+num_centroids=${15}
+use_reranker=${16}
+ns_method=${17}
+seed=${18}
+extra_params="${19}"
 use_head_embeddings=1
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
 docs=("trn" "tst")
 
 
-stats=`python3 -c "import sys, json; print(json.load(open('${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/split_stats.json'))['${quantile}'])"` 
+stats=`python3 -c "import sys, json; print(json.load(open('${temp_model_data}/aux_stats.json'))['${quantile}'])"` 
 stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[2]}
-echo $num_labels $(wc -l ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt)
-extra_params="--feature_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/features_split_${quantile}.txt \
-                --label_indices ${data_dir}/${dataset}/${temp_model_data}/${split_threhold}/labels_split_${quantile}.txt"
-
-if [ $quantile -eq -1 ]
-then
-    extra_params=""    
-fi
 
 if [ $use_head_embeddings -eq 1 ]
 then
     echo "Using Head Embeddings"
-    embedding_file="head_embeddings_${embedding_dims}d.npy"
+    embedding_file="wrd_emb.npy"
     extra_params="${extra_params} --use_head_embeddings"
 else
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
@@ -77,9 +69,9 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --model_method shortlist \
             --shortlist_method hybrid \
             --lr ${learning_rate} \
-            --efS 300 \
+            --efS 500 \
             --normalize \
-            --num_nbrs 300 \
+            --num_nbrs 500 \
             --efC 300 \
             --M 100 \
             --use_shortlist \
@@ -91,8 +83,8 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --retrain_hnsw_after $(($num_epochs+3)) \
             ${DEFAULT_PARAMS}"
 
-PREDICT_PARAMS="--efS 300 \
-                --num_nbrs 300 \
+PREDICT_PARAMS="--efS 500 \
+                --num_nbrs 500 \
                 --model_method shortlist \
                 --ann_threads 12\
                 --normalize \
@@ -105,8 +97,8 @@ PREDICT_PARAMS="--efS 300 \
                 ${DEFAULT_PARAMS}"
 
 
-PREDICT_PARAMS_train="--efS 300 \
-                    --num_nbrs 300 \
+PREDICT_PARAMS_train="--efS 500 \
+                    --num_nbrs 500 \
                     --model_method shortlist \
                     --ann_threads 12\
                     --normalize \

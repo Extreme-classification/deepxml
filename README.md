@@ -1,14 +1,15 @@
-# deepxml
+# DeepXML
 Implementation of DeepXML
 
 # TODO
 
+- [ ] Predictions with aux mapping
+- [ ] Classifier weights with aux mapping
 - [x] Integrate parameters
 - [x] Refactor data loader
 - [x] Refactor dataset/collate_fn
 - [x] Refactor model
 - [x] Refactor network
-- [ ] Integrate low rank factorization
 - [x] Remove logit
 - [x] Post-processing
 - [x] Integrate xclib
@@ -19,7 +20,7 @@ Implementation of DeepXML
 - [ ] Remove dependence on labels in prediction?/get_document_embeddings?
 - [x] Shortlist with NS
 - [x] Support for dynamic shortlist
-- [ ] Support for on-disk document embeddings (i.e. a large number of documents)
+- [x] Support for on-disk document embeddings (i.e. a large number of documents)
 - [ ] Support for novel documents i.e. w/o saving shortlist
 
 
