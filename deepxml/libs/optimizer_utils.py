@@ -5,6 +5,8 @@ import torch.nn as nn
 class Optimizer(object):
     """Wrapper for pytorch optimizer class to handle
     mixture of sparse and dense parameters
+    - Infers sparse/dense from 'sparse' attribute
+
     Parameters
     ----------
     opt_type: str, optional, default='Adam'
@@ -62,17 +64,16 @@ class Optimizer(object):
         else:
             raise NotImplementedError("Unknown optimizer!")
 
-    def construct(self, model, args):
+    def construct(self, model):
         """
         Get optimizer.
         Args:
             model: torch.nn.Module: network
             params: : parameters
-            freeze_embeddings: bool: specify if embeddings need to be trained
         Returns:
             optimizer: torch.optim: optimizer as per given specifications
         """
-        model_params, is_sparse = self.get_params(model, args)
+        model_params, is_sparse = self.get_params(model)
         for _, item in enumerate(zip(model_params, is_sparse)):
             if item[0]:
                 self.optimizer.append(self._get_opt(
@@ -110,7 +111,7 @@ class Optimizer(object):
                 out_states.append(None)
         return out_states
 
-    def get_params(self, net, args):
+    def get_params(self, net):
         self.net_params = {}
         self.net_params['sparse'] = list()
         self.net_params['dense'] = list()
@@ -118,20 +119,17 @@ class Optimizer(object):
         if self.freeze_embeddings:
             for params in net.embeddings.parameters():
                 params.requires_grad = False
-        lrs = args.lrs
-        module_dict = net.__dict__['_modules']
 
-        for key, val in module_dict.items():
+        for key, val in net.__dict__['_modules'].items():
             is_sparse = val.__dict__.get("sparse", False)
-            lr = lrs.get(key, args.learning_rate)
             for params in val.parameters():
                 if params.requires_grad:
                     if is_sparse:
                         self.net_params['sparse'].append(
-                            {"params": params, "lr": lr})
+                            {"params": params})
                     else:
                         self.net_params['dense'].append(
-                            {"params": params, "lr": lr})
+                            {"params": params})
                 else:
                     self.net_params['no_grad'].append(params)
         return [self.net_params['sparse'], self.net_params['dense']], \
