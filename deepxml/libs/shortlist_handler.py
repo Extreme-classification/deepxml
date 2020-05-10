@@ -86,7 +86,7 @@ class ShortlistHandlerBase(object):
             label_shortlist = np.full(
                 self.size_shortlist, fill_value=self.label_padding_index,
                 dtype=np.int64)
-            # TODO: Adjust dist as well
+            # TODO: Adjust sim as well
             # If number of positives are more than shortlist_size
             if len(pos_labels) > self.size_shortlist:
                 _ind = np.random.choice(
@@ -95,9 +95,7 @@ class ShortlistHandlerBase(object):
                 pos_labels = np.fromiter(
                     operator.itemgetter(*_ind)(pos_labels),
                     dtype=np.int64)
-            neg_labels = np.fromiter(
-                filter(lambda x: x not in set(pos_labels), shortlist),
-                dtype=np.int64)
+            neg_labels = shortlist[~np.isin(shortlist, pos_labels)]
             labels_mask[:len(pos_labels)] = 1.0
             #  #TODO not used during training; not perfect values
             sim_mask[:len(pos_labels)] = 1.0
@@ -110,10 +108,7 @@ class ShortlistHandlerBase(object):
                 self.size_shortlist, fill_value=self.label_padding_index,
                 dtype=np.int64)
             label_shortlist[:len(shortlist)] = shortlist
-            pos_labels = set(pos_labels)
-            for idx, item in enumerate(shortlist):
-                if item in pos_labels:    
-                    labels_mask[idx] = 1
+            labels_mask[np.isin(shortlist, pos_labels)] = 1.0
             sim_mask = np.zeros(self.size_shortlist, dtype=np.float32)
             sim_mask[:len(shortlist)] = sim
         return label_shortlist, labels_mask, sim_mask
@@ -314,8 +309,7 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
                          mode, size_shortlist, label_mapping)
         self.in_memory = in_memory
         self._create_shortlist()
-        # Some labels will be repeated, so keep it low
-        self.shortlist_dynamic = NegativeSampler(num_labels, size_shortlist)
+        self.shortlist_dynamic = NegativeSampler(num_labels, _corruption)
         self.size_shortlist = size_shortlist+_corruption  # Both
 
     def query(self, index):

@@ -54,26 +54,19 @@ class CustomEmbedding(torch.nn.Module):
         Returns:
             out: torch.Tensor: embedding for each sample (batch_size, embedding_dims)
         """
-        out = []
         batch_size = features.size()[0]
-        local_batch_size = 32
-        for batch_idx in range(0, batch_size, local_batch_size):
-            begin_idx = batch_idx
-            end_idx = min(batch_idx+local_batch_size, batch_size)
-            _input = features[begin_idx:end_idx, :]
-            _weight = weights[begin_idx:end_idx, :].unsqueeze(2)
-            temp = F.embedding(
-                _input, self.weight,
-                self.padding_idx, self.max_norm, self.norm_type,
-                self.scale_grad_by_freq, self.sparse)
-            temp = temp * _weight
-            temp = torch.sum(temp, dim=1)
-            if _div:
-                temp = temp/torch.sum(_weight, dim=1)
-            out.append(temp)
-
-        out = torch.cat(out, dim=0)
+        out = F.embedding(
+            features, self.weight,
+            self.padding_idx, self.max_norm, self.norm_type,
+            self.scale_grad_by_freq, self.sparse)
+        out = torch.sum(out * weights.unsqueeze(2), dim=1)
+        if _div:
+            out = out/torch.sum(weight, dim=1)
         return out
+
+    def from_pretrained(self, embeddings):
+        # first index is treated as padding index
+        self.weight.data[1:, :] = torch.from_numpy(embeddings)
 
     def get_weights(self):
         return self.weight.detach().cpu().numpy()[1:, :]

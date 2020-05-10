@@ -28,8 +28,11 @@ def compute_label_embeddings(doc_embeddings, data_loader, num_graphs):
             _l_indices = data_loader.dataset.shortlist.get_partition_indices(
                 idx)
             # TODO: See if there is some better way to handle this
-            out.append(utils.get_label_embeddings(
-                doc_embeddings, data_loader.dataset.labels.data[:, _l_indices]))
+            out.append(
+                utils.get_label_embeddings(
+                    doc_embeddings,
+                    data_loader.dataset.labels.data[:, _l_indices])
+                )
         return out
 
 
