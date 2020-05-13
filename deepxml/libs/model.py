@@ -84,6 +84,25 @@ class ModelShortlist(ModelBase):
         return beta*torch.sigmoid(out_logits) \
             + (1-beta)*torch.sigmoid(batch_sim)
 
+    def _compute_loss_one(self, _pred, _true, _mask):
+        # Compute loss for one classifier
+        _true = _true.to(_pred.get_device())
+        if _mask is not None:
+            _mask = _mask.to(_true.get_device())
+        return self.criterion(_pred, _true, _mask).to(self.devices[-1])
+
+    def _compute_loss(self, out_ans, batch_data, weightage=1.0):
+        # Support loss for parallel classifier as well
+        if self.num_clf_partitions > 1:
+            out = []
+            temp = zip(out_ans, batch_data['Y'], batch_data['Y_mask'])
+            for _, _out in enumerate(temp):
+                out.append(self._compute_loss_one(*_out))
+            return torch.stack(out).mean()
+        else:
+            return self._compute_loss_one(
+                out_ans, batch_data['Y'], batch_data['Y_mask'])
+
     def _combine_scores(self, out_logits, batch_sim, beta):
         if isinstance(out_logits, list):  # For distributed classifier
             out = []

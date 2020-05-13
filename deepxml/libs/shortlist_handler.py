@@ -126,25 +126,27 @@ class ShortlistHandlerBase(object):
         pos_labels = self.partitioner.split_indices(pos_labels)
         if self.shortlist.data_init:  # Shortlist is initialized
             _shortlist, _sim = self.query(index)
-            shortlist, labels_mask, sim, rev_map = [], [], [], []
+            shortlist, target, sim, mask, rev_map = [], [], [], [], []
             # Get shortlist for each classifier
             for idx in range(self.num_clf_partitions):
-                __shortlist, __labels_mask, __sim = self._adjust_shortlist(
+                __shortlist, __target, __sim, __mask = self._adjust_shortlist(
                     pos_labels[idx],
                     _shortlist[idx],
                     _sim[idx])
                 shortlist.append(__shortlist)
-                labels_mask.append(__labels_mask)
+                target.append(__target)
                 sim.append(__sim)
-                rev_map += self.partitioner.map_to_original(__shortlist, idx)
+                mask.append(__mask)
+                rev_map.append(
+                    self.partitioner.map_to_original(__shortlist, idx))
+            rev_map = np.concatenate(rev_map)
         else:  # Shortlist is un-initialized
-            shortlist, labels_mask, sim = [], [], []
-            for idx in range(self.num_clf_partitions):
-                shortlist.append([0]*self.size_shortlist)
-                labels_mask.append([0]*self.size_shortlist)
-                sim.append([0]*self.size_shortlist)
-            rev_map = [0]*self.size_shortlist*self.num_clf_partitions  # Dummy
-        return shortlist, labels_mask, sim, rev_map
+            shortlist = [np.zeros(self.size_shortlist)]*self.num_clf_partitions
+            target = [np.zeros(self.size_shortlist)]*self.num_clf_partitions
+            sim = [np.zeros(self.size_shortlist)]*self.num_clf_partitions
+            mask = [np.zeros(self.size_shortlist)]*self.num_clf_partitions
+            rev_map = np.zeros(self.size_shortlist*self.num_clf_partitions)
+        return shortlist, target, sim, mask, rev_map
 
     def get_shortlist(self, index, pos_labels=None):
         """

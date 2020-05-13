@@ -59,7 +59,7 @@ class Partitioner(object):
         return mapping_to_original, mapping_to_partition
 
     def _map(self, fun, array):
-        return list(map(fun, array))
+        return np.fromiter(map(fun, array), dtype=array.dtype)
 
     def map_to_original(self, array, idx=None):
         return self._map(self.mapping_to_original[idx].get, array)
