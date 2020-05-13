@@ -104,17 +104,17 @@ class ModelShortlist(ModelBase):
 
     def _update_predicted_shortlist(self, count, batch_size, predicted_labels,
                                     batch_out, batch_data, beta, top_k=50):
-        _score = self._combine_scores(batch_out, batch_data['Y_d'], beta)
+        _score = self._combine_scores(batch_out, batch_data['Y_sim'], beta)
         # IF rev mapping exist; case of distributed classifier
-        if 'Y_m' in batch_data:
-            batch_shortlist = batch_data['Y_m'].numpy()
+        if 'Y_map' in batch_data:
+            batch_shortlist = batch_data['Y_map'].numpy()
             # Send this as merged?
-            _knn_score = torch.cat(batch_data['Y_d'], 1)
+            _knn_score = torch.cat(batch_data['Y_sim'], 1)
             _clf_score = torch.cat(batch_out, 1).data
             _score = torch.cat(_score, 1)
         else:
             batch_shortlist = batch_data['Y_s'].numpy()
-            _knn_score = batch_data['Y_d']
+            _knn_score = batch_data['Y_sim']
             _clf_score = batch_out.data
         utils.update_predicted_shortlist(
             count, batch_size, _clf_score, predicted_labels['clf'],
@@ -497,17 +497,17 @@ class ModelReRanker(ModelShortlist):
 
     def _update_predicted_shortlist(self, count, batch_size, predicted_labels,
                                     batch_out, batch_data, beta, top_k=50):
-        _score = self._combine_scores(batch_out, batch_data['Y_d'], beta)
+        _score = self._combine_scores(batch_out, batch_data['Y_sim'], beta)
         # IF rev mapping exist; case of distributed classifier
-        if 'Y_m' in batch_data:
-            batch_shortlist = batch_data['Y_m'].numpy()
+        if 'Y_map' in batch_data:
+            batch_shortlist = batch_data['Y_map'].numpy()
             # Send this as merged?
-            _knn_score = torch.cat(batch_data['Y_d'], 1)
+            _knn_score = torch.cat(batch_data['Y_sim'], 1)
             _clf_score = torch.cat(batch_out, 1).data
             _score = torch.cat(_score, 1)
         else:
             batch_shortlist = batch_data['Y_s'].numpy()
-            _knn_score = batch_data['Y_d']
+            _knn_score = batch_data['Y_sim']
             _clf_score = batch_out.data
         utils.update_predicted_shortlist(
             count, batch_size, _clf_score, predicted_labels['clf'],
