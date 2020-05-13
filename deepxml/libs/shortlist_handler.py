@@ -32,12 +32,13 @@ class ShortlistHandlerBase(object):
     """
 
     def __init__(self, num_labels, shortlist, model_dir='',
-                 num_clf_partitions=1, mode='train',
-                 size_shortlist=-1, label_mapping=None):
+                 num_clf_partitions=1, mode='train', size_shortlist=-1,
+                 label_mapping=None, max_pos=10):
         self.model_dir = model_dir
         self.num_clf_partitions = num_clf_partitions
         self.size_shortlist = size_shortlist
         self.mode = mode
+        self.max_pos = max_pos
         self.num_labels = num_labels
         self.label_mapping = label_mapping
         # self._create_shortlist(shortlist)
@@ -74,55 +75,51 @@ class ShortlistHandlerBase(object):
                 self.partitioner.load(os.path.join(
                     self.model_dir, 'partitionar.pkl'))
 
-    def _adjust_shortlist(self, pos_labels, shortlist, sim, min_nneg=100):
+    def _adjust_shortlist(self, pos_labels, shortlist, sim):
         """
             Adjust shortlist for a instance
             Training: Add positive labels to the shortlist
             Inference: Return shortlist with label mask
         """
         if self.mode == 'train':
-            labels_mask = np.zeros(self.size_shortlist, dtype=np.float32)
-            sim_mask = np.zeros(self.size_shortlist, dtype=np.float32)
-            label_shortlist = np.full(
+            _target = np.zeros(self.size_shortlist, dtype=np.float32)
+            _sim = np.zeros(self.size_shortlist, dtype=np.float32)
+            _shortlist = np.full(
                 self.size_shortlist, fill_value=self.label_padding_index,
                 dtype=np.int64)
             # TODO: Adjust sim as well
-            # If number of positives are more than shortlist_size
-            if len(pos_labels) > self.size_shortlist:
-                _ind = np.random.choice(
-                    len(pos_labels), size=self.size_shortlist-min_nneg,
-                    replace=False)
-                pos_labels = np.fromiter(
-                    operator.itemgetter(*_ind)(pos_labels),
-                    dtype=np.int64)
+            if len(pos_labels) > self.max_pos:
+                pos_labels = np.random.choice(
+                    pos_labels, size=self.max_pos, replace=False)
             neg_labels = shortlist[~np.isin(shortlist, pos_labels)]
-            labels_mask[:len(pos_labels)] = 1.0
+            _target[:len(pos_labels)] = 1.0
             #  #TODO not used during training; not perfect values
-            sim_mask[:len(pos_labels)] = 1.0
-            _shortlist = np.concatenate([pos_labels, neg_labels])
-            temp = min(len(_shortlist), self.size_shortlist)
-            label_shortlist[:temp] = _shortlist[:temp]
+            _sim[:len(pos_labels)] = 1.0
+            _short = np.concatenate([pos_labels, neg_labels])
+            temp = min(len(_short), self.size_shortlist)
+            _shortlist[:temp] = _short[:temp]
         else:
-            labels_mask = np.zeros(self.size_shortlist, dtype=np.float32)
-            label_shortlist = np.full(
+            _target = np.zeros(self.size_shortlist, dtype=np.float32)
+            _shortlist = np.full(
                 self.size_shortlist, fill_value=self.label_padding_index,
                 dtype=np.int64)
-            label_shortlist[:len(shortlist)] = shortlist
-            labels_mask[np.isin(shortlist, pos_labels)] = 1.0
-            sim_mask = np.zeros(self.size_shortlist, dtype=np.float32)
-            sim_mask[:len(shortlist)] = sim
-        return label_shortlist, labels_mask, sim_mask
+            _shortlist[:len(shortlist)] = shortlist
+            _target[np.isin(shortlist, pos_labels)] = 1.0
+            _sim = np.zeros(self.size_shortlist, dtype=np.float32)
+            _sim[:len(shortlist)] = sim
+        return _shortlist, _target, _sim
 
     def _get_sl_one(self, index, pos_labels):
         if self.shortlist.data_init:
             shortlist, sim = self.query(index)
-            shortlist, labels_mask, sim = self._adjust_shortlist(
+            shortlist, target, sim = self._adjust_shortlist(
                 pos_labels, shortlist, sim)
         else:
             shortlist = np.zeros(self.size_shortlist, dtype=np.int64)
-            labels_mask = np.zeros(self.size_shortlist, dtype=np.float32)
+            target = np.zeros(self.size_shortlist, dtype=np.float32)
             sim = np.zeros(self.size_shortlist, dtype=np.float32)
-        return shortlist, labels_mask, sim
+        mask = shortlist != self.label_padding_index
+        return shortlist, target, sim, mask
 
     def _get_sl_partitioned(self, index, pos_labels):
         # Partition labels

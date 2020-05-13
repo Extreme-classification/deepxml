@@ -488,7 +488,7 @@ class ModelBase(object):
             fname = self.tracking.saved_checkpoints.pop(0)
             self.logger.info(
                 "Purging network checkpoint: {}".format(fname['net']))
-            os.remove(os.path.join(model_dir, fname['net']))
+            self.net.purge(os.path.join(model_dir, fname['net']))
 
     def _evaluate(self, true_labels, predicted_labels):
         acc = xc_metrics.Metrics(true_labels)

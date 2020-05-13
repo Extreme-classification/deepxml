@@ -15,6 +15,7 @@ import libs.model as model_utils
 import libs.optimizer_utils as optimizer_utils
 import libs.parameters as parameters
 import libs.negative_sampling as negative_sampling
+import libs.loss as loss
 
 
 __author__ = 'KD'
@@ -285,9 +286,30 @@ def construct_shortlist(params):
                 efS=params.efS,
                 num_threads=params.ann_threads,
                 num_clusters=params.num_centroids)
+    elif params.ns_method == 'ensemble':
+        if params.num_clf_partitions > 1:
+            NotImplementedError("Not yet implemented!")
+        else:
+            shorty = shortlist.ShortlistEnsemble(
+                method=params.ann_method,
+                num_neighbours=params.num_nbrs,
+                M={'knn': params.M//2, 'kcentroid': params.M},
+                efC={'knn': params.efC//6, 'kcentroid': params.efC},
+                efS={'knn': params.efS//4, 'kcentroid': params.efS},
+                num_threads=params.ann_threads,
+                num_clusters=params.num_centroids)
     else:
         raise NotImplementedError("Not yet implemented!")
     return shorty
+
+
+def construct_loss(params, pos_weight=None):
+    _reduction = 'sum' if params.use_shortlist else 'mean'
+    # pad index is for OVA training and not shortlist
+    # pass mask for shortlist
+    _pad_ind = None if params.use_shortlist else params.label_padding_index
+    return loss.BCEWithLogitsLoss(
+        reduction=_reduction, pad_ind=_pad_ind, pos_weight=pos_weight)
 
 
 def construct_model(params, net, criterion, optimizer, shorty):
@@ -327,8 +349,7 @@ def main(params):
         net.initialize_embeddings(embeddings)
         del embeddings
         print("Initialized embeddings!")
-        criterion = torch.nn.BCEWithLogitsLoss(
-           reduction='sum' if params.use_shortlist else 'mean')
+        criterion = construct_loss(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
         optimizer = optimizer_utils.Optimizer(
@@ -354,8 +375,7 @@ def main(params):
             learning_rate=params.learning_rate,
             momentum=params.momentum,
             freeze_embeddings=params.freeze_embeddings)
-        criterion = torch.nn.BCEWithLogitsLoss(
-            size_average=False if params.use_shortlist else True)
+        criterion = construct_loss(params)
         shorty = construct_shortlist(params)
         model = construct_model(params, net, criterion, optimizer, shorty)
 

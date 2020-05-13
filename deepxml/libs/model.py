@@ -226,9 +226,7 @@ class ModelShortlist(ModelBase):
                 self.tracking.train_time,
                 self.tracking.validation_time,
                 self.tracking.shortlist_time,
-                self.net.model_size+os.path.getsize(
-                    os.path.join(model_dir,
-                    'checkpoint_ANN_{}.pkl'.format(epoch+1)))/math.pow(2, 20)))
+                self.net.model_size+self.shorty.model_size))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
             num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
@@ -362,22 +360,22 @@ class ModelShortlist(ModelBase):
 
     def load_checkpoint(self, model_dir, fname, epoch):
         super().load_checkpoint(model_dir, fname, epoch)
-        fname = os.path.join(model_dir, 'checkpoint_ANN_{}.pkl'.format(epoch))
+        fname = os.path.join(model_dir, 'checkpoint_ANN_{}'.format(epoch))
         self.shorty.load(fname)
 
     def save(self, model_dir, fname):
         super().save(model_dir, fname)
-        self.shorty.save(os.path.join(model_dir, fname+'_ANN.pkl'))
+        self.shorty.save(os.path.join(model_dir, fname+'_ANN'))
 
     def load(self, model_dir, fname):
         super().load(model_dir, fname)
-        self.shorty.load(os.path.join(model_dir, fname+'_ANN.pkl'))
+        self.shorty.load(os.path.join(model_dir, fname+'_ANN'))
 
     def purge(self, model_dir):
         if len(self.tracking.saved_checkpoints) \
                 > self.tracking.checkpoint_history:
             fname = self.tracking.saved_checkpoints[0]['ANN']
-            os.remove(os.path.join(model_dir, fname))
+            self.shorty.purge(fname)  # let the class handle the deletion
         super().purge(model_dir)
 
 
