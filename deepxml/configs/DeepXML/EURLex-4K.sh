@@ -5,7 +5,6 @@ num_splits=2
 aux_threshold=1024
 topk=50
 embedding_dims=300
-learning_rates=1
 dlr_factor=0.5
 num_labels=3993
 A=0.55

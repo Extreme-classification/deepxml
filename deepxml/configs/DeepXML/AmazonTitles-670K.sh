@@ -5,7 +5,6 @@ num_splits=2
 aux_threshold=65536
 topk=100
 embedding_dims=300
-learning_rates=1
 dlr_factor=0.5
 num_labels=670091
 A=0.6
@@ -32,7 +31,7 @@ lr_rnk=(0.002)
 num_epochs_rnk=15
 num_centroids_rnk=1
 batch_size_rnk=255
-dlr_step_rnk=8
+dlr_step_rnk=10
 
 
 order=("shortlist" "full")

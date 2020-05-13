@@ -117,6 +117,7 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --use_shortlist \
                 --model_method shortlist \
                 --normalize \
+                --ns_method ${ns_method} \
                 --model_fname ${MODEL_NAME} \
                 --batch_size 512 ${extra_params}"
 
@@ -130,11 +131,9 @@ then
     ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train} --get_only clf"
 fi
 
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
 
 for doc in ${docs[*]}
 do 
     ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS}  --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
-    # ./run_base.sh "postprocess" $dataset $work_dir $dir_version/$version "export/${doc}_emb.npy" "${doc}"
 done
 
