@@ -115,7 +115,7 @@ else
     if [ $use_reranker -eq 1 ]
     then            
         mkdir -p "$models_dir/rnk"
-        cp "$results_dir/org/test_predictions_reranker_clf.npz" "$models_dir/rnk/test_shortlist.npz"
+        cp "$results_dir/org/test_predictions_clf.npz" "$models_dir/rnk/test_shortlist.npz"
         cp "$results_dir/org/train_predictions_clf.npz" "$models_dir/rnk/train_shortlist.npz"
         run "reranker" $version "rnk" ""
         cp "$results_dir/org/test_predictions_reranker_knn.npz" "$results_dir/test_predictions_reranker_knn.npz"

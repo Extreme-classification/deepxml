@@ -127,7 +127,6 @@ EXTRACT_PARAMS="--dataset ${dataset} \
 if [ $use_reranker -eq 1 ]
 then
     echo -e "\nFetching data for reranker"
-    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --pred_fname test_predictions_reranker"
     ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train} --get_only clf"
 fi
 
