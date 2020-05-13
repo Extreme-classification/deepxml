@@ -130,17 +130,16 @@ class DeepXMLBase(nn.Module):
         """
         self.embeddings.from_pretrained(word_embeddings)
 
-    def initialize_classifier(self, weights, bias=None):
+    def initialize_classifier(self, clf_weights):
         """Initialize classifier from existing weights
         Parameters:
         -----------
-        weights: numpy.ndarray
-            (num_labels, repr_dims) last dimension is bias
-        bias: numpy.ndarray or None, optional (default=None)
+        clf_weights: numpy.ndarray
+            (num_labels, repr_dims+1) last dimension is bias
         """
-        self.classifier.weight.data.copy_(torch.from_numpy(weights))
-        if bias is not None:
-            self.classifier.bias.data.copy_(torch.from_numpy(bias).view(-1, 1))
+        self.classifier.weight.data.copy_(torch.from_numpy(clf_weights[:, -1]))
+        self.classifier.bias.data.copy_(
+            torch.from_numpy(clf_weights[:, -1]).view(-1, 1))
 
     def get_clf_weights(self):
         """Get classifier weights

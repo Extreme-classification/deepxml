@@ -126,8 +126,7 @@ def collate_fn_sparse_sl(batch, num_partitions):
             get_iterator(get_iterator(z, 2), idx), dtype=torch.FloatTensor)
             for idx in range(num_partitions)]
         batch_data['Y_mask'] = [collate_dense(
-            get_iterator(get_iterator(z, 3), idx),
-            dtype=torch.torch.BoolTensor)
+            get_iterator(get_iterator(z, 3), idx), dtype=torch.FloatTensor)
             for idx in range(num_partitions)]
         batch_data['Y_map'] = collate_dense(
             get_iterator(z, 4), dtype=torch.LongTensor)
@@ -139,7 +138,7 @@ def collate_fn_sparse_sl(batch, num_partitions):
         batch_data['Y_sim'] = collate_dense(
             get_iterator(z, 2), dtype=torch.FloatTensor)
         batch_data['Y_mask'] = collate_dense(
-            get_iterator(z, 3), dtype=torch.BoolTensor)
+            get_iterator(z, 3), dtype=torch.FloatTensor)
     return batch_data
 
 
@@ -165,8 +164,7 @@ def collate_fn_dense_sl(batch, num_partitions):
             get_iterator(get_iterator(z, 2), idx), dtype=torch.FloatTensor)
             for idx in range(num_partitions)]
         batch_data['Y_mask'] = [collate_dense(
-            get_iterator(get_iterator(z, 3), idx),
-            dtype=torch.torch.BoolTensor)
+            get_iterator(get_iterator(z, 3), idx), dtype=torch.FloatTensor)
             for idx in range(num_partitions)]
         batch_data['Y_map'] = collate_dense(
             get_iterator(z, 4), dtype=torch.LongTensor)
@@ -178,7 +176,7 @@ def collate_fn_dense_sl(batch, num_partitions):
         batch_data['Y_sim'] = collate_dense(
             get_iterator(z, 2), dtype=torch.FloatTensor)
         batch_data['Y_mask'] = collate_dense(
-            get_iterator(z, 3), dtype=torch.BoolTensor)
+            get_iterator(z, 3), dtype=torch.FloatTensor)
     return batch_data
 
 

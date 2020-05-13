@@ -115,10 +115,10 @@ else
     if [ $use_reranker -eq 1 ]
     then            
         mkdir -p "$models_dir/rnk"
-        cp "$results_dir/org/test_predictions_clf.npz" "$models_dir/rnk/test_shortlist.npz"
+        cp "$results_dir/org/test_predictions_reranker_clf.npz" "$models_dir/rnk/test_shortlist.npz"
         cp "$results_dir/org/train_predictions_clf.npz" "$models_dir/rnk/train_shortlist.npz"
         run "reranker" $version "rnk" ""
-        cp "$results_dir/org/test_predictions_reranker_knn.npz" "$results_dir/test_predictions_reranker_knn.npz"
+        ln -s "$results_dir/test_predictions_knn.npz" "$results_dir/test_predictions_reranker_knn.npz"
         cp "$results_dir/rnk/test_predictions_reranker_combined.npz" "$results_dir/test_predictions_reranker_clf.npz"
         run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
     fi
