@@ -240,9 +240,9 @@ def construct_network(params):
     """Construct DeepXML network
     """
     if params.use_shortlist:
-        return network.DeepXMLt(params)
+        return network.DeepXMLs(params)
     else:
-        return network.DeepXMLh(params)
+        return network.DeepXMLf(params)
 
 
 def construct_shortlist(params):
@@ -292,7 +292,10 @@ def construct_shortlist(params):
         else:
             shorty = shortlist.ShortlistEnsemble(
                 method=params.ann_method,
-                num_neighbours=params.num_nbrs,
+                num_neighbours={
+                    'kcentroid': params.efS,
+                    'knn': params.efS*3//4,
+                    'ens': params.num_nbrs},
                 M={'knn': params.M//2, 'kcentroid': params.M},
                 efC={'knn': params.efC//6, 'kcentroid': params.efC},
                 efS={'knn': params.efS//4, 'kcentroid': params.efS},

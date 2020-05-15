@@ -33,7 +33,7 @@ class ShortlistHandlerBase(object):
 
     def __init__(self, num_labels, shortlist, model_dir='',
                  num_clf_partitions=1, mode='train', size_shortlist=-1,
-                 label_mapping=None, max_pos=10):
+                 label_mapping=None, max_pos=20):
         self.model_dir = model_dir
         self.num_clf_partitions = num_clf_partitions
         self.size_shortlist = size_shortlist
@@ -308,7 +308,7 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
                          mode, size_shortlist, label_mapping)
         self.in_memory = in_memory
         self._create_shortlist()
-        self.shortlist_dynamic = NegativeSampler(num_labels, _corruption)
+        self.shortlist_dynamic = NegativeSampler(num_labels, _corruption+20)
         self.size_shortlist = size_shortlist+_corruption  # Both
 
     def query(self, index):

@@ -20,7 +20,7 @@ def pad_and_collate(x, pad_val=0, dtype=torch.FloatTensor):
     dtype: datatype, optional (default=torch.FloatTensor)
         tensor should be of this type
     """
-    return pad_sequence(list(map(lambda z: torch.from_numpy(z), x)),
+    return pad_sequence([torch.from_numpy(z) for z in x],
                         batch_first=True, padding_value=pad_val).type(dtype)
 
 
@@ -36,8 +36,7 @@ def collate_dense(x, dtype=torch.FloatTensor):
     dtype: datatype, optional (default=torch.FloatTensor)
         features should be of this type
     """
-    return torch.stack(list(
-            map(lambda z: torch.from_numpy(z), x)), 0).type(dtype)
+    return torch.stack([torch.from_numpy(z) for z in x], 0).type(dtype)
 
 
 def collate_sparse(x, pad_val=0.0, has_weight=False, dtype=torch.FloatTensor):
@@ -108,9 +107,9 @@ def collate_fn_sparse_sl(batch, num_partitions):
         For sparse features
     """
     _is_partitioned = True if num_partitions > 1 else False
-    batch_data = {}
+    batch_data = {'batch_size': len(batch), 'X_ind': None}
     batch_data['batch_size'] = len(batch)
-    batch_data['X'], batch_data['X_w'] = collate_sparse(
+    batch_data['X_ind'], batch_data['X'] = collate_sparse(
         get_iterator(batch, 0), pad_val=[0, 0.0], has_weight=True,
         dtype=[torch.LongTensor, torch.FloatTensor])
 
@@ -126,7 +125,7 @@ def collate_fn_sparse_sl(batch, num_partitions):
             get_iterator(get_iterator(z, 2), idx), dtype=torch.FloatTensor)
             for idx in range(num_partitions)]
         batch_data['Y_mask'] = [collate_dense(
-            get_iterator(get_iterator(z, 3), idx), dtype=torch.FloatTensor)
+            get_iterator(get_iterator(z, 3), idx), dtype=torch.BoolTensor)
             for idx in range(num_partitions)]
         batch_data['Y_map'] = collate_dense(
             get_iterator(z, 4), dtype=torch.LongTensor)
@@ -138,7 +137,7 @@ def collate_fn_sparse_sl(batch, num_partitions):
         batch_data['Y_sim'] = collate_dense(
             get_iterator(z, 2), dtype=torch.FloatTensor)
         batch_data['Y_mask'] = collate_dense(
-            get_iterator(z, 3), dtype=torch.FloatTensor)
+            get_iterator(z, 3), dtype=torch.BoolTensor)
     return batch_data
 
 
@@ -148,8 +147,7 @@ def collate_fn_dense_sl(batch, num_partitions):
         For dense features
     """
     _is_partitioned = True if num_partitions > 1 else False
-    batch_data = {}
-    batch_data['batch_size'] = len(batch)
+    batch_data = {'batch_size': len(batch), 'X_ind': None}
     batch_data['X'] = collate_dense(get_iterator(batch, 0))
 
     z = list(get_iterator(batch, 1))
@@ -164,7 +162,7 @@ def collate_fn_dense_sl(batch, num_partitions):
             get_iterator(get_iterator(z, 2), idx), dtype=torch.FloatTensor)
             for idx in range(num_partitions)]
         batch_data['Y_mask'] = [collate_dense(
-            get_iterator(get_iterator(z, 3), idx), dtype=torch.FloatTensor)
+            get_iterator(get_iterator(z, 3), idx), dtype=torch.BoolTensor)
             for idx in range(num_partitions)]
         batch_data['Y_map'] = collate_dense(
             get_iterator(z, 4), dtype=torch.LongTensor)
@@ -176,7 +174,7 @@ def collate_fn_dense_sl(batch, num_partitions):
         batch_data['Y_sim'] = collate_dense(
             get_iterator(z, 2), dtype=torch.FloatTensor)
         batch_data['Y_mask'] = collate_dense(
-            get_iterator(z, 3), dtype=torch.FloatTensor)
+            get_iterator(z, 3), dtype=torch.BoolTensor)
     return batch_data
 
 
@@ -186,8 +184,7 @@ def collate_fn_dense_full(batch, num_partitions):
         For dense features
     """
     _is_partitioned = True if num_partitions > 1 else False
-    batch_data = {}
-    batch_data['batch_size'] = len(batch)
+    batch_data = {'batch_size': len(batch), 'X_ind': None}
     batch_data['X'] = collate_dense(get_iterator(batch, 0))
     if _is_partitioned:
         batch_data['Y'] = [collate_dense(
@@ -204,9 +201,8 @@ def collate_fn_sparse_full(batch, num_partitions):
         For sparse features
     """
     _is_partitioned = True if num_partitions > 1 else False
-    batch_data = {}
-    batch_data['batch_size'] = len(batch)
-    batch_data['X'], batch_data['X_w'] = collate_sparse(
+    batch_data = {'batch_size': len(batch), 'X_ind': None}
+    batch_data['X_ind'], batch_data['X'] = collate_sparse(
         get_iterator(batch, 0), pad_val=[0, 0.0], has_weight=True,
         dtype=[torch.LongTensor, torch.FloatTensor])
     if _is_partitioned:

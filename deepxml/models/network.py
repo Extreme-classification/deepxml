@@ -13,37 +13,34 @@ __author__ = 'KD'
 
 class DeepXMLBase(nn.Module):
     """DeepXMLBase: Base class for DeepXML architecture
-    Parameters:
+
+    * Identity op as classifier by default
+    (derived class should implement it's own classifier)
+    * embedding and classifier shall automatically transfer
+    the vector to the appropriate device
+
+    Arguments:
     ----------
     vocabulary_dims: int
         number of tokens in the vocabulary
-    num_labels: int
-        number of labels
     embedding_dims: int
         size of word/token representations
     trans_config: list of strings
         configuration of the transformation layer
-    dropout: float, default=0.5
-        value of dropout
-    num_clf_partitions: int, default=1
-        partition classifier in these many parts
     padding_idx: int, default=0
         padding index in words embedding layer
     """
 
-    def __init__(self, vocabulary_dims, num_labels, embedding_dims,
-                 trans_config, dropout=0.5, num_clf_partitions=1,
-                 padding_idx=0):
+    def __init__(self, vocabulary_dims, embedding_dims,
+                 trans_config, padding_idx=0):
         super(DeepXMLBase, self).__init__()
         self.vocabulary_dims = vocabulary_dims+1
         self.embedding_dims = embedding_dims
         self.trans_config = trans_config
-        self.dropout = dropout
         self.padding_idx = padding_idx
-        self.num_clf_partitions = num_clf_partitions
-        self.num_labels = num_labels
         self.embeddings = self._construct_embedding()
         self.transform = self._construct_transform(trans_config)
+        self.classifier = self._construct_classifier()
         # Keep embeddings on first device
         self.device_embeddings = torch.device("cuda:0")
 
@@ -56,22 +53,7 @@ class DeepXMLBase(nn.Module):
             sparse=True)
 
     def _construct_classifier(self):
-        if self.num_clf_partitions > 1:  # Run the distributed version
-            _bias = [True for _ in range(self.num_clf_partitions)]
-            _clf_devices = ["cuda:{}".format(
-                idx) for idx in range(self.num_clf_partitions)]
-            return linear_layer.ParallelLinear(
-                input_size=self.representation_dims,
-                output_size=self.num_labels,
-                bias=_bias,
-                num_partitions=self.num_clf_partitions,
-                devices=_clf_devices)
-        else:
-            return linear_layer.Linear(
-                input_size=self.representation_dims,
-                output_size=self.num_labels,  # last one is padding index
-                bias=True
-            )
+        return nn.Identity()
 
     def _construct_transform(self, trans_config):
         return transform_layer.Transform(
@@ -81,45 +63,49 @@ class DeepXMLBase(nn.Module):
     def representation_dims(self):
         return self.transform.representation_dims
 
-    def encode(self, batch_data):
-        """encode documents
-        Parameters:
-        -----------
-        batch_data: dict
-            batch_data['X']: torch.Tensor
-                dense feature vector or
-                feature indices in case of sparse features
-            batch_data['X_w]: torch.Tensor
-                feature weights in case of sparse features
-
-        Returns
-        -------
-        out: torch.Tensor
-            encoding of a document
-        """
-        if 'X_w' in batch_data:  # Sparse features
-            embed = self.embeddings(
-                batch_data['X'].to(self.device_embeddings),
-                batch_data['X_w'].to(self.device_embeddings))
-        else:  # Dense features
-            embed = batch_data['X'].to(self.device_embeddings)
-        return self.transform(embed)
-
-    def forward(self, batch_data):
+    def encode(self, x, x_ind=None):
         """Forward pass
-        Parameters:
+        * Assumes features are dense if x_ind is None
+
+        Arguments:
         -----------
-        batch_data: dict
-            batch_data['X']: torch.Tensor
-                dense feature vector or
-                feature indices in case of sparse features
-            batch_data['X_w]: torch.Tensor
-                feature weights in case of sparse features
+        x: torch.FloatTensor
+            (sparse features) contains weights of features as per x_ind or
+            (dense features) contains the dense representation of a point
+        x_ind: torch.LongTensor or None, optional (default=None)
+            contains indices of features (sparse features)
+
         Returns
         -------
         out: logits for each label
         """
-        return self.classifier(self.encode(batch_data))
+        if x_ind is None:
+            embed = x.to(self.device_embeddings)
+        else:
+            embed = self.embeddings(
+                x_ind.to(self.device_embeddings),
+                x.to(self.device_embeddings))
+        return self.transform(embed)
+
+    def forward(self, batch_data):
+        """Forward pass
+        * Assumes features are dense if X_w is None
+        * By default classifier is identity op
+
+        Arguments:
+        -----------
+        batch_data: dict
+            * 'X': torch.FloatTensor
+                feature weights for given indices or dense rep.
+            * 'X_ind': torch.LongTensor
+                feature indices (LongTensor) or None
+
+        Returns
+        -------
+        out: logits for each label
+        """
+        return self.classifier(
+            self.encode(batch_data['X'], batch_data['X_ind']))
 
     def initialize_embeddings(self, word_embeddings):
         """Initialize embeddings from existing ones
@@ -129,22 +115,6 @@ class DeepXMLBase(nn.Module):
             existing embeddings
         """
         self.embeddings.from_pretrained(word_embeddings)
-
-    def initialize_classifier(self, clf_weights):
-        """Initialize classifier from existing weights
-        Parameters:
-        -----------
-        clf_weights: numpy.ndarray
-            (num_labels, repr_dims+1) last dimension is bias
-        """
-        self.classifier.weight.data.copy_(torch.from_numpy(clf_weights[:, -1]))
-        self.classifier.bias.data.copy_(
-            torch.from_numpy(clf_weights[:, -1]).view(-1, 1))
-
-    def get_clf_weights(self):
-        """Get classifier weights
-        """
-        return self.classifier.get_weights()
 
     def to(self):
         """Send layers to respective devices
@@ -166,48 +136,68 @@ class DeepXMLBase(nn.Module):
         return self.num_trainable_params * 4 / math.pow(2, 20)
 
 
-class DeepXMLh(DeepXMLBase):
-    """DeepXMLh: Head network for DeepXML architecture
-    Allows additional transform layer
+class DeepXMLf(DeepXMLBase):
+    """DeepXMLf: Network for DeepXML's architecture
+    with fully-connected o/p layer (a.k.a 1-vs.-all in literature)
+
+    Allows additional transform layer to transform features from the
+    base class. e.g. base class can handle intermediate rep. and transform
+    could be used to the intermediate rep. from base class
     """
 
     def __init__(self, params):
+        self.num_labels = params.num_labels
+        self.num_clf_partitions = params.num_clf_partitions
         transform_config_dict = transform_layer.fetch_json(
             params.trans_method, params)
-        params.trans_config_coarse = transform_config_dict['transform_coarse']
-        params.trans_config_fine = transform_config_dict['transform_fine']
-        super(DeepXMLh, self).__init__(
+        trans_config_coarse = transform_config_dict['transform_coarse']
+        super(DeepXMLf, self).__init__(
             vocabulary_dims=params.vocabulary_dims,
-            num_labels=params.num_labels,
             embedding_dims=params.embedding_dims,
-            trans_config=params.trans_config_coarse,
-            dropout=params.dropout,
-            num_clf_partitions=params.num_clf_partitions,
+            trans_config=trans_config_coarse,
             padding_idx=params.padding_idx)
+        trans_config_fine = transform_config_dict['transform_fine']
         self.transform_fine = self._construct_transform(
-            params.trans_config_fine)
-        self.classifier = self._construct_classifier()
+            trans_config_fine)
 
-    def encode(self, batch_data, return_coarse=False):
-        """encode documents
-        Parameters:
+    def encode(self, x, x_ind=None, return_coarse=False):
+        """Forward pass
+        * Assumes features are dense if x_ind is None
+
+        Arguments:
         -----------
-        batch_data: dict
-            batch_data['X']: torch.Tensor
-                dense feature vector or
-                feature indices in case of sparse features
-            batch_data['X_w]: torch.Tensor
-                feature weights in case of sparse features
-        return_coarse: boolean, default=False
-            whether to return intermediate representation
+        x: torch.FloatTensor
+            (sparse features) contains weights of features as per x_ind or
+            (dense features) contains the dense representation of a point
+        x_ind: torch.LongTensor or None, optional (default=None)
+            contains indices of features (sparse features)
+        return_coarse: boolean, optional (default=False)
+            Return coarse features or not
 
         Returns
         -------
-        out: torch.Tensor
-            encoding of a document
+        out: logits for each label
         """
-        encoding = super().encode(batch_data)
+        encoding = super().encode(x, x_ind)
         return encoding if return_coarse else self.transform_fine(encoding)
+
+    def _construct_classifier(self):
+        if self.num_clf_partitions > 1:  # Run the distributed version
+            _bias = [True for _ in range(self.num_clf_partitions)]
+            _clf_devices = ["cuda:{}".format(
+                idx) for idx in range(self.num_clf_partitions)]
+            return linear_layer.ParallelLinear(
+                input_size=self.representation_dims,
+                output_size=self.num_labels,
+                bias=_bias,
+                num_partitions=self.num_clf_partitions,
+                devices=_clf_devices)
+        else:
+            return linear_layer.Linear(
+                input_size=self.representation_dims,
+                output_size=self.num_labels,  # last one is padding index
+                bias=True
+            )
 
     def to(self):
         """Send layers to respective devices
@@ -215,69 +205,87 @@ class DeepXMLh(DeepXMLBase):
         self.transform_fine.to()
         super().to()
 
+    def initialize_classifier(self, weight, bias=None):
+        """Initialize classifier from existing weights
 
-class DeepXMLt(DeepXMLBase):
-    """DeepXMLt: Tail network for DeepXML architecture
-    Allows additional transform layer and shortlist
+        Arguments:
+        -----------
+        weight: numpy.ndarray
+        bias: numpy.ndarray or None, optional (default=None)
+        """
+        self.classifier.weight.data.copy_(torch.from_numpy(weight))
+        if bias is not None:
+            self.classifier.bias.data.copy_(
+                torch.from_numpy(bias).view(-1, 1))
+
+    def get_clf_weights(self):
+        """Get classifier weights
+        """
+        return self.classifier.get_weights()
+
+
+class DeepXMLs(DeepXMLBase):
+    """DeepXMLt: DeepXML architecture to be trained with
+                 a label shortlist
+    * Allows additional transform layer for features
     """
 
     def __init__(self, params):
         transform_config_dict = transform_layer.fetch_json(
             params.trans_method, params)
-        params.trans_config_coarse = transform_config_dict['transform_coarse']
-        params.trans_config_fine = transform_config_dict['transform_fine']
+        trans_config_coarse = transform_config_dict['transform_coarse']
+        self.num_labels = params.num_labels
+        self.num_clf_partitions = params.num_clf_partitions
         self.label_padding_index = params.label_padding_index
-        super(DeepXMLt, self).__init__(
+        super(DeepXMLs, self).__init__(
             vocabulary_dims=params.vocabulary_dims,
-            num_labels=params.num_labels,
             embedding_dims=params.embedding_dims,
-            trans_config=params.trans_config_coarse,
-            dropout=params.dropout,
-            num_clf_partitions=params.num_clf_partitions,
+            trans_config=trans_config_coarse,
             padding_idx=params.padding_idx)
+        trans_config_fine = transform_config_dict['transform_fine']
         self.transform_fine = self._construct_transform(
-            params.trans_config_fine)
-        self.classifier = self._construct_classifier()
+            trans_config_fine)
 
-    def encode(self, batch_data, return_coarse=False):
-        """encode documents
-        Parameters:
+    def encode(self, x, x_ind=None, return_coarse=False):
+        """Forward pass
+        * Assumes features are dense if x_ind is None
+
+        Arguments:
         -----------
-        batch_data: dict
-            batch_data['X']: torch.Tensor
-                dense feature vector or
-                feature indices in case of sparse features
-            batch_data['X_w]: torch.Tensor
-                feature weights in case of sparse features
-        return_coarse: boolean, default=False
-            whether to return intermediate representation
+        x: torch.FloatTensor
+            (sparse features) contains weights of features as per x_ind or
+            (dense features) contains the dense representation of a point
+        x_ind: torch.LongTensor or None, optional (default=None)
+            contains indices of features (sparse features)
+        return_coarse: boolean, optional (default=False)
+            Return coarse features or not
 
         Returns
         -------
-        out: torch.Tensor
-            encoding of a document
+        out: logits for each label
         """
-        encoding = super().encode(batch_data)
+        encoding = super().encode(x, x_ind)
         return encoding if return_coarse else self.transform_fine(encoding)
 
     def forward(self, batch_data):
         """Forward pass
-        Parameters:
+
+        Arguments:
         -----------
         batch_data: dict
-            batch_data['X']: torch.Tensor
-                dense feature vector or
-                feature indices in case of sparse features
-            batch_data['X_w]: torch.Tensor
-                feature weights in case of sparse features
-            batch_data['Y_s]: torch.LongTensor
-                indices of label shortlist
+            * 'X': torch.FloatTensor
+                feature weights for given indices or dense rep.
+            * 'X_ind': torch.LongTensor
+                feature indices (LongTensor) or None
+            * 'Y_s': torch.LongTensor
+                indices of labels to pick for each document
+
         Returns
         -------
         out: logits for each label in the shortlist
         """
         return self.classifier(
-            self.encode(batch_data),
+            self.encode(batch_data['X'], batch_data['X_ind']),
             batch_data['Y_s'])
 
     def _construct_classifier(self):
@@ -312,3 +320,21 @@ class DeepXMLt(DeepXMLBase):
         """
         self.transform_fine.to()
         super().to()
+
+    def initialize_classifier(self, weight, bias=None):
+        """Initialize classifier from existing weights
+
+        Arguments:
+        -----------
+        weight: numpy.ndarray
+        bias: numpy.ndarray or None, optional (default=None)
+        """
+        self.classifier.weight.data.copy_(torch.from_numpy(weight))
+        if bias is not None:
+            self.classifier.bias.data.copy_(
+                torch.from_numpy(bias).view(-1, 1))
+
+    def get_clf_weights(self):
+        """Get classifier weights
+        """
+        return self.classifier.get_weights()

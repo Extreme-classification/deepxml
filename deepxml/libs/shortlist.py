@@ -357,10 +357,11 @@ class ShortlistEnsemble(object):
         weight for KNN.
         * final shortlist => gamma * knn + (1-gamma) * kcentroid
     """
-    def __init__(self, method='hnsw', num_neighbours=500,
-                 M={'kcentroid': 100, 'knn': 100},
+    def __init__(self, method='hnsw', num_neighbours={'ens': 500,
+                 'kcentroid': 400, 'knn': 300},
+                 M={'kcentroid': 100, 'knn': 50},
                  efC={'kcentroid': 300, 'knn': 50},
-                 efS={'kcentroid': 500, 'knn': 100},
+                 efS={'kcentroid': 400, 'knn': 100},
                  num_threads=24, space='cosine', verbose=True,
                  num_clusters=1, pad_val=-10000, gamma=0.075):
         self.kcentroid = ShortlistCentroids(
@@ -368,11 +369,11 @@ class ShortlistEnsemble(object):
             M=M['kcentroid'], efC=efC['kcentroid'], efS=efS['kcentroid'],
             num_threads=num_threads, space=space, verbose=True)
         self.knn = ShortlistInstances(
-            method=method, num_neighbours=500, M=M['knn'], efC=efC['knn'],
-            efS=efS['knn'], num_threads=num_threads, space=space,
-            verbose=True)
+            method=method, num_neighbours=num_neighbours['knn'], M=M['knn'],
+            efC=efC['knn'], efS=efS['knn'], num_threads=num_threads,
+            space=space, verbose=True)
         self.num_labels = None
-        self.num_neighbours = num_neighbours
+        self.num_neighbours = num_neighbours['ens']
         self.pad_val = pad_val
         self.pad_ind = -1
         self.gamma = gamma

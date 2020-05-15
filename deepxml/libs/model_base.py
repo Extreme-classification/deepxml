@@ -241,7 +241,7 @@ class ModelBase(object):
             "Training time: {} sec, Validation time: {} sec"
             ", Shortlist time: {} sec, Model size: {} MB".format(
                 self.tracking.train_time, self.tracking.validation_time,
-                self.tracking.shortlist_time, self.net.model_size))
+                self.tracking.shortlist_time, self.model_size))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
             num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
@@ -282,7 +282,7 @@ class ModelBase(object):
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(
                 train_loader, return_coarse=True)
-            data['Y'] = train_dataset.labels.Y
+            data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
                 data=data,
@@ -352,7 +352,7 @@ class ModelBase(object):
         predicted_labels = self._predict(data_loader, top_k, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
-        acc = self.evaluate(dataset.labels.Y, predicted_labels)
+        acc = self.evaluate(dataset.labels.data, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info(
             "Prediction time (total): {} sec.,"
@@ -399,7 +399,8 @@ class ModelBase(object):
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['batch_size']
-            out_ans = self.net.encode(batch_data, return_coarse)
+            out_ans = self.net.encode(
+                batch_data['X'], batch_data['X_ind'], return_coarse)
             embeddings[count:count+batch_size,
                        :] = out_ans.detach().cpu().numpy()
             count += batch_size
@@ -504,14 +505,6 @@ class ModelBase(object):
                 acc[key] = self._evaluate(true_labels, val)
             return acc
 
-    def get_size(self):
-        total = 0
-        component_size = {}
-        for key, val in self.net.__dict__['_modules'].items():
-            num_params = np.sum([p.numel()
-                                 for p in val.parameters() if p.requires_grad])
-            _size = num_params*4/(1024*1024*1024)
-            component_size[key] = _size
-            total += _size
-        return total, component_size
-        
+    @property
+    def model_size(self):
+        return self.net.model_size

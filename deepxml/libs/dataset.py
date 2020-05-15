@@ -232,7 +232,7 @@ class DatasetSparse(DatasetBase):
             self.shortlist = ShortlistHandlerHybrid(
                 self.num_labels, model_dir, num_clf_partitions,
                 mode, size_shortlist, shortlist_in_memory,
-                _corruption=75)
+                _corruption=150)
         elif shortlist_method == 'dynamic':
             self.shortlist = ShortlistHandlerDynamic(
                 self.num_labels, shorty, model_dir, num_clf_partitions,

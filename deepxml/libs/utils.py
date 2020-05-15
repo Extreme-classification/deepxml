@@ -4,6 +4,7 @@ import json
 import os
 from scipy.sparse import csr_matrix, save_npz
 import numba as nb
+from xclib.utils.sparse import _map
 
 
 def save_predictions(preds, result_dir, valid_labels, num_samples,
@@ -13,8 +14,10 @@ def save_predictions(preds, result_dir, valid_labels, num_samples,
         for _fname, _pred in preds.items():
             if _fname in get_fnames:
                 if valid_labels is not None:
-                    predicted_labels = map_to_original(
-                        _pred, valid_labels, _shape=(num_samples, num_labels))
+                    predicted_labels = _map(
+                        _pred, valid_labels,
+                        shape=(num_samples, num_labels),
+                        axis=1)
                 else:
                     predicted_labels = _pred
                 save_npz(os.path.join(
@@ -22,8 +25,10 @@ def save_predictions(preds, result_dir, valid_labels, num_samples,
                     predicted_labels, compressed=False)
     else:
         if valid_labels is not None:
-            predicted_labels = map_to_original(
-                preds, valid_labels, _shape=(num_samples, num_labels))
+            predicted_labels = _map(
+                preds, valid_labels,
+                shape=(num_samples, num_labels),
+                axis=1)
         else:
             predicted_labels = preds
         save_npz(os.path.join(result_dir, '{}.npz'.format(prefix)),
@@ -71,13 +76,6 @@ def append_padding_embedding(embeddings):
     return np.vstack([app, embeddings])
 
 
-def get_scores(out_ans, batch_dist, beta):
-    """
-        Combine predicted scores and Approx knn distances
-    """
-    return beta*torch.sigmoid(out_ans) + (1-beta)*torch.sigmoid(1-batch_dist)
-
-
 def get_header(fname):
     with open(fname, 'r') as fp:
         line = fp.readline()
@@ -96,15 +94,6 @@ def get_data_stats(fname, key):
         return tuple(out)
     else:
         return get(fname, key)
-
-
-def map_to_original(mat, mapping, _shape, axis=1):
-    mat = mat.tocsr()
-    row_idx, col_idx = mat.nonzero()
-    vals = np.array(mat[row_idx, col_idx]).squeeze()
-    col_indices = list(map(lambda x: mapping[x], col_idx))
-    return csr_matrix(
-        (vals, (np.array(row_idx), np.array(col_indices))), shape=_shape)
 
 
 def save_parameters(fname, params):

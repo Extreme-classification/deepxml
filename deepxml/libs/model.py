@@ -220,7 +220,7 @@ class ModelShortlist(ModelBase):
                     validation_loader, beta)
                 val_end_t = time.time()
                 _acc = self.evaluate(
-                    validation_loader.dataset.labels.Y, predicted_labels)
+                    validation_loader.dataset.labels.data, predicted_labels)
                 self.tracking.validation_time = self.tracking.validation_time \
                     + val_end_t - val_start_t
                 self.tracking.mean_val_loss.append(val_avg_loss)
@@ -245,7 +245,7 @@ class ModelShortlist(ModelBase):
                 self.tracking.train_time,
                 self.tracking.validation_time,
                 self.tracking.shortlist_time,
-                self.net.model_size+self.shorty.model_size))
+                self.model_size))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
             num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
@@ -288,7 +288,7 @@ class ModelShortlist(ModelBase):
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(
                 train_loader, return_coarse=True)
-            data['Y'] = train_dataset.labels.Y
+            data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
                 data=data,
@@ -397,6 +397,10 @@ class ModelShortlist(ModelBase):
             self.shorty.purge(fname)  # let the class handle the deletion
         super().purge(model_dir)
 
+    @property
+    def model_size(self):
+        return self.shorty.model_size + self.net.model_size
+
 
 class ModelNS(ModelBase):
     """
@@ -451,7 +455,7 @@ class ModelNS(ModelBase):
                 "to save computations.")
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(train_loader)
-            data['Y'] = train_dataset.labels.Y
+            data['Y'] = train_dataset.labels.data
             #  Invalid labels already removed
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
@@ -499,7 +503,7 @@ class ModelReRanker(ModelShortlist):
 
     def __init__(self, params, net, criterion, optimizer, shorty):
         super().__init__(params, net, criterion, optimizer, shorty)
-      
+
     def _combine_scores_one(self, out_logits, batch_sim, beta):
         return out_logits + batch_sim
 
@@ -562,7 +566,7 @@ class ModelReRanker(ModelShortlist):
                     validation_loader, beta)
                 val_end_t = time.time()
                 _acc = self.evaluate(
-                    validation_loader.dataset.labels.Y, predicted_labels)
+                    validation_loader.dataset.labels.data, predicted_labels)
                 self.tracking.validation_time = self.tracking.validation_time \
                     + val_end_t - val_start_t
                 self.tracking.mean_val_loss.append(val_avg_loss)
@@ -625,7 +629,7 @@ class ModelReRanker(ModelShortlist):
             data = {'X': None, 'Y': None}
             data['X'] = self._document_embeddings(
                 train_loader, return_coarse=True)
-            data['Y'] = train_dataset.labels.Y
+            data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
                 data=data,
@@ -724,7 +728,7 @@ class ModelReRanker(ModelShortlist):
         predicted_labels = self._predict(data_loader, top_k, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
-        acc = self.evaluate(dataset.labels.Y, predicted_labels)
+        acc = self.evaluate(dataset.labels.data, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info(
             "Prediction time (total): {} sec.,"
