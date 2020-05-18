@@ -1,9 +1,6 @@
-version=0
 use_post=1
-evaluation_type=1
-num_splits=2
 aux_threshold=65536
-topk=50
+topk=500
 embedding_dims=300
 dlr_factor=0.5
 num_labels=2812281

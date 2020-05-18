@@ -341,9 +341,9 @@ class Parameters(ParametersBase):
             help='Update shortlist while predicting'
         )
         self.parser.add_argument(
-            '--use_head_embeddings',
+            '--use_aux_embeddings',
             action='store_true',
-            help='Use head embeddings?'
+            help='Use aux embeddings?'
         )
         self.parser.add_argument(
             '--huge_dataset',
@@ -360,5 +360,5 @@ class Parameters(ParametersBase):
             nargs='+',
             type=str,
             default=['knn', 'clf', 'combined'],
-            help='What do you have to output'
+            help='What do you have to output?'
         )

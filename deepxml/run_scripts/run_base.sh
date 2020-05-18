@@ -13,6 +13,7 @@ train () {
 }
 
 retrain () {
+        # TODO
         # $1 dataset
         # $2 data_dir
         # $3 model_dir
@@ -82,7 +83,7 @@ evaluate () {
         # $4 pred_fname path
         # $5 A
         # $6 B
-        # $7 TYPE SAVE and BETAS
+        # $7 SAVE and BETAS
         log_eval_file="${1}/log_eval.txt"
         python -u ${work_dir}/programs/deepxml/deepxml/tools/evaluate.py "${2}" "${3}" "${4}" $5 $6 $7 | tee -a $log_eval_file
 }
@@ -110,33 +111,27 @@ if [ "${FLAG}" == "train" ]
 then
     # $1 PARAMS
     train $model_dir $result_dir "${1}"
-
 elif [ "${FLAG}" == "predict" ]
 then
     # #1 PARAMS
     predict $result_dir $model_dir "${1}"
-
 elif [ "${FLAG}" == "evaluate" ]
 then
     # $1 Out_file
     # $2 A
     # $3 B
     # $4 TYPE, SAVE and BETAS
-    evaluate $result_dir $data_dir'/trn_X_Y.txt' $data_dir'/tst_X_Y.txt' "${result_dir}/${1}" ${2} ${3} "${4}"
-
+    evaluate $result_dir "${data_dir}/trn_X_Y.txt" "${data_dir}/tst_X_Y.txt" "${result_dir}/${1}" ${2} ${3} "${4}"
 elif [ "${FLAG}" == "extract" ]
 then
     # $1 PARAMS
     mkdir -p "${result_dir}/export"
     extract $result_dir $model_dir "${1}"
-
 elif [ "${FLAG}" == "retrain_w_shortlist" ]
 then
     # $1 embedding files
     # $2 file 
     retrain_w_shorty $model_dir $result_dir "${1}"
-
 else
     echo "Kuch bhi"
-
 fi

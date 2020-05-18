@@ -11,8 +11,10 @@ def main():
     train_feat_fname = sys.argv[1]
     train_label_fname = sys.argv[2]
     method = int(sys.argv[3])
-    split_threshold = int(sys.argv[4])
-    tmp_dir = sys.argv[5]
+    aux_threshold = int(sys.argv[4])
+    seed = int(sys.argv[5])
+    np.random.seed(seed)
+    tmp_dir = sys.argv[6]
     features = data_utils.read_sparse_file(train_feat_fname)
     labels = data_utils.read_sparse_file(train_label_fname)
     assert features.shape[0] == labels.shape[0], \
@@ -20,10 +22,10 @@ def main():
     num_features = features.shape[1]
     num_labels = labels.shape[1]
     stats_obj = {}
-    stats_obj['threshold'] = split_threshold
+    stats_obj['threshold'] = aux_threshold
     stats_obj['method'] = method
 
-    sd = AuxMapping(method=method, threshold=split_threshold)
+    sd = AuxMapping(method=method, threshold=aux_threshold)
     sd.fit(features, labels)
     stats_obj['aux'] = "{},{},{}".format(
         num_features, sd.num_aux_labels, sd.num_aux_labels)

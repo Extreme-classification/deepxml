@@ -14,7 +14,7 @@ MODEL_NAME="${12}"
 temp_model_data="${13}"
 topk="${14}"
 seed=${18}
-use_head_embeddings=0
+use_aux_embeddings=0
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
 docs=("trn" "tst")
@@ -26,12 +26,13 @@ stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[1]}
 
-if [ $use_head_embeddings -eq 1 ]
+if [ $use_aux_embeddings -eq 1 ]
 then
-    echo "Using Head Embeddings"
-    embedding_file="head_embeddings_${embedding_dims}d.npy"
-    extra_params="${extra_params} --use_head_embeddings"
+    echo -e "\nUsing embeddings from auxilliary task."
+    embedding_file="aux_embeddings_${embedding_dims}d.npy"
+    extra_params="${extra_params} --use_aux_embeddings"
 else
+    echo -e "\nUsing pre-trained embeddings."
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
 fi
 

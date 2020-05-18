@@ -223,6 +223,10 @@ class DeepXMLf(DeepXMLBase):
         """
         return self.classifier.get_weights()
 
+    def __repr__(self):
+        return "{}\n(Transform fine): {}\n(Classifier): {}\n".format(
+            self.transform, self.transform_fine, self.classifier)
+
 
 class DeepXMLs(DeepXMLBase):
     """DeepXMLt: DeepXML architecture to be trained with
@@ -338,3 +342,7 @@ class DeepXMLs(DeepXMLBase):
         """Get classifier weights
         """
         return self.classifier.get_weights()
+
+    def __repr__(self):
+        return "{}\n(Transform fine): {}\n(Classifier): {}\n".format(
+            self.transform, self.transform_fine, self.classifier)

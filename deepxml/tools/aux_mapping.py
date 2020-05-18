@@ -116,11 +116,10 @@ class AuxMapping(object):
         self.method = method
         self.threshold = threshold
 
-    def get_valid_labels(self):
-        pass
-
     def map_on_cluster(self, features, labels):
         label_centroids = compute_centroid(features, labels)
+        cooc = normalize(labels.T.dot(labels).tocsr(), norm='l1')
+        label_centroids = cooc.dot(label_centroids)
         _, mapping = cluster_labels(
             labels=label_centroids,
             clusters=[np.asarray(np.arange(labels.shape[1]), dtype=np.int64)],

@@ -22,7 +22,7 @@ __author__ = 'KD'
 
 
 def set_seed(value):
-    print("Setting the seed value: {}".format(value))
+    print("\nSetting the seed value: {}".format(value))
     torch.manual_seed(value)
     torch.cuda.manual_seed_all(value)
     np.random.seed(value)
@@ -35,19 +35,17 @@ def load_emeddings(params):
         - loading head embeddings
     * vocabulary_dims must match #rows in embeddings
     """
-    if params.use_head_embeddings:
+    if params.use_aux_embeddings:
         embeddings = np.load(
             os.path.join(os.path.dirname(params.model_dir),
                          params.embeddings))
-
     else:
         fname = os.path.join(
             params.data_dir, params.dataset, params.embeddings)
         if Path(fname).is_file():
-            print("Loading embeddings from file: {}".format(fname))
             embeddings = np.load(fname)
         else:
-            print("Loading random embeddings")
+            print("Generating random embeddings")
             embeddings = np.random.rand(
                 params.vocabulary_dims, params.embedding_dims)
     if params.feature_indices is not None:

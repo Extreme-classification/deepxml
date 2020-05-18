@@ -18,7 +18,7 @@ use_reranker=${16}
 ns_method=${17}
 seed=${18}
 extra_params="${19}"
-use_head_embeddings=1
+use_aux_embeddings=1
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
 docs=("trn" "tst")
@@ -29,12 +29,13 @@ stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[2]}
 
-if [ $use_head_embeddings -eq 1 ]
+if [ $use_aux_embeddings -eq 1 ]
 then
-    echo "Using Head Embeddings"
-    embedding_file="wrd_emb.npy"
-    extra_params="${extra_params} --use_head_embeddings"
+    echo -e "\nUsing embeddings from auxilliary task."
+    embedding_file="aux_embeddings_${embedding_dims}d.npy"
+    extra_params="${extra_params} --use_aux_embeddings"
 else
+    echo -e "\nUsing pre-trained embeddings."
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
 fi
 
@@ -90,6 +91,7 @@ PREDICT_PARAMS="--efS 500 \
                 --normalize \
                 --use_shortlist \
                 --batch_size 256 \
+                --use_coarse_for_shorty \
                 --beta 0.5 ${extra_params} \
                 --out_fname predictions.txt \
                 --pred_fname test_predictions \
@@ -104,6 +106,7 @@ PREDICT_PARAMS_train="--efS 500 \
                     --normalize \
                     --use_shortlist \
                     --batch_size 256 \
+                    --use_coarse_for_shorty \
                     --beta 0.5 ${extra_params}\
                     --out_fname predictions.txt \
                     --pred_fname train_predictions \
@@ -122,12 +125,11 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --batch_size 512 ${extra_params}"
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
-./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --use_coarse_for_shorty"
+./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS}"
 
 if [ $use_reranker -eq 1 ]
 then
     echo -e "\nFetching data for reranker"
-    ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS} --pred_fname test_predictions_reranker"
     ./run_base.sh "predict" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${PREDICT_PARAMS_train} --get_only clf"
 fi
 

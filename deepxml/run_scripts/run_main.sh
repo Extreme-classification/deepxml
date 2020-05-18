@@ -14,23 +14,10 @@ source "../configs/${model_type}/${dataset}.sh"
 version=$4
 seed=$5
 save_predictions=0
+betas="0.1 0.2 0.5 0.6 0.75 0.8 0.9"
 
 gen_aux_mapping () {
-    # $1: train_feat_fname
-    # $2: train_label_fname
-    # $3: method
-    # $4: threshold
-    # $5: temp model data directory
-    python3 ../tools/run_aux_mapping.py $1 $2 $3 $4 $5
-}
-
-merge_split_predictions () {
-    # $1: fnames_predictions 
-    # $2: fnames_mapping
-    # $3: num_labels
-    # $4: out_fname 
-    echo "Merging predictions.."
-    python3 ../tools/merge_split_predictions.py $1 $2 $3 $4 $5
+    python3 ../tools/run_aux_mapping.py ${trn_ft_file} ${trn_lbl_file} ${aux_method} ${aux_threshold} ${seed} ${temp_model_data}
 }
 
 clean_up(){
@@ -38,14 +25,15 @@ clean_up(){
     rm -rf ${trn_ft_file} ${trn_lbl_file} ${tst_ft_file} ${tst_lbl_file}
 }
 
-run_beta(){
-    ./run_base.sh "evaluate" $1 $2 $3 $model_type $4 $5 $6 "${7} ${8} ${9}"
+evaluate() {
+    # $1 fname
+    # $2 beta
+    ./run_base.sh "evaluate" ${dataset} "${work_dir}" ${version} ${model_type} "${1}" $A $B "${save_predictions} ${2}"
 }
-
 
 work_dir="${HOME}/scratch/Workspace"
 data_dir="${work_dir}/data/${dataset}"
-temp_model_data="${data_dir}/deepxml.aux/${aux_threshold}"
+temp_model_data="${data_dir}/deepxml.aux/${aux_threshold}.${seed}"
 
 train_file="${data_dir}/train.txt"
 test_file="${data_dir}/test.txt"
@@ -67,7 +55,7 @@ fi
 
 if [ ! -e "${temp_model_data}/aux_stats.json" ]
 then
-    gen_aux_mapping "${trn_ft_file}" "${trn_lbl_file}" $aux_method $aux_threshold $temp_model_data
+    gen_aux_mapping
 else
     echo "Using old" "${temp_model_data}/aux_stats.json"
 fi
@@ -83,7 +71,7 @@ run(){
     num_epochs="num_epochs_${quantile}"
     batch_size="batch_size_${quantile}"
     num_centriods="num_centroids_${quantile}"
-    echo "Training ${quantile} .. with lr:" ${!learning_rate} "epochs:" ${!num_epochs}  
+    echo -e "\nTraining ${quantile} .. with lr:" ${!learning_rate} "epochs:" ${!num_epochs}  
     ./run_"${type}".sh $dataset $version $quantile $use_post ${!learning_rate} $embedding_dims \
            ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
            $model_type ${temp_model_data} ${topk} ${!num_centriods} \
@@ -93,34 +81,40 @@ run(){
 results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
 models_dir="${work_dir}/models/$model_type/${dataset}/v_${version}"
 
-if [ $num_splits -eq 0 ]; then
-    echo "Not using any split to train."
-    #run "full" $version "org" ""
-    run "shortlist" $version "org" ""
-
+if [ ${model_type} == "DeepXML-fr" ]; then
+    echo -e "\n---Running DeepXML-fr, i.e., DeepXML with OVA classifier---\n"
+    run "full" $version "org" ""
     cp -r ${results_dir}/org/* ${results_dir}
-    if [ $use_post -eq 1 ] || [] ; then
-        run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
+    echo -e "\nEvaluating with A/B: ${A}/${B}"
+    if [ $use_post -eq 1 ]; then
+        evaluate "test_predictions" "${betas}"
     else
-        run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} -1
+        evaluate "test_predictions" "-1"
     fi
-
+elif [ ${model_type} == "DeepXML-ANNS" ]; then
+    echo -e "\n---Running DeepXML-ANNS, i.e., DeepXML with ANNS based classifier---\n"
+    run "shortlist" $version "org" ""
+    cp -r ${results_dir}/org/* ${results_dir}
+    echo -e "\nEvaluating with A/B: ${A}/${B}"
+    evaluate "test_predictions" "${betas}"
 else
+    echo -e "\n---Running DeepXML---\n"
     run "full" $version "aux" "--aux_mapping ${temp_model_data}/aux_mapping.txt"
     run "shortlist" $version "org" ""
     cp "$results_dir/org/test_predictions_clf.npz" "$results_dir/test_predictions_clf.npz"
     cp "$results_dir/org/test_predictions_knn.npz" "$results_dir/test_predictions_knn.npz"
-    echo "Evaluating with A/B: ${A}/${B}" $evaluation_type
-    run_beta $dataset $work_dir $version "test_predictions" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
+    echo -e "\nEvaluating base classifier with A/B: ${A}/${B}"
+    evaluate "test_predictions" "${betas}"
     if [ $use_reranker -eq 1 ]
     then            
         mkdir -p "$models_dir/rnk"
-        cp "$results_dir/org/test_predictions_reranker_clf.npz" "$models_dir/rnk/test_shortlist.npz"
+        cp "$results_dir/org/test_predictions_clf.npz" "$models_dir/rnk/test_shortlist.npz"
         cp "$results_dir/org/train_predictions_clf.npz" "$models_dir/rnk/train_shortlist.npz"
         run "reranker" $version "rnk" ""
         ln -s "$results_dir/test_predictions_knn.npz" "$results_dir/test_predictions_reranker_knn.npz"
         cp "$results_dir/rnk/test_predictions_reranker_combined.npz" "$results_dir/test_predictions_reranker_clf.npz"
-        run_beta $dataset $work_dir $version "test_predictions_reranker" $A $B $evaluation_type ${save_predictions} "0.1 0.2 0.5 0.6 0.75"
+        echo -e "\nEvaluating re-ranker with with A/B: ${A}/${B}\n"
+        evaluate "test_predictions_reranker" "${betas}"
     fi
 fi
 

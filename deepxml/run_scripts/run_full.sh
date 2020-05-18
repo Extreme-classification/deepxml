@@ -18,16 +18,18 @@ use_reranker=${16}
 ns_method=${17}
 seed=${18}
 extra_params="${19}"
-use_head_embeddings=0
+use_aux_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
 docs=("trn" "tst")
 
-if [ $use_head_embeddings -eq 1 ]
+if [ $use_aux_embeddings -eq 1 ]
 then
-    echo "Using Head Embeddings"
-    embedding_file="head_embeddings_${embedding_dims}d.npy"
+    echo -e "\nUsing embeddings from auxilliary task."
+    embedding_file="aux_embeddings_${embedding_dims}d.npy"
+    extra_params="${extra_params} --use_aux_embeddings"
 else
+    echo -e "\nUsing pre-trained embeddings."
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
 fi
 
@@ -155,7 +157,7 @@ fi
 if [ "${quantile}" == "aux" ]
 then
     echo -e "\nGenerating embeddings from auxiliary task."
-    cp "${work_dir}/results/DeepXML/${dataset}/v_${dir_version}/aux/export/wrd_emb.npy" "${work_dir}/models/DeepXML/${dataset}/v_${dir_version}/wrd_emb.npy"
+    cp "${work_dir}/results/DeepXML/${dataset}/v_${dir_version}/aux/export/wrd_emb.npy" "${work_dir}/models/DeepXML/${dataset}/v_${dir_version}/aux_embeddings_${embedding_dims}d.npy"
     exit
 fi
 

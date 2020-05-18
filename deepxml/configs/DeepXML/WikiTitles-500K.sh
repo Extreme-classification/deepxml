@@ -1,7 +1,4 @@
-version=0
 use_post=0
-evaluation_type=1
-num_splits=2
 aux_threshold=65536
 topk=500
 embedding_dims=300
