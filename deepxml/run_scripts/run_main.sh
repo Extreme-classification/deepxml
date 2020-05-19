@@ -1,8 +1,9 @@
 #!/bin/bash
 # $1 GPU DEIVCE ID
-# $2 ABLATION TYPE
+# $2 Model TYPE (DeepXML/DeepXML-fr etc.)
 # $3 DATASET
 # $4 VERSION
+# $5 seed
 # eg. ./run_main.sh 0 DeepXML EURLex-4K 0 22
 # eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0 22
 
@@ -105,8 +106,7 @@ else
     cp "$results_dir/org/test_predictions_knn.npz" "$results_dir/test_predictions_knn.npz"
     echo -e "\nEvaluating base classifier with A/B: ${A}/${B}"
     evaluate "test_predictions" "${betas}"
-    if [ $use_reranker -eq 1 ]
-    then            
+    if [ $use_reranker -eq 1 ]; then            
         mkdir -p "$models_dir/rnk"
         cp "$results_dir/org/test_predictions_clf.npz" "$models_dir/rnk/test_shortlist.npz"
         cp "$results_dir/org/train_predictions_clf.npz" "$models_dir/rnk/train_shortlist.npz"
