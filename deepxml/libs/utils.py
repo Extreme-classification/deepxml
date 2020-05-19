@@ -238,3 +238,29 @@ def map_neighbors(indices, similarity, labels, top_k, padding_ind, padding_val):
             point_labels[i, :len(unique_point_labels)] = unique_point_labels
             point_label_similarities[i, :len(unique_point_labels)] = point_label_similarity
     return point_labels, point_label_similarities
+
+
+@nb.njit(cache=True)
+def _remap_centroid_one(indices, sims, mapping):
+    mapped_indices = mapping[indices]
+    unique_mapped_indices = np.unique(mapped_indices)
+    unique_mapped_sims = np.zeros(
+        (len(unique_mapped_indices), ), dtype=np.float32)
+    for i in range(len(unique_mapped_indices)):
+        ind = unique_mapped_indices[i]
+        unique_mapped_sims[i] = np.max(sims[mapped_indices == ind])
+    return unique_mapped_indices, unique_mapped_sims
+
+
+@nb.njit()
+def map_centroids(indices, sims, mapping, pad_ind, pad_val):
+    mapped_indices = np.full(
+        indices.shape, fill_value=pad_ind, dtype=np.int64)
+    mapped_sims = np.full(
+        indices.shape, fill_value=pad_val, dtype=np.float32)
+
+    for i in nb.prange(indices.shape[0]):
+        _ind, _sim = _remap_centroid_one(indices[i], sims[i], mapping)
+        mapped_indices[i, :len(_ind)] = _ind
+        mapped_sims[i, :len(_sim)] = _sim
+    return mapped_indices, mapped_sims

@@ -14,7 +14,7 @@ import numba
 import math
 from operator import itemgetter
 from libs.clustering import Cluster
-from libs.utils import map_neighbors
+from libs.utils import map_neighbors, map_centroids
 
 
 class Shortlist(object):
@@ -123,7 +123,7 @@ class ShortlistCentroids(Shortlist):
     """
     def __init__(self, method='hnsw', num_neighbours=300, M=100, efC=300,
                  efS=300, num_threads=24, space='cosine', verbose=True,
-                 num_clusters=1, threshold=5000):
+                 num_clusters=1, threshold=7500, pad_val=-10000):
         super().__init__(method, num_neighbours, M, efC, efS, num_threads)
         self.num_clusters = num_clusters
         self.space = space
@@ -131,6 +131,7 @@ class ShortlistCentroids(Shortlist):
         self.mapping = None
         self.ext_head = None
         self.threshold = threshold
+        self.pad_val = pad_val
 
     def _cluster_multiple_rep(self, features, labels, label_centroids,
                               multi_centroid_indices):
@@ -174,31 +175,13 @@ class ShortlistCentroids(Shortlist):
     def _remap(self, indices, sims):
         if self.mapping is None:
             return indices, sims
-        print("Re-mapping code not optimized")
-        mapped_indices = np.full_like(indices, self.pad_ind)
-        # minimum similarity for padding index
-        mapped_sims = np.full_like(sims, -1000.0)
-        for idx, (ind, sim) in enumerate(zip(indices, sims)):
-            _ind, _sim = self._remap_one(ind, sim)
-            mapped_indices[idx, :len(_ind)] = _ind
-            mapped_sims[idx, :len(_sim)] = _sim
-        return mapped_indices, mapped_sims
-
-    def _remap_one(self, indices, vals, _func=max, _limit=-1000):
-        """
-            Remap multiple centroids to original labels
-        """
-        indices = map(lambda x: self.mapping[x], indices)
-        _dict = dict({})
-        for idx, ind in enumerate(indices):
-            _dict[ind] = _func(_dict.get(ind, _limit), vals[idx])
-        indices, values = zip(*_dict.items())
-        return np.fromiter(indices, dtype=np.int64), \
-            np.fromiter(values, dtype=np.float32)
+        return map_centroids(
+            indices, sims, self.mapping, self.pad_ind, self.pad_val)
 
     def load(self, fname):
         temp = pickle.load(open(fname+".metadata", 'rb'))
         self.pad_ind = temp['pad_ind']
+        self.pad_val = temp['pad_val']
         self.mapping = temp['mapping']
         self.ext_head = temp['ext_head']
         super().load(fname+".index")
@@ -206,6 +189,7 @@ class ShortlistCentroids(Shortlist):
     def save(self, fname):
         metadata = {
             'pad_ind': self.pad_ind,
+            'pad_val': self.pad_val,
             'mapping': self.mapping,
             'ext_head': self.ext_head
         }
@@ -367,7 +351,8 @@ class ShortlistEnsemble(object):
         self.kcentroid = ShortlistCentroids(
             method=method, num_neighbours=efS['kcentroid'],
             M=M['kcentroid'], efC=efC['kcentroid'], efS=efS['kcentroid'],
-            num_threads=num_threads, space=space, verbose=True)
+            num_threads=num_threads, space=space, num_clusters=num_clusters,
+            verbose=True)
         self.knn = ShortlistInstances(
             method=method, num_neighbours=num_neighbours['knn'], M=M['knn'],
             efC=efC['knn'], efS=efS['knn'], num_threads=num_threads,
