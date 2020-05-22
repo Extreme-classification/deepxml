@@ -4,8 +4,8 @@
 # $2 Model TYPE (DeepXML/DeepXML-fr etc.)
 # $3 DATASET
 # $4 VERSION
-# eg. ./run_main.sh 0 DeepXML EURLex-4K 0
-# eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0
+# eg. ./run_ensemble.sh 0 DeepXML EURLex-4K 0
+# eg. ./run_ensemble.sh 0 DeepXML-fr EURLex-4K 0
 
 gpu_id=$1
 model_type=$2
