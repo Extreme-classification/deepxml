@@ -253,7 +253,7 @@ def construct_shortlist(params):
     if params.shortlist_method == 'reranker':
         return None
 
-    if params.use_shortlist == -1:
+    if not params.use_shortlist:
         return None
 
     if params.ns_method == 'ns':  # Negative Sampling
@@ -292,11 +292,12 @@ def construct_shortlist(params):
                 method=params.ann_method,
                 num_neighbours={
                     'kcentroid': params.efS,
-                    'knn': params.efS*3//4,
+                    'knn': params.efS,
                     'ens': params.num_nbrs},
                 M={'knn': params.M//2, 'kcentroid': params.M},
                 efC={'knn': params.efC//6, 'kcentroid': params.efC},
                 efS={'knn': params.efS//4, 'kcentroid': params.efS},
+                num_threads=params.ann_threads,
                 num_threads=params.ann_threads,
                 num_clusters=params.num_centroids)
     else:
