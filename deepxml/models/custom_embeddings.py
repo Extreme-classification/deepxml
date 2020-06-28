@@ -5,22 +5,32 @@ import torch.nn.functional as F
 
 class CustomEmbedding(torch.nn.Module):
     """
-        Memory efficient way to compute weighted EmbeddingBag
+    Memory efficient way to compute weighted EmbeddingBag
+
+    Arguments:
+    ----------
+    num_embeddings: int
+        vocalubary size
+    embedding_dim: int
+        dimension for embeddings
+    padding_idx: 0 or None, optional (default=None)
+        index for <PAD>; embedding is not updated
+    max_norm: None or float, optional (default=None)
+        maintain norm of embeddings
+    norm_type: int, optional (default=2)
+        norm for max_norm
+    scale_grad_by_freq: boolean
+        Scale gradients by token frequency
+    sparse: boolean
+        sparse or dense gradients
+        * the optimizer will infer from this parameters
+    device: str, optional (default="cuda:0")
+        Keep embeddings on this device
     """
 
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
                  max_norm=None, norm_type=2, scale_grad_by_freq=False,
                  sparse=False, device="cuda:0"):
-        """
-            Args:
-                num_embeddings: int: vocalubary size
-                embedding_dim: int: dimension for embeddings
-                padding_idx: int: index for <PAD>; embedding is not updated
-                max_norm: 
-                norm_type: int: default: 2
-                scale_grad_by_freq: boolean: True/False
-                sparse: boolean: sparse or dense gradients
-        """
         super(CustomEmbedding, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim

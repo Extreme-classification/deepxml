@@ -135,6 +135,9 @@ class DeepXMLBase(nn.Module):
     def model_size(self):  # Assumptions: 32bit floats
         return self.num_trainable_params * 4 / math.pow(2, 20)
 
+    def __repr__(self):
+        return f"{self.embeddings}\n(Transform): {self.transform}"
+
 
 class DeepXMLf(DeepXMLBase):
     """DeepXMLf: Network for DeepXML's architecture
@@ -224,8 +227,10 @@ class DeepXMLf(DeepXMLBase):
         return self.classifier.get_weights()
 
     def __repr__(self):
-        return "{}\n(Transform fine): {}\n(Classifier): {}\n".format(
-            self.transform, self.transform_fine, self.classifier)
+        s = f"{self.embeddings}\n{self.transform}\n"
+        s += f"(Transform fine): {self.transform_fine}"
+        s += f"\n(Classifier): {self.classifier}\n"
+        return s
 
 
 class DeepXMLs(DeepXMLBase):
@@ -344,5 +349,7 @@ class DeepXMLs(DeepXMLBase):
         return self.classifier.get_weights()
 
     def __repr__(self):
-        return "{}\n(Transform fine): {}\n(Classifier): {}\n".format(
-            self.transform, self.transform_fine, self.classifier)
+        s = f"{self.embeddings}\n{self.transform}\n"
+        s += f"(Transform fine): {self.transform_fine}"
+        s += f"\n(Classifier): {self.classifier}\n"
+        return s
