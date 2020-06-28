@@ -53,7 +53,8 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --label_padding_index ${num_labels} \
                 --top_k ${topk} \
                 --model_fname ${MODEL_NAME} ${extra_params} \
-                --get_only combined"
+                --get_only combined \
+                --use_pretrained_shortlist"
 
 TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --dlr_step $dlr_step \
@@ -64,7 +65,7 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --optim Adam \
             --keep_invalid \
             --model_method reranker \
-            --shortlist_method reranker \
+            --shortlist_method static \
             --lr $learning_rate \
             --efS 300 \
             --normalize \

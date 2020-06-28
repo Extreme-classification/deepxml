@@ -11,7 +11,7 @@ import numpy as np
 import xclib.evaluation.xc_metrics as xc_metrics
 import sys
 import libs.utils as utils
-from .dataset import construct_dataset, DatasetDense, DatasetSparse
+from .dataset import construct_dataset
 from .collate_fn import construct_collate_fn
 from .tracking import Tracking
 import torch.utils.data
@@ -62,18 +62,15 @@ class ModelBase(object):
 
     def _create_dataset(self, data_dir, fname_features, fname_labels=None,
                         data=None, mode='predict', normalize_features=True,
-                        normalize_labels=False, feature_type=None,
+                        normalize_labels=False, feature_type='sparse',
                         keep_invalid=False, feature_indices=None,
-                        label_indices=None, size_shortlist=None,
+                        label_indices=None, size_shortlist=-1,
                         shortlist_method='static', shorty=None,
-                        aux_mapping=None):
+                        aux_mapping=None, _type='full',
+                        pretrained_shortlist=None):
         """
             Create dataset as per given parameters
         """
-        size_shortlist = self.shortlist_size \
-            if size_shortlist is None else size_shortlist
-        feature_type = self.feature_type \
-            if feature_type is None else feature_type
         _dataset = construct_dataset(
             data_dir=data_dir,
             fname_features=fname_features,
@@ -91,25 +88,24 @@ class ModelBase(object):
             label_indices=label_indices,
             shortlist_method=shortlist_method,
             shorty=shorty,
-            aux_mapping=aux_mapping)
+            aux_mapping=aux_mapping,
+            pretrained_shortlist=pretrained_shortlist,
+            _type=_type)
         return _dataset
 
     def _create_data_loader(self, dataset, batch_size=128,
-                            num_workers=4, shuffle=False, mode='predict'):
+                            num_workers=4, shuffle=False,
+                            mode='predict', feature_type='sparse',
+                            classifier_type='full'):
         """
             Create data loader for given dataset
         """
-        feature_type = dataset.feature_type
-        if hasattr(dataset, 'size_shortlist'):
-            use_shortlist = True
-        else:
-            use_shortlist = False
         dt_loader = DataLoader(
             dataset,
             batch_size=batch_size,
             num_workers=num_workers,
             collate_fn=construct_collate_fn(
-                feature_type, use_shortlist, self.num_clf_partitions),
+                feature_type, classifier_type, self.num_clf_partitions),
             shuffle=shuffle)
         return dt_loader
 
@@ -280,8 +276,11 @@ class ModelBase(object):
                 "Computing and reusing coarse document embeddings"
                 " to save computations.")
             data = {'X': None, 'Y': None}
-            data['X'] = self._document_embeddings(
-                train_loader, return_coarse=True)
+            data['X'] = self.get_embeddings(
+                data_dir=None,
+                fname=None,
+                data=train_dataset.features.data,
+                return_coarse=True)
             data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
@@ -294,6 +293,7 @@ class ModelBase(object):
                 train_dataset,
                 batch_size=batch_size,
                 num_workers=num_workers,
+                classifier_type='full',
                 shuffle=shuffle)
         self.logger.info("Loading validation data.")
         validation_loader = None
@@ -331,13 +331,17 @@ class ModelBase(object):
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
-                aux_mapping=None, **kwargs):
+                aux_mapping=None, feature_type='sparse',
+                classifier_type='full', **kwargs):
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=ts_feat_fname,
             fname_labels=ts_label_fname,
             data=data,
             mode='predict',
+            feature_type=feature_type,
+            size_shortlist=self.shortlist_size,
+            _type=classifier_type,
             keep_invalid=keep_invalid,
             normalize_features=normalize_features,
             normalize_labels=normalize_labels,
@@ -345,6 +349,8 @@ class ModelBase(object):
             label_indices=label_indices,
             aux_mapping=aux_mapping)
         data_loader = self._create_data_loader(
+            feature_type=feature_type,
+            classifier_type=classifier_type,
             dataset=dataset,
             batch_size=batch_size,
             num_workers=num_workers)
@@ -382,8 +388,8 @@ class ModelBase(object):
                         batch_idx, num_batches))
         return predicted_labels
 
-    def _document_embeddings(self, data_loader, return_coarse=False,
-                             fname_out=None, _dtype='float32'):
+    def _embeddings(self, data_loader, return_coarse=False,
+                    fname_out=None, _dtype='float32'):
         self.net.eval()
         torch.set_grad_enabled(False)
         if fname_out is not None:  # Save to disk
@@ -409,30 +415,29 @@ class ModelBase(object):
             embeddings.flush()
         return embeddings
 
-    def get_document_embeddings(self, data_dir, dataset, fname_features,
-                                fname_labels=None, data=None,
-                                keep_invalid=False, batch_size=128,
-                                num_workers=4, data_loader=None,
-                                normalize_features=True, feature_indices=None,
-                                fname_out=None, return_coarse=False):
+    def get_embeddings(self, data_dir=None, fname=None, data=None,
+                       batch_size=1024, num_workers=6, normalize=False,
+                       indices=None, fname_out=None, return_coarse=False,
+                       feature_type='sparse'):
         """
-            Get document embeddings
+            Encode given data points
         """
-        if data_loader is None:
-            dataset = self._create_dataset(
-                os.path.join(data_dir, dataset),
-                fname_features=fname_features,
-                fname_labels=fname_labels,
-                data=data,
-                mode='predict',
-                keep_invalid=keep_invalid,
-                normalize_features=normalize_features,
-                feature_indices=feature_indices)
-            data_loader = self._create_data_loader(
-                dataset,
-                batch_size=batch_size,
-                num_workers=num_workers)
-        return self._document_embeddings(data_loader, return_coarse, fname_out)
+        if data is None:
+            assert data_dir is not None and fname is not None, \
+                "valid file path is required when data is not passed"
+        dataset = self._create_dataset(
+            data_dir, fname_features=fname,
+            data=data, normalize_features=normalize,
+            feature_type=feature_type,
+            feature_indices=indices, _type='tensor')
+        data_loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            collate_fn=construct_collate_fn(
+                feature_type=feature_type, classifier_type='None'),
+            shuffle=False)
+        return self._embeddings(data_loader, return_coarse, fname_out)
 
     def _adjust_parameters(self):
         self.optimizer.adjust_lr(self.dlr_factor)

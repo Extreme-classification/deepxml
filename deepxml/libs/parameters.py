@@ -311,6 +311,10 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Use shortlist or full')
         self.parser.add_argument(
+            '--use_pretrained_shortlist',
+            action='store_true',
+            help='Load shortlist from disk')
+        self.parser.add_argument(
             '--validate',
             action='store_true',
             help='Validate or just train')

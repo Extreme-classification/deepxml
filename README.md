@@ -4,7 +4,10 @@ Implementation of DeepXML
 # TODO
 
 - [ ] Predictions with aux mapping
+- [ ] Post-process with shortlist
 - [ ] Classifier weights with aux mapping
+- [ ] Load any architecture from json
+- [ ] Support for images?
 - [x] Integrate parameters
 - [x] Refactor data loader
 - [x] Refactor dataset/collate_fn
@@ -17,7 +20,7 @@ Implementation of DeepXML
 - [x] Different class for features/labels
 - [x] Different class for shortlist
 - [ ] Parameters from json?
-- [ ] Remove dependence on labels in prediction?/get_document_embeddings?
+- [ ] Remove dependence on labels in prediction?
 - [x] Shortlist with NS
 - [x] Support for dynamic shortlist
 - [x] Support for on-disk document embeddings (i.e. a large number of documents)

@@ -10,11 +10,10 @@ from pathlib import Path
 import libs.utils as utils
 import models.network as network
 import libs.shortlist as shortlist
-import libs.shortlist_utils as shortlist_utils
 import libs.model as model_utils
-import libs.optimizer_utils as optimizer_utils
+import libs.optimizer as optimizer
 import libs.parameters as parameters
-import libs.negative_sampling as negative_sampling
+import libs.sampling as sampling
 import libs.loss as loss
 
 
@@ -87,6 +86,16 @@ def train(model, params):
     params: NameSpace
         parameter of the model
     """
+    tr_pretrained_shortlist = None
+    val_pretrained_shortlist = None
+
+    # Names harcoded for now; changed if required
+    if params.use_pretrained_shortlist:
+        tr_pretrained_shortlist = os.path.join(
+            params.model_dir, 'train_shortlist.npz')
+        if params.validate:
+            val_pretrained_shortlist = os.path.join(
+                params.model_dir, 'test_shortlist.npz')
     model.fit(
         data_dir=params.data_dir,
         model_dir=params.model_dir,
@@ -113,6 +122,8 @@ def train(model, params):
         feature_indices=params.feature_indices,
         use_coarse=params.use_coarse_for_shorty,
         label_indices=params.label_indices,
+        tr_pretrained_shortlist=tr_pretrained_shortlist,
+        val_pretrained_shortlist=val_pretrained_shortlist,
         aux_mapping=params.aux_mapping)
     model.save(params.model_dir, params.model_fname)
 
@@ -132,19 +143,15 @@ def get_document_embeddings(model, params, _save=True):
     if params.huge_dataset:
         fname_temp = os.path.join(
             params.result_dir, params.out_fname + ".memmap.npy")
-    doc_embeddings = model.get_document_embeddings(
-        data_dir=params.data_dir,
-        dataset=params.dataset,
-        fname_features=params.ts_feat_fname,
-        fname_labels=params.ts_label_fname,
-        data={'X': None, 'Y': None},
+    doc_embeddings = model.get_embeddings(
+        data_dir=os.path.join(params.data_dir, params.dataset),
+        fname=params.ts_feat_fname,
         fname_out=fname_temp,
         return_coarse=params.use_coarse_for_shorty,
-        keep_invalid=params.keep_invalid,
         batch_size=params.batch_size,
-        normalize_features=params.normalize,
+        normalize=params.normalize,
         num_workers=params.num_workers,
-        feature_indices=params.feature_indices)
+        indices=params.feature_indices)
     fname = os.path.join(params.result_dir, params.out_fname)
     if _save:  # Save
         np.save(fname, doc_embeddings)
@@ -194,6 +201,13 @@ def inference(model, params):
     params: NameSpace
         parameter of the model
     """
+    pretrained_shortlist = None
+    classifier_type = 'full'
+    if params.use_shortlist:
+        classifier_type = 'shortlist'
+    if params.use_pretrained_shortlist:
+        pretrained_shortlist = os.path.join(
+            params.model_dir, 'test_shortlist.npz')
     predicted_labels = model.predict(
         data_dir=params.data_dir,
         dataset=params.dataset,
@@ -202,6 +216,8 @@ def inference(model, params):
         normalize_features=params.normalize,
         normalize_labels=params.nbn_rel,
         beta=params.beta,
+        feature_type=params.feature_type,
+        classifier_type=classifier_type,
         num_workers=params.num_workers,
         top_k=params.top_k,
         data={'X': None, 'Y': None},
@@ -210,7 +226,8 @@ def inference(model, params):
         label_indices=params.label_indices,
         use_coarse=params.use_coarse_for_shorty,
         shortlist_method=params.shortlist_method,
-        aux_mapping=params.aux_mapping
+        aux_mapping=params.aux_mapping,
+        pretrained_shortlist=pretrained_shortlist
     )
     # Real number of labels
     num_samples, num_labels = utils.get_header(
@@ -250,7 +267,7 @@ def construct_shortlist(params):
         - hnsw
         - parallel shortlist
     """
-    if params.shortlist_method == 'reranker':
+    if params.use_pretrained_shortlist:
         return None
 
     if not params.use_shortlist:
@@ -260,7 +277,7 @@ def construct_shortlist(params):
         if params.num_clf_partitions > 1:
             raise NotImplementedError("Not tested yet!")
         else:
-            shorty = negative_sampling.NegativeSampler(
+            shorty = sampling.NegativeSampler(
                 num_labels=params.num_labels,
                 num_negatives=params.num_nbrs,
                 prob=None,
@@ -298,7 +315,6 @@ def construct_shortlist(params):
                 efC={'knn': params.efC//6, 'kcentroid': params.efC},
                 efS={'knn': params.efS//4, 'kcentroid': params.efS},
                 num_threads=params.ann_threads,
-                num_threads=params.ann_threads,
                 num_clusters=params.num_centroids)
     else:
         raise NotImplementedError("Not yet implemented!")
@@ -314,7 +330,7 @@ def construct_loss(params, pos_weight=None):
         reduction=_reduction, pad_ind=_pad_ind, pos_weight=pos_weight)
 
 
-def construct_model(params, net, criterion, optimizer, shorty):
+def construct_model(params, net, criterion, opt, shorty):
     """Construct shorty
     * Support for:
         - negative sampling (ns)
@@ -323,15 +339,15 @@ def construct_model(params, net, criterion, optimizer, shorty):
     """
     if params.model_method == 'ns':  # Random negative Sampling
         model = model_utils.ModelNS(
-            params, net, criterion, optimizer, shorty)
+            params, net, criterion, opt, shorty)
     elif params.model_method == 'shortlist':  # Approximate Nearest Neighbor
         model = model_utils.ModelShortlist(
-            params, net, criterion, optimizer, shorty)
+            params, net, criterion, opt, shorty)
     elif params.model_method == 'full':
-        model = model_utils.ModelFull(params, net, criterion, optimizer)
+        model = model_utils.ModelFull(params, net, criterion, opt)
     elif params.model_method == 'reranker':
         model = model_utils.ModelReRanker(
-            params, net, criterion, optimizer, shorty)
+            params, net, criterion, opt, shorty)
     else:
         raise NotImplementedError("Unknown model_method.")
     return model
@@ -354,15 +370,15 @@ def main(params):
         criterion = construct_loss(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
-        optimizer = optimizer_utils.Optimizer(
+        opt = optimizer.Optimizer(
             opt_type=params.optim,
             learning_rate=params.learning_rate,
             momentum=params.momentum,
             freeze_embeddings=params.freeze_embeddings,
             weight_decay=params.weight_decay)
-        optimizer.construct(net)
+        opt.construct(net)
         shorty = construct_shortlist(params)
-        model = construct_model(params, net, criterion, optimizer, shorty)
+        model = construct_model(params, net, criterion, opt, shorty)
         model.transfer_to_devices()
         train(model, params)
         fname = os.path.join(params.result_dir, 'params.json')
@@ -372,20 +388,20 @@ def main(params):
         fname = os.path.join(params.result_dir, 'params.json')
         utils.load_parameters(fname, params)
         net = construct_network(params)
-        optimizer = optimizer_utils.Optimizer(
+        opt = optimizer.Optimizer(
             opt_type=params.optim,
             learning_rate=params.learning_rate,
             momentum=params.momentum,
             freeze_embeddings=params.freeze_embeddings)
         criterion = construct_loss(params)
         shorty = construct_shortlist(params)
-        model = construct_model(params, net, criterion, optimizer, shorty)
+        model = construct_model(params, net, criterion, opt, shorty)
 
         model.load_checkpoint(
             params.model_dir, params.model_fname, params.last_epoch)
         model.transfer_to_devices()
 
-        model.optimizer = optimizer
+        model.optimizer = opt
         model.optimizer.construct(model.net)
 
         print("Model configuration is: ", params)
@@ -416,7 +432,7 @@ def main(params):
         print("\nModel configuration: ", net)
         shorty = construct_shortlist(params)
         model = construct_model(
-            params, net, criterion=None, optimizer=None, shorty=shorty)
+            params, net, criterion=None, opt=None, shorty=shorty)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
         pp_with_shorty(model, params, shorty)
@@ -430,7 +446,7 @@ def main(params):
         print("\nModel configuration: ", net)
         shorty = construct_shortlist(params)
         model = construct_model(
-            params, net, criterion=None, optimizer=None, shorty=shorty)
+            params, net, criterion=None, opt=None, shorty=shorty)
         model.load(params.model_dir, params.model_fname)
         model.transfer_to_devices()
         if params.ts_feat_fname == "0":

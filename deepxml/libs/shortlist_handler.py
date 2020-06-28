@@ -4,9 +4,31 @@ from .dist_utils import Partitioner
 import operator
 import os
 from .lookup import Table, PartitionedTable
-from .negative_sampling import NegativeSampler
+from .sampling import NegativeSampler
 from scipy.sparse import load_npz
 from xclib.utils import sparse as sp
+
+
+def construct_handler(shortlist_type, num_labels, model_dir='',
+                      mode='train', size_shortlist=-1,
+                      label_mapping=None, in_memory=True,
+                      shorty=None, fname=None, corruption=200,
+                      num_clf_partitions=1):
+    if shortlist_type == 'static':
+        return ShortlistHandlerStatic(
+            num_labels, model_dir, num_clf_partitions, mode, size_shortlist,
+            in_memory, label_mapping, fname)
+    elif shortlist_type == 'hybrid':
+        return ShortlistHandlerHybrid(
+            num_labels, model_dir, num_clf_partitions, mode, size_shortlist,
+            in_memory, label_mapping, corruption)
+    elif shortlist_type == 'dynamic':
+        return ShortlistHandlerDynamic(
+            num_labels, shorty, model_dir,
+            mode, num_clf_partitions, size_shortlist, label_mapping)
+    else:
+        raise NotImplementedError(
+            "Unknown shortlist method: {}!".format(shortlist_method))
 
 
 class ShortlistHandlerBase(object):
@@ -185,11 +207,23 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
 
     def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
                  mode='train', size_shortlist=-1, in_memory=True,
-                 label_mapping=None):
+                 label_mapping=None, fname=None):
         super().__init__(num_labels, None, model_dir, num_clf_partitions,
                          mode, size_shortlist, label_mapping)
         self.in_memory = in_memory
         self._create_shortlist()
+        if fname is not None:
+            self.from_pretrained(fname)
+
+    def from_pretrained(self, fname):
+        """
+            Load label shortlist and similarity for each instance
+        """
+        shortlist = load_npz(fname)
+        _ind, _sim = sp.topk(shortlist,
+                             self.size_shortlist, self.num_labels,
+                             -1000, return_values=True)
+        self.update_shortlist(_ind, _sim, fname='tmp_reranker')
 
     def query(self, index):
         shortlist = self.shortlist.query(index)
@@ -246,7 +280,6 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
 
 class ShortlistHandlerDynamic(ShortlistHandlerBase):
     """ShortlistHandler with dynamic shortlist
-    - support for partitioned classifier
 
     Parameters
     ----------
@@ -256,8 +289,6 @@ class ShortlistHandlerDynamic(ShortlistHandlerBase):
         shortlist object like negative sampler
     model_dir: str, optional, default=''
         save the data in model_dir
-    num_clf_partitions: int, optional, default=''
-        #classifier splits
     mode: str: optional, default=''
         mode i.e. train or test or val
     size_shortlist:int, optional, default=-1
@@ -267,14 +298,16 @@ class ShortlistHandlerDynamic(ShortlistHandlerBase):
     """
 
     def __init__(self, num_labels, shortlist, model_dir='',
-                 num_clf_partitions=1, mode='train', size_shortlist=-1,
-                 label_mapping=None):
-        super().__init__(num_labels, shortlist, model_dir, num_clf_partitions,
-                         mode, size_shortlist, label_mapping)
+                 num_clf_partitions=1, mode='train',
+                 size_shortlist=-1, label_mapping=None):
+        super().__init__(
+            num_labels, shortlist, model_dir, num_clf_partitions,
+            mode, size_shortlist, label_mapping)
         self._create_shortlist(shortlist)
 
-    def query(self, index):
-        return self.shortlist.query(num_samples=1)
+    def query(self, num_instances=1, ind=None):
+        return self.shortlist.query(
+            num_instances=num_instances, ind=ind)
 
 
 class ShortlistHandlerHybrid(ShortlistHandlerBase):
@@ -366,49 +399,3 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
             self.model_dir, fname+'.shortlist.indices'))
         self.sim.load(os.path.join(
             self.model_dir, fname+'.shortlist.sim'))
-
-
-class ShortlistReRanker(ShortlistHandlerStatic):
-    """ShortlistHandler with static shortlist
-    - save/load/update/process shortlist
-    - support for partitioned classifier
-    Parameters
-    ----------
-    num_labels: int
-        number of labels
-    model_dir: str, optional, default=''
-        save the data in model_dir
-    num_clf_partitions: int, optional, default=''
-        #classifier splits
-    mode: str: optional, default=''
-        mode i.e. train or test or val
-    size_shortlist:int, optional, default=-1
-        get shortlist of this size
-    in_memory: bool: optional, default=True
-        Keep the shortlist in memory or on-disk
-    label_mapping: None or dict: optional, default=None
-        map labels as per this mapping
-    """
-
-    def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
-                 mode='train', size_shortlist=-1, in_memory=True,
-                 label_mapping=None):
-        super().__init__(num_labels, model_dir, num_clf_partitions,
-                         mode, size_shortlist, label_mapping)
-        self.in_memory = in_memory
-        self._create_shortlist()
-
-    def _create_shortlist(self):
-        super()._create_shortlist()
-        self.load_shortlist(self.mode)
-
-    def load_shortlist(self, fname):
-        """
-            Load label shortlist and similarity for each instance
-        """
-        shortlist = load_npz(os.path.join(self.model_dir,
-                                          fname+'_shortlist.npz'))
-        _shortlist, _sim = sp.topk(shortlist,
-                                   self.size_shortlist, self.num_labels,
-                                   -1000, return_values=True)
-        self.update_shortlist(_shortlist, _sim, fname='tmp_reranker')

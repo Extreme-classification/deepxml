@@ -5,14 +5,13 @@ import sys
 from scipy.sparse import lil_matrix
 import numpy as np
 from sklearn.preprocessing import normalize
-from .dataset_base import DatasetBase
+from .dataset_base import DatasetBase, DatasetTensor
 import xclib.data.data_utils as data_utils
 from .dist_utils import Partitioner
 import operator
 from xclib.utils.sparse import _map
 from .lookup import Table, PartitionedTable
-from .shortlist_handler import ShortlistHandlerStatic, ShortlistHandlerDynamic
-from .shortlist_handler import ShortlistHandlerHybrid, ShortlistReRanker
+from .shortlist_handler import construct_handler
 
 
 def construct_dataset(data_dir, fname_features, fname_labels, data=None,
@@ -21,22 +20,29 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None,
                       keep_invalid=False, feature_type='sparse',
                       num_clf_partitions=1, feature_indices=None,
                       label_indices=None, shortlist_method='static',
-                      shorty=None, aux_mapping=None):
-    if size_shortlist == -1:
-        return DatasetDense(
+                      shorty=None, aux_mapping=None, _type='full',
+                      pretrained_shortlist=None):
+    if _type == 'full':  # with OVA classifier
+        return DatasetFull(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
             normalize_labels, num_clf_partitions, feature_type, aux_mapping)
-    else:
+    elif _type == 'shortlist':  # with a shortlist
         #  Construct dataset for sparse data
-        return DatasetSparse(
+        return DatasetShortlist(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
             normalize_labels, num_clf_partitions, size_shortlist,
-            feature_type, shortlist_method, shorty, aux_mapping)
+            feature_type, shortlist_method, shorty, aux_mapping,
+            pretrained_shortlist=pretrained_shortlist)
+    elif _type == 'tensor':
+        return DatasetTensor(
+            data_dir, fname_features, data, feature_indices, feature_type)
+    else:
+        raise NotImplementedError("Unknown dataset type")
 
 
-class DatasetDense(DatasetBase):
+class DatasetFull(DatasetBase):
     """Dataset to load and use XML-Datasets with full output space only
     Parameters
     ---------
@@ -147,7 +153,7 @@ class DatasetDense(DatasetBase):
         return x, y
 
 
-class DatasetSparse(DatasetBase):
+class DatasetShortlist(DatasetBase):
     """Dataset to load and use XML-Datasets with shortlist
     Parameters
     ---------
@@ -201,7 +207,7 @@ class DatasetSparse(DatasetBase):
                  num_clf_partitions=1, size_shortlist=-1,
                  feature_type='sparse', shortlist_method='static',
                  shorty=None, aux_mapping=None, label_type='sparse',
-                 shortlist_in_memory=True):
+                 shortlist_in_memory=True, pretrained_shortlist=None):
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
                          keep_invalid, normalize_features, normalize_labels,
@@ -217,40 +223,44 @@ class DatasetSparse(DatasetBase):
         self.shortlist_method = shortlist_method
         if self.mode == 'train':
             # Remove samples w/o any feature or label
-            if self.shortlist_method != 'reranker':
+            if pretrained_shortlist is None:
                 self._remove_samples_wo_features_and_labels()
 
         if not keep_invalid:
             # Remove labels w/o any positive instance
             self._process_labels(model_dir, aux_mapping)
 
-        if shortlist_method == 'static':
-            self.shortlist = ShortlistHandlerStatic(
-                self.num_labels, model_dir, num_clf_partitions,
-                mode, size_shortlist, shortlist_in_memory)
-        elif shortlist_method == 'hybrid':
-            self.shortlist = ShortlistHandlerHybrid(
-                self.num_labels, model_dir, num_clf_partitions,
-                mode, size_shortlist, shortlist_in_memory,
-                _corruption=150)
-        elif shortlist_method == 'dynamic':
-            self.shortlist = ShortlistHandlerDynamic(
-                self.num_labels, shorty, model_dir, num_clf_partitions,
-                mode, size_shortlist)
-        elif shortlist_method == 'reranker':
-            self.shortlist = ShortlistReRanker(
-                self.num_labels, model_dir, num_clf_partitions, mode,
-                size_shortlist)
-        else:
-            raise NotImplementedError(
-                "Unknown shortlist method: {}!".format(shortlist_method))
+        self.shortlist = construct_handler(
+            shortlist_type=shortlist_method,
+            num_labels=self.num_labels,
+            model_dir=model_dir,
+            shorty=shorty,
+            mode=mode,
+            size_shortlist=size_shortlist,
+            label_mapping=None,
+            in_memory=shortlist_in_memory,
+            corruption=150,
+            fname=pretrained_shortlist)
         self.use_shortlist = True if self.size_shortlist > 0 else False
         self.label_padding_index = self.num_labels
 
-    def update_shortlist(self, shortlist, dist, fname='tmp', idx=-1):
+    def _process_labels(self, model_dir, aux_mapping):
+        super()._process_labels(model_dir)
+        # if auxiliary task is clustered labels
+        if aux_mapping is not None:
+            print("Aux mapping is not None, mapping labels")
+            aux_mapping = np.loadtxt(aux_mapping, dtype=np.int)
+            _num_labels = len(np.unique(aux_mapping))
+            mapping = dict(zip(range(len(aux_mapping)), aux_mapping))
+            self.labels.Y = _map(self.labels.Y, mapping=mapping,
+                                 shape=(self.num_instances, _num_labels),
+                                 axis=1)
+            self.labels.binarize()
+
+    def update_shortlist(self, ind, sim, fname='tmp', idx=-1):
         """Update label shortlist for each instance
         """
-        self.shortlist.update_shortlist(shortlist, dist, fname, idx)
+        self.shortlist.update_shortlist(ind, sim, fname, idx)
 
     def save_shortlist(self, fname):
         """Save label shortlist and distance for each instance
@@ -261,32 +271,6 @@ class DatasetSparse(DatasetBase):
         """Load label shortlist and distance for each instance
         """
         self.shortlist.load_shortlist(fname)
-
-    def _process_labels_retrain_w_shortlist(self, data_obj):
-        """Process labels for retrain with shortlist
-        Useful for training labels shortlist after OVA training
-        """
-        super()._process_labels_predict(data_obj)
-
-    def _process_labels(self, model_dir, aux_mapping=None):
-        """
-            Process labels to handle labels without any training instance
-        """
-        data_obj = {}
-        fname = os.path.join(
-            model_dir, 'labels_params.pkl' if self._split is None else
-            "labels_params_split_{}.pkl".format(self._split))
-        if self.mode == 'train':
-            self._process_labels_train(data_obj)
-            pickle.dump(data_obj, open(fname, 'wb'))
-        elif self.mode == 'retrain_w_shortlist':
-            data_obj = pickle.load(open(fname, 'rb'))
-            self._process_labels_retrain_w_shortlist(
-                data_obj)
-            pickle.dump(data_obj, open(fname, 'wb'))
-        else:
-            data_obj = pickle.load(open(fname, 'rb'))
-            self._process_labels_predict(data_obj)
 
     def get_shortlist(self, index):
         """
