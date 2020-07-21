@@ -311,6 +311,14 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Use shortlist or full')
         self.parser.add_argument(
+            '--load_intermediate',
+            action='store_true',
+            help='Load existing model for intermediate rep.')
+        self.parser.add_argument(
+            '--save_intermediate',
+            action='store_true',
+            help='Save model for intermediate rep.')
+        self.parser.add_argument(
             '--use_pretrained_shortlist',
             action='store_true',
             help='Load shortlist from disk')

@@ -2,7 +2,23 @@ import sys
 import re
 import torch.nn as nn
 import models.residual_layer as residual_layer
+import models.rnn_layer as rnn_layer
+import models.astec as astec
 import json
+from collections import OrderedDict
+
+
+class _Identity(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(_Identity, self).__init__()
+
+    def forward(self, x):
+        # useful when x_ind is None
+        x, x_ind = x
+        return x
+
+    def initialize(self, *args, **kwargs):
+        pass
 
 
 elements = {
@@ -10,7 +26,11 @@ elements = {
     'batchnorm1d': nn.BatchNorm1d,
     'linear': nn.Linear,
     'relu': nn.ReLU,
-    'residual': residual_layer.Residual
+    'residual': residual_layer.Residual,
+    'identity': nn.Identity,
+    '_identity': _Identity,
+    'astec': astec.Astec,
+    'rnn': rnn_layer.RNN
 }
 
 
@@ -26,17 +46,35 @@ class Transform(nn.Module):
     def __init__(self, modules, device="cuda:0"):
         super(Transform, self).__init__()
         self.device = device
-        self.transform = nn.Sequential(*modules)
+        if len(modules) == 1:
+            self.transform = modules[0]
+        else:
+            self.transform = nn.Sequential(*modules)
 
-    def forward(self, embed):
+    def forward(self, x):
         """
             Forward pass for transform layer
             Args:
-                embed: torch.Tensor: document representation
+                x: torch.Tensor: document representation
             Returns:
-                embed: torch.Tensor: transformed document representation
+                x: torch.Tensor: transformed document representation
         """
-        return self.transform(embed)
+        return self.transform(x)
+
+    def _initialize(self, x):
+        """Initialize parameters from existing ones
+        Typically for word embeddings
+        """
+        if isinstance(self.transform, nn.Sequential):
+            self.transform[0].initialize(x)
+        else:
+            self.transform.initialize(x)
+
+    def initialize(self, x):
+        # Currently implemented for:
+        #  * initializing first module of nn.Sequential
+        #  * initializing module
+        self._initialize(x)
 
     def to(self):
         super().to(self.device)
@@ -46,12 +84,26 @@ class Transform(nn.Module):
         # TODO: Hardcoded for now; compute it
         return 300
 
+    def get_token_embeddings(self):
+        return self.transform.get_token_embeddings()
+
+    @property
+    def sparse(self):
+        try:
+            _sparse = self.transform.sparse
+        except AttributeError:
+            _sparse = False
+        return _sparse
+
 
 def resolve_schema_args(jfile, ARGS):
     arguments = re.findall(r"#ARGS\.(.+?);", jfile)
     for arg in arguments:
         replace = '#ARGS.%s;' % (arg)
         to = str(ARGS.__dict__[arg])
+        # Python True and False to json true & false
+        if to == 'True' or to == 'False':
+            to = to.lower()
         if jfile.find('\"#ARGS.%s;\"' % (arg)) != -1:
             replace = '\"#ARGS.%s;\"' % (arg)
             if isinstance(ARGS.__dict__[arg], str):

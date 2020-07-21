@@ -109,6 +109,7 @@ def train(model, params):
         tr_label_fname=params.tr_label_fname,
         val_label_fname=params.val_label_fname,
         batch_size=params.batch_size,
+        feature_type=params.feature_type,
         num_workers=params.num_workers,
         normalize_features=params.normalize,
         normalize_labels=params.nbn_rel,
@@ -148,6 +149,7 @@ def get_document_embeddings(model, params, _save=True):
         fname=params.ts_feat_fname,
         fname_out=fname_temp,
         return_coarse=params.use_coarse_for_shorty,
+        feature_type=params.feature_type,
         batch_size=params.batch_size,
         normalize=params.normalize,
         num_workers=params.num_workers,
@@ -171,7 +173,7 @@ def get_word_embeddings(model, params):
     params: NameSpace
         parameter of the model
     """
-    _embeddings = model.net.embeddings.get_weights()
+    _embeddings = model.net.get_token_embeddings()
     fname = os.path.join(params.result_dir, params.out_fname)
     np.save(fname, _embeddings)
 
@@ -363,10 +365,14 @@ def main(params):
         if params.use_shortlist:
             params.label_padding_index = params.num_labels
         net = construct_network(params)
-        embeddings = load_emeddings(params)
-        net.initialize_embeddings(embeddings)
-        del embeddings
-        print("Initialized embeddings!")
+        if params.load_intermediate:
+            net.load_intermediate_model(
+                os.path.join(os.path.dirname(params.model_dir), "Z.pkl"))
+        else:
+            embeddings = load_emeddings(params)
+            net.initialize(embeddings)
+            del embeddings
+            print("Initialized embeddings!")
         criterion = construct_loss(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)
@@ -374,7 +380,6 @@ def main(params):
             opt_type=params.optim,
             learning_rate=params.learning_rate,
             momentum=params.momentum,
-            freeze_embeddings=params.freeze_embeddings,
             weight_decay=params.weight_decay)
         opt.construct(net)
         shorty = construct_shortlist(params)
@@ -382,6 +387,9 @@ def main(params):
         model.transfer_to_devices()
         train(model, params)
         fname = os.path.join(params.result_dir, 'params.json')
+        if params.save_intermediate:
+            net.save_intermediate_model(
+                os.path.join(os.path.dirname(params.model_dir), "Z.pkl"))
         utils.save_parameters(fname, params)
 
     elif params.mode == 'retrain':

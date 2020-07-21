@@ -3,12 +3,23 @@ import torch.nn as nn
 import numpy as np
 import math
 import os
-import models.custom_embeddings as custom_embeddings
 import models.transform_layer as transform_layer
 import models.linear_layer as linear_layer
 
 
 __author__ = 'KD'
+
+
+def _to_device(x, device):
+    if x is None:
+        return None
+    elif isinstance(x, (tuple, list)):
+        out = []
+        for item in x:
+            out.append(_to_device(item, device))
+        return out
+    else:
+        return x.to(device)
 
 
 class DeepXMLBase(nn.Module):
@@ -31,26 +42,11 @@ class DeepXMLBase(nn.Module):
         padding index in words embedding layer
     """
 
-    def __init__(self, vocabulary_dims, embedding_dims,
-                 trans_config, padding_idx=0):
+    def __init__(self, config, device="cuda:0"):
         super(DeepXMLBase, self).__init__()
-        self.vocabulary_dims = vocabulary_dims+1
-        self.embedding_dims = embedding_dims
-        self.trans_config = trans_config
-        self.padding_idx = padding_idx
-        self.embeddings = self._construct_embedding()
-        self.transform = self._construct_transform(trans_config)
+        self.transform = self._construct_transform(config)
         self.classifier = self._construct_classifier()
-        # Keep embeddings on first device
-        self.device_embeddings = torch.device("cuda:0")
-
-    def _construct_embedding(self):
-        return custom_embeddings.CustomEmbedding(
-            num_embeddings=self.vocabulary_dims,
-            embedding_dim=self.embedding_dims,
-            padding_idx=self.padding_idx,
-            scale_grad_by_freq=False,
-            sparse=True)
+        self.device = torch.device(device)
 
     def _construct_classifier(self):
         return nn.Identity()
@@ -63,29 +59,25 @@ class DeepXMLBase(nn.Module):
     def representation_dims(self):
         return self.transform.representation_dims
 
-    def encode(self, x, x_ind=None):
+    def encode(self, x):
         """Forward pass
         * Assumes features are dense if x_ind is None
 
         Arguments:
         -----------
-        x: torch.FloatTensor
-            (sparse features) contains weights of features as per x_ind or
-            (dense features) contains the dense representation of a point
-        x_ind: torch.LongTensor or None, optional (default=None)
-            contains indices of features (sparse features)
+        x: tuple
+            torch.FloatTensor or None
+                (sparse features) contains weights of features as per x_ind or
+                (dense features) contains the dense representation of a point
+            torch.LongTensor or None
+                contains indices of features (sparse or seqential features)
 
         Returns
         -------
         out: logits for each label
         """
-        if x_ind is None:
-            embed = x.to(self.device_embeddings)
-        else:
-            embed = self.embeddings(
-                x_ind.to(self.device_embeddings),
-                x.to(self.device_embeddings))
-        return self.transform(embed)
+        return self.transform(
+            _to_device(x, self.device))
 
     def forward(self, batch_data):
         """Forward pass
@@ -107,19 +99,18 @@ class DeepXMLBase(nn.Module):
         return self.classifier(
             self.encode(batch_data['X'], batch_data['X_ind']))
 
-    def initialize_embeddings(self, word_embeddings):
+    def initialize(self, x):
         """Initialize embeddings from existing ones
         Parameters:
         -----------
         word_embeddings: numpy array
             existing embeddings
         """
-        self.embeddings.from_pretrained(word_embeddings)
+        self.transform.initialize(x)
 
     def to(self):
         """Send layers to respective devices
         """
-        self.embeddings.to()
         self.transform.to()
         self.classifier.to()
 
@@ -154,11 +145,7 @@ class DeepXMLf(DeepXMLBase):
         transform_config_dict = transform_layer.fetch_json(
             params.trans_method, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
-        super(DeepXMLf, self).__init__(
-            vocabulary_dims=params.vocabulary_dims,
-            embedding_dims=params.embedding_dims,
-            trans_config=trans_config_coarse,
-            padding_idx=params.padding_idx)
+        super(DeepXMLf, self).__init__(trans_config_coarse)
         trans_config_fine = transform_config_dict['transform_fine']
         self.transform_fine = self._construct_transform(
             trans_config_fine)
@@ -181,7 +168,7 @@ class DeepXMLf(DeepXMLBase):
         -------
         out: logits for each label
         """
-        encoding = super().encode(x, x_ind)
+        encoding = super().encode((x, x_ind))
         return encoding if return_coarse else self.transform_fine(encoding)
 
     def _construct_classifier(self):
@@ -201,6 +188,15 @@ class DeepXMLf(DeepXMLBase):
                 output_size=self.num_labels,  # last one is padding index
                 bias=True
             )
+
+    def get_token_embeddings(self):
+        return self.transform.get_token_embeddings()
+
+    def save_intermediate_model(self, fname):
+        torch.save(self.transform.state_dict(), fname)
+
+    def load_intermediate_model(self, fname):
+        self.transform.load_state_dict(torch.load(fname))
 
     def to(self):
         """Send layers to respective devices
@@ -227,7 +223,7 @@ class DeepXMLf(DeepXMLBase):
         return self.classifier.get_weights()
 
     def __repr__(self):
-        s = f"{self.embeddings}\n{self.transform}\n"
+        s = f"{self.transform}\n"
         s += f"(Transform fine): {self.transform_fine}"
         s += f"\n(Classifier): {self.classifier}\n"
         return s
@@ -240,20 +236,22 @@ class DeepXMLs(DeepXMLBase):
     """
 
     def __init__(self, params):
-        transform_config_dict = transform_layer.fetch_json(
-            params.trans_method, params)
-        trans_config_coarse = transform_config_dict['transform_coarse']
         self.num_labels = params.num_labels
         self.num_clf_partitions = params.num_clf_partitions
         self.label_padding_index = params.label_padding_index
-        super(DeepXMLs, self).__init__(
-            vocabulary_dims=params.vocabulary_dims,
-            embedding_dims=params.embedding_dims,
-            trans_config=trans_config_coarse,
-            padding_idx=params.padding_idx)
+        transform_config_dict = transform_layer.fetch_json(
+            params.trans_method, params)
+        trans_config_coarse = transform_config_dict['transform_coarse']
+        super(DeepXMLs, self).__init__(trans_config_coarse)
         trans_config_fine = transform_config_dict['transform_fine']
         self.transform_fine = self._construct_transform(
             trans_config_fine)
+
+    def save_intermediate_model(self, fname):
+        torch.save(self.transform.state_dict(), fname)
+
+    def load_intermediate_model(self, fname):
+        self.transform.load_state_dict(torch.load(fname))
 
     def encode(self, x, x_ind=None, return_coarse=False):
         """Forward pass
@@ -273,7 +271,7 @@ class DeepXMLs(DeepXMLBase):
         -------
         out: logits for each label
         """
-        encoding = super().encode(x, x_ind)
+        encoding = super().encode((x, x_ind))
         return encoding if return_coarse else self.transform_fine(encoding)
 
     def forward(self, batch_data):
@@ -349,7 +347,7 @@ class DeepXMLs(DeepXMLBase):
         return self.classifier.get_weights()
 
     def __repr__(self):
-        s = f"{self.embeddings}\n{self.transform}\n"
+        s = f"{self.transform}\n"
         s += f"(Transform fine): {self.transform_fine}"
         s += f"\n(Classifier): {self.classifier}\n"
         return s

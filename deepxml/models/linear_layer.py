@@ -71,6 +71,10 @@ class Linear(nn.Module):
         s += ')'
         return s.format(name=self.__class__.__name__, **self.__dict__)
 
+    @property
+    def sparse(self):
+        return False
+
 
 class SparseLinear(Linear):
     """Sparse Linear linear with sparse gradients
@@ -96,7 +100,6 @@ class SparseLinear(Linear):
             output_size=output_size,
             bias=bias,
             device=device)
-        self.sparse = True  # Required for optimizer
 
     def forward(self, embed, shortlist):
         """Forward pass for Linear sparse layer
@@ -159,6 +162,10 @@ class SparseLinear(Linear):
                 _bias = _bias[:-1, :]
             _wts = np.hstack([_wts, _bias])
         return _wts
+
+    @property
+    def sparse(self):
+        return True
 
 
 class ParallelLinear(nn.Module):
