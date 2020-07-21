@@ -37,7 +37,8 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None,
             pretrained_shortlist=pretrained_shortlist)
     elif _type == 'tensor':
         return DatasetTensor(
-            data_dir, fname_features, data, feature_indices, feature_type)
+            data_dir, fname_features, data, feature_indices,
+            normalize_features, feature_type)
     else:
         raise NotImplementedError("Unknown dataset type")
 

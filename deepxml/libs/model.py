@@ -7,6 +7,7 @@ import _pickle as pickle
 from .model_base import ModelBase
 import torch.utils.data
 from torch.utils.data import DataLoader
+from .features import DenseFeatures
 import numpy as np
 import sys
 import libs.utils as utils
@@ -127,9 +128,10 @@ class ModelShortlist(ModelBase):
         self.shorty.fit(doc_embeddings, labels)
 
     def _update_shortlist(self, dataset, use_coarse=True, mode='train',
-                          pre_trained_embedding=False, flag=True):
+                          flag=True):
         if flag:
-            if pre_trained_embedding:
+            if isinstance(dataset.features, DenseFeatures) and use_coarse:
+                self.logger.info("Using pre-trained embeddings for shortlist.")
                 doc_embeddings = dataset.features.data
             else:
                 doc_embeddings = self.get_embeddings(
@@ -201,8 +203,7 @@ class ModelShortlist(ModelBase):
             mean_loss / num_instances
 
     def _fit(self, train_loader, validation_loader, model_dir, result_dir,
-             init_epoch, num_epochs, validate_after, beta, use_coarse,
-             pre_trained_embedding=False):
+             init_epoch, num_epochs, validate_after, beta, use_coarse):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             cond = self.dlr_step != -1 and epoch % self.dlr_step == 0
             if epoch != 0 and cond:
@@ -216,7 +217,6 @@ class ModelShortlist(ModelBase):
                     dataset=train_loader.dataset,
                     use_coarse=use_coarse,
                     mode='train',
-                    pre_trained_embedding=pre_trained_embedding,
                     flag=self.shorty is not None)
 
                 if validation_loader is not None:
@@ -224,10 +224,9 @@ class ModelShortlist(ModelBase):
                         dataset=validation_loader.dataset,
                         use_coarse=use_coarse,
                         mode='predict',
-                        pre_trained_embedding=False,
                         flag=self.shorty is not None)
                 shorty_end_t = time.time()
-                self.logger.info("ANN train time: {} sec".format(
+                self.logger.info("ANN train time: {0:.2f} sec".format(
                     shorty_end_t - shorty_start_t))
                 self.tracking.shortlist_time = self.tracking.shortlist_time \
                     + shorty_end_t - shorty_start_t
@@ -239,7 +238,7 @@ class ModelShortlist(ModelBase):
                 batch_train_end_time - batch_train_start_time
 
             self.logger.info(
-                "Epoch: {}, loss: {}, time: {} sec".format(
+                "Epoch: {:d}, loss: {:.6f}, time: {:.2f} sec".format(
                     epoch, tr_avg_loss,
                     batch_train_end_time - batch_train_start_time))
             if validation_loader is not None and epoch % validate_after == 0:
@@ -258,8 +257,8 @@ class ModelShortlist(ModelBase):
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
                 self.logger.info(
-                    "P@1 (combined): {}, P@1 (knn): {}, "
-                    "P@1 (clf): {}, loss: {}, time: {} sec".format(
+                    "P@1 (combined): {:.2f}, P@1 (knn): {:.2f}, P@1"
+                    " (clf): {:.2f}, loss: {:.6f}, time: {:.2f} sec".format(
                         _acc['combined'][0][0]*100, _acc['knn'][0][0]*100,
                         _acc['clf'][0][0]*100, val_avg_loss,
                         val_end_t-val_start_t))
@@ -268,8 +267,8 @@ class ModelShortlist(ModelBase):
         self.save_checkpoint(model_dir, epoch+1)
         self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
         self.logger.info(
-            "Training time: {} sec, Validation time: {} sec, "
-            "Shortlist time: {} sec, Model size: {} MB".format(
+            "Training time: {:.2f} sec, Validation time: {:.2f} sec, "
+            "Shortlist time: {:.2f} sec, Model size: {:.2f} MB".format(
                 self.tracking.train_time,
                 self.tracking.validation_time,
                 self.tracking.shortlist_time,
@@ -312,7 +311,7 @@ class ModelShortlist(ModelBase):
             num_workers=num_workers,
             shuffle=shuffle)
         # No need to update embeddings
-        if self.freeze_embeddings:
+        if self.freeze_embeddings and feature_type != 'dense':
             self.logger.info(
                 "Computing and reusing coarse document embeddings "
                 "to save computations.")
@@ -342,7 +341,6 @@ class ModelShortlist(ModelBase):
                 batch_size=batch_size,
                 num_workers=num_workers,
                 shuffle=shuffle)
-
         self.logger.info("Loading validation data.")
         validation_loader = None
         if validate:
@@ -356,6 +354,7 @@ class ModelShortlist(ModelBase):
                 keep_invalid=keep_invalid,
                 normalize_features=normalize_features,
                 normalize_labels=normalize_labels,
+                feature_type=feature_type,
                 feature_indices=feature_indices,
                 pretrained_shortlist=val_pretrained_shortlist,
                 label_indices=label_indices,
@@ -369,8 +368,7 @@ class ModelShortlist(ModelBase):
                 num_workers=num_workers)
         self._fit(train_loader, validation_loader, model_dir,
                   result_dir, init_epoch, num_epochs,
-                  validate_after, beta, use_coarse,
-                  self.freeze_embeddings)
+                  validate_after, beta, use_coarse)
 
     def _predict(self, data_loader, top_k, use_coarse, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
@@ -385,7 +383,6 @@ class ModelShortlist(ModelBase):
             dataset=data_loader.dataset,
             use_coarse=use_coarse,
             mode='predict',
-            pre_trained_embedding=False,
             flag=self.shorty is not None)
         num_instances = data_loader.dataset.num_instances
         num_batches = num_instances//data_loader.batch_size
@@ -416,7 +413,7 @@ class ModelShortlist(ModelBase):
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
                 aux_mapping=None, feature_type='sparse',
-                pretrained_shortlist=None, **kwargs):
+                pretrained_shortlist=None, use_coarse=True, **kwargs):
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=ts_feat_fname,
@@ -440,14 +437,16 @@ class ModelShortlist(ModelBase):
             batch_size=batch_size,
             num_workers=num_workers)
         time_begin = time.time()
-        predicted_labels = self._predict(data_loader, top_k, **kwargs)
+        predicted_labels = self._predict(
+            data_loader, top_k, use_coarse, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
         acc = self.evaluate(dataset.labels.data, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info(
-            "Prediction time (total): {} sec.,"
-            "Prediction time (per sample): {} msec., P@k(%): {}".format(
+            "Prediction time (total): {:.2f} sec., "
+            "Prediction time (per sample): {:.2f} msec., "
+            "P@k(%): {:s}".format(
                 prediction_time,
                 prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
@@ -491,6 +490,7 @@ class ModelShortlist(ModelBase):
         s = self.net.model_size
         if self.shorty is not None:
             return s + self.shorty.model_size
+        return s
 
 
 class ModelNS(ModelBase):

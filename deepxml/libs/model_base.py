@@ -209,9 +209,10 @@ class ModelBase(object):
             self.tracking.train_time = self.tracking.train_time + \
                 batch_train_end_time - batch_train_start_time
 
-            self.logger.info("Epoch: {}, loss: {}, time: {} sec".format(
-                epoch, tr_avg_loss,
-                batch_train_end_time - batch_train_start_time))
+            self.logger.info(
+                "Epoch: {:d}, loss: {:.6f}, time: {:.2f} sec".format(
+                    epoch, tr_avg_loss,
+                    batch_train_end_time - batch_train_start_time))
             if validation_loader is not None and epoch % validate_after == 0:
                 val_start_t = time.time()
                 predicted_labels, val_avg_loss = self._validate(
@@ -228,14 +229,15 @@ class ModelBase(object):
                 self.logger.info("Model saved after epoch: {}".format(epoch))
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
-                self.logger.info("P@1: {}, loss: {}, time: {} sec".format(
-                    _prec[0]*100, val_avg_loss, val_end_t-val_start_t))
+                self.logger.info(
+                    "P@1: {:.2f}, loss: {:.6f}, time: {:.2f} sec".format(
+                        _prec[0]*100, val_avg_loss, val_end_t-val_start_t))
             self.tracking.last_epoch += 1
         self.save_checkpoint(model_dir, epoch+1)
         self.tracking.save(os.path.join(result_dir, 'training_statistics.pkl'))
         self.logger.info(
-            "Training time: {} sec, Validation time: {} sec"
-            ", Shortlist time: {} sec, Model size: {} MB".format(
+            "Training time: {:.2f} sec, Validation time: {:.2f} sec"
+            ", Shortlist time: {:.2f} sec, Model size: {:.2f} MB".format(
                 self.tracking.train_time, self.tracking.validation_time,
                 self.tracking.shortlist_time, self.model_size))
 
@@ -245,7 +247,7 @@ class ModelBase(object):
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4,
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
-            normalize_labels=False, validate=False,
+            normalize_labels=False, validate=False, feature_type='sparse',
             validate_after=5, aux_mapping=None, **kwargs):
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(
@@ -254,6 +256,7 @@ class ModelBase(object):
             fname_labels=tr_label_fname,
             data=data,
             mode='train',
+            feature_type=feature_type,
             keep_invalid=keep_invalid,
             normalize_features=normalize_features,
             normalize_labels=normalize_labels,
@@ -262,16 +265,12 @@ class ModelBase(object):
             aux_mapping=aux_mapping)
         train_loader = self._create_data_loader(
             train_dataset,
+            feature_type=feature_type,
             batch_size=batch_size,
             num_workers=num_workers,
             shuffle=shuffle)
         # Compute and store representation if embeddings are fixed
         if self.freeze_embeddings:
-            train_loader = self._create_data_loader(
-                train_dataset,
-                batch_size=batch_size,
-                num_workers=num_workers,
-                shuffle=False)
             self.logger.info(
                 "Computing and reusing coarse document embeddings"
                 " to save computations.")
@@ -291,6 +290,7 @@ class ModelBase(object):
                 keep_invalid=True)  # Invalid labels already removed
             train_loader = self._create_data_loader(
                 train_dataset,
+                feature_type='dense',
                 batch_size=batch_size,
                 num_workers=num_workers,
                 classifier_type='full',
@@ -304,6 +304,7 @@ class ModelBase(object):
                 fname_labels=val_label_fname,
                 data={'X': None, 'Y': None},
                 mode='predict',
+                feature_type=feature_type,
                 keep_invalid=keep_invalid,
                 normalize_features=normalize_features,
                 normalize_labels=normalize_labels,
@@ -312,6 +313,7 @@ class ModelBase(object):
                 aux_mapping=aux_mapping)
             validation_loader = self._create_data_loader(
                 validation_dataset,
+                feature_type=feature_type,
                 batch_size=batch_size,
                 num_workers=num_workers)
         self._fit(train_loader, validation_loader, model_dir,
@@ -321,9 +323,11 @@ class ModelBase(object):
         _res = ""
         if isinstance(acc, dict):
             for key, val in acc.items():
-                _res += "{}: {} ".format(key, val[0]*100)
+                _val = ','.join(map(lambda x: '%0.2f' % (x*100), val[0]))
+                _res += "({}): {} ".format(key, _val)
         else:
-            _res = "clf: {}".format(acc[0]*100)
+            _val = ','.join(map(lambda x: '%0.2f' % (x*100), acc[0]))
+            _res = "(clf): {}".format(_val)
         return _res
 
     def predict(self, data_dir, dataset, data=None,
@@ -361,8 +365,8 @@ class ModelBase(object):
         acc = self.evaluate(dataset.labels.data, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info(
-            "Prediction time (total): {} sec.,"
-            "Prediction time (per sample): {} msec., P@k(%): {}".format(
+            "Prediction time (total): {:.2f} sec.,"
+            "Prediction time (per sample): {:.2f} msec., P@k(%): {:s}".format(
                 prediction_time,
                 prediction_time*1000/data_loader.dataset.num_instances, _res))
         return predicted_labels
@@ -388,8 +392,12 @@ class ModelBase(object):
                         batch_idx, num_batches))
         return predicted_labels
 
-    def _embeddings(self, data_loader, return_coarse=False,
-                    fname_out=None, _dtype='float32'):
+    def _embeddings(self, data_loader, encoder=None,
+                    return_coarse=False, fname_out=None,
+                    _dtype='float32'):
+        if encoder is None:
+            self.logger.info("Using the default encoder.")
+            encoder = self.net.encode
         self.net.eval()
         torch.set_grad_enabled(False)
         if fname_out is not None:  # Save to disk
@@ -405,7 +413,7 @@ class ModelBase(object):
         count = 0
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['batch_size']
-            out_ans = self.net.encode(
+            out_ans = encoder(
                 batch_data['X'], batch_data['X_ind'], return_coarse)
             embeddings[count:count+batch_size,
                        :] = out_ans.detach().cpu().numpy()
@@ -415,10 +423,10 @@ class ModelBase(object):
             embeddings.flush()
         return embeddings
 
-    def get_embeddings(self, data_dir=None, fname=None, data=None,
-                       batch_size=1024, num_workers=6, normalize=False,
-                       indices=None, fname_out=None, return_coarse=False,
-                       feature_type='sparse'):
+    def get_embeddings(self, encoder=None, data_dir=None, fname=None,
+                       data=None, batch_size=1024, num_workers=6,
+                       normalize=False, indices=None, fname_out=None,
+                       return_coarse=False, feature_type='sparse'):
         """
             Encode given data points
         """
@@ -437,7 +445,7 @@ class ModelBase(object):
             collate_fn=construct_collate_fn(
                 feature_type=feature_type, classifier_type='None'),
             shuffle=False)
-        return self._embeddings(data_loader, return_coarse, fname_out)
+        return self._embeddings(data_loader, encoder, return_coarse, fname_out)
 
     def _adjust_parameters(self):
         self.optimizer.adjust_lr(self.dlr_factor)
