@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import models.transform_layer as transform_layer
 
 
 class Optimizer(object):
@@ -24,15 +25,13 @@ class Optimizer(object):
     """
 
     def __init__(self, opt_type='Adam', learning_rate=0.01,
-                 momentum=0.9, weight_decay=0.0, nesterov=True,
-                 freeze_embeddings=False):
+                 momentum=0.9, weight_decay=0.0, nesterov=True):
         self.opt_type = opt_type
         self.optimizer = []
         self.weight_decay = weight_decay
         self.learning_rate = learning_rate
         self.momentum = momentum
         self.nesterov = nesterov
-        self.freeze_embeddings = freeze_embeddings
 
     def _get_opt(self, params, is_sparse):
         if self.opt_type == 'SGD':
@@ -111,26 +110,51 @@ class Optimizer(object):
                 out_states.append(None)
         return out_states
 
-    def get_params(self, net):
-        self.net_params = {}
-        self.net_params['sparse'] = list()
-        self.net_params['dense'] = list()
-        self.net_params['no_grad'] = list()
-        if self.freeze_embeddings:
-            for params in net.embeddings.parameters():
-                params.requires_grad = False
+    def _modules(self, net):
+        # Useful when parameters are tied etc.
+        if hasattr(net, 'modules_'):
+            return net.modules.items()
+        else:
+            return net._modules.items()
 
-        for key, val in net.__dict__['_modules'].items():
-            is_sparse = val.__dict__.get("sparse", False)
-            for params in val.parameters():
-                if params.requires_grad:
-                    if is_sparse:
-                        self.net_params['sparse'].append(
-                            {"params": params})
+    def _sparse(self, item):
+        try:
+            return item.sparse
+        except AttributeError:
+            return False
+
+    def _parameters(self, item):
+        if isinstance(item, transform_layer.Transform):
+            return self._parameters(item.transform)
+        elif isinstance(item, nn.Sequential):
+            params = []
+            is_sparse = []
+            for _item in item:
+                _p, _s = self._parameters(_item)
+                params.append(_p)
+                is_sparse.append(_s)
+            return params, is_sparse
+        elif isinstance(item, nn.Module):
+            return item.parameters(), self._sparse(item)
+        else:
+            raise NotImplementedError("Unknown module class!")
+
+    def _get_params(self, _params, _sparse, params):
+        if isinstance(_params, list):
+            for p, s in zip(_params, _sparse):
+                self._get_params(p, s, params)
+        else:  # Should be generator
+            for p in _params:
+                if p.requires_grad:
+                    if _sparse:
+                        params['sparse'].append({"params": p})
                     else:
-                        self.net_params['dense'].append(
-                            {"params": params})
-                else:
-                    self.net_params['no_grad'].append(params)
+                        params['dense'].append({"params": p})
+
+    def get_params(self, net):
+        self.net_params = {'sparse': [], 'dense': []}
+        for key, val in self._modules(net):
+            p, s = self._parameters(val)
+            self._get_params(p, s, self.net_params)
         return [self.net_params['sparse'], self.net_params['dense']], \
             [True, False]
