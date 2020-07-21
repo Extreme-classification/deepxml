@@ -14,7 +14,7 @@ dataset=$3
 source "../configs/${model_type}/${dataset}.sh"
 version=$4
 seed=$5
-save_predictions=0
+save_predictions=1
 betas="0.1 0.2 0.5 0.6 0.75 0.8 0.9"
 
 gen_aux_mapping () {
@@ -32,7 +32,7 @@ evaluate() {
     ./run_base.sh "evaluate" ${dataset} "${work_dir}" ${version} ${model_type} "${1}" $A $B "${save_predictions} ${2}"
 }
 
-work_dir="${HOME}/scratch/Workspace"
+work_dir="${HOME}/scratch/XC"
 data_dir="${work_dir}/data/${dataset}"
 temp_model_data="${data_dir}/deepxml.aux/${aux_threshold}.${seed}"
 
@@ -61,6 +61,7 @@ else
     echo "Using old" "${temp_model_data}/aux_stats.json"
 fi
 
+
 run(){
     type=$1
     version=$2
@@ -82,8 +83,8 @@ run(){
 results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"
 models_dir="${work_dir}/models/$model_type/${dataset}/v_${version}"
 
-if [ ${model_type} == "DeepXML-fr" ]; then
-    echo -e "\n---Running DeepXML-fr, i.e., DeepXML with OVA classifier---\n"
+if [ ${model_type} == "DeepXML-OVA" ]; then
+    echo -e "\n---Running DeepXML-OVA, i.e., DeepXML with OVA classifier---\n"
     run "full" $version "org" ""
     cp -r ${results_dir}/org/* ${results_dir}
     echo -e "\nEvaluating with A/B: ${A}/${B}"

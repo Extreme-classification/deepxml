@@ -1,9 +1,11 @@
 {
     "transform_coarse": {
-        "order": ["relu", "dropout"],
-        "relu": {},
-        "dropout": {
-            "p": 0.5
+        "order": ["astec"],
+        "astec": {
+            "vocabulary_dims": "#ARGS.vocabulary_dims;",
+            "embedding_dims": "#ARGS.embedding_dims;",
+            "freeze": "#ARGS.freeze_embeddings;",
+            "dropout": 0.5
         }
     },
     "transform_fine": {

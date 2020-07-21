@@ -5,8 +5,8 @@ Implementation of DeepXML
 
 - [ ] Predictions with aux mapping
 - [ ] Post-process with shortlist
-- [ ] Classifier weights with aux mapping
-- [ ] Load any architecture from json
+- [ ] classifier weights with aux mapping
+- [x] Load any architecture from json
 - [ ] Support for images?
 - [x] Integrate parameters
 - [x] Refactor data loader
@@ -33,3 +33,4 @@ Implementation of DeepXML
 - [x] dataset for sparse & full
 - [x] network for dense
 - [x] network for sparse 
+- [x] different architectures

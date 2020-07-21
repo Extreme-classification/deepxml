@@ -18,20 +18,19 @@ use_reranker=${16}
 ns_method=${17}
 seed=${18}
 extra_params="${19}"
-use_aux_embeddings=0
 data_dir="${work_dir}/data"
 current_working_dir=$(pwd)
 docs=("trn" "tst")
 
-if [ $use_aux_embeddings -eq 1 ]
-then
-    echo -e "\nUsing embeddings from auxilliary task."
-    embedding_file="aux_embeddings_${embedding_dims}d.npy"
-    extra_params="${extra_params} --use_aux_embeddings"
-else
-    echo -e "\nUsing pre-trained embeddings."
-    embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
-fi
+trn_ft_file="trn_X_Xf.txt"
+trn_lbl_file="trn_X_Y.txt"
+tst_ft_file="tst_X_Xf.txt"
+tst_lbl_file="tst_X_Y.txt"
+
+extra_params="${extra_params} --normalize --feature_type sparse"
+
+echo -e "\nUsing pre-trained embeddings."
+embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
 
 stats=`python3 -c "import sys, json; print(json.load(open('${temp_model_data}/aux_stats.json'))['${quantile}'])"` 
 stats=($(echo $stats | tr ',' "\n"))
@@ -45,12 +44,12 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --embeddings $embedding_file \
                 --embedding_dims ${embedding_dims} \
                 --num_epochs $num_epochs \
-                --tr_feat_fname trn_X_Xf.txt \
-                --tr_label_fname trn_X_Y.txt \
-		        --val_feat_fname tst_X_Xf.txt \
-                --val_label_fname tst_X_Y.txt \
-                --ts_feat_fname tst_X_Xf.txt \
-                --ts_label_fname tst_X_Y.txt \
+                --tr_feat_fname ${trn_ft_file} \
+                --tr_label_fname ${trn_lbl_file} \
+		        --val_feat_fname ${tst_ft_file} \
+                --val_label_fname ${tst_lbl_file} \
+                --ts_feat_fname ${tst_ft_file} \
+                --ts_label_fname ${tst_lbl_file} \
                 --top_k $topk \
                 --seed ${seed} \
                 --model_fname ${MODEL_NAME} ${extra_params} \
@@ -64,13 +63,13 @@ TRAIN_PARAMS="  --trans_method ${current_working_dir}/full.json \
                 --dlr_factor $dlr_factor \
                 --dlr_step $dlr_step \
                 --batch_size $batch_size \
-                --normalize \
                 --validate \
+                --save_intermediate \
                 ${DEFAULT_PARAMS}"
+
 
 if [ $use_post -eq 1 ]
 then
-
     TRAIN_PARAMS_post="--trans_method  ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
                 --freeze_embeddings \
@@ -87,7 +86,6 @@ then
                 --num_nbrs 300 \
                 --M 100 \
                 --use_shortlist \
-                --normalize \
                 --validate \
                 --ann_threads 24\
                 --beta 0.5\
@@ -99,7 +97,6 @@ then
                     --num_nbrs 300 \
                     --ns_method ${ns_method} \
                     --ann_threads 24 \
-                    --normalize \
                     --use_shortlist \
                     --batch_size 256 \
                     --pred_fname test_predictions \
@@ -113,20 +110,18 @@ then
                         --num_nbrs 300 \
                         --ann_threads 24 \
                         --ns_method ${ns_method} \
-                        --normalize \
                         --use_shortlist \
                         --batch_size 256 \
                         --pred_fname train_predictions \
                         --out_fname train_predictions.txt \
                         --update_shortlist \
                         ${DEFAULT_PARAMS} \
-                        --ts_feat_fname trn_X_Xf.txt \
-                        --ts_label_fname trn_X_Y.txt \
+                        --ts_feat_fname ${trn_ft_file} \
+                        --ts_label_fname ${trn_lbl_file} \
                         --get_only clf"
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
-                    --normalize \
                     --ns_method ${ns_method} \
                     --model_method shortlist \
                     --use_shortlist \
@@ -135,7 +130,6 @@ then
 
 else
     PREDICT_PARAMS="--model_method full \
-                    --normalize \
                     --model_fname ${MODEL_NAME}\
                     --pred_fname test_predictions \
                     --out_fname predictions.txt \
@@ -144,7 +138,6 @@ else
 
     EXTRACT_PARAMS="--dataset ${dataset} \
                     --data_dir=${work_dir}/data \
-                    --normalize \
                     --model_method full \
                     --model_fname ${MODEL_NAME}\
                     --batch_size 512 ${extra_params}"
@@ -152,14 +145,6 @@ else
 fi
 
 ./run_base.sh "train" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${TRAIN_PARAMS}"
-./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname 0 --out_fname export/wrd_emb"
-
-if [ "${quantile}" == "aux" ]
-then
-    echo -e "\nGenerating embeddings from auxiliary task."
-    cp "${work_dir}/results/DeepXML/${dataset}/v_${dir_version}/aux/export/wrd_emb.npy" "${work_dir}/models/DeepXML/${dataset}/v_${dir_version}/aux_embeddings_${embedding_dims}d.npy"
-    exit
-fi
 
 if [ $use_post -eq 1 ]
 then
@@ -171,5 +156,5 @@ fi
 
 for doc in ${docs[*]} 
 do 
-    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --ts_label_fname ${doc}_X_Y.txt --out_fname export/${doc}_emb"
+    ./run_base.sh "extract" $dataset $work_dir $dir_version/$quantile $MODEL_NAME "${EXTRACT_PARAMS} --ts_feat_fname ${doc}_X_Xf.txt --out_fname export/${doc}_emb"
 done

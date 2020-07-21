@@ -14,11 +14,17 @@ MODEL_NAME="${12}"
 temp_model_data="${13}"
 topk="${14}"
 seed=${18}
-use_aux_embeddings=0
+use_aux_rep=0
 current_working_dir=$(pwd)
 data_dir="${work_dir}/data"
 docs=("trn" "tst")
 
+trn_ft_file="trn_X_Xf.txt"
+trn_lbl_file="trn_X_Y.txt"
+tst_ft_file="tst_X_Xf.txt"
+tst_lbl_file="tst_X_Y.txt"
+
+extra_params="${extra_params} --normalize --feature_type sparse"
 
 # Do not remove invalid labels
 stats=`python3 -c "import sys, json; print(json.load(open('${temp_model_data}/aux_stats.json'))['org'])"`
@@ -26,11 +32,10 @@ stats=($(echo $stats | tr ',' "\n"))
 vocabulary_dims=${stats[0]}
 num_labels=${stats[1]}
 
-if [ $use_aux_embeddings -eq 1 ]
+if [ $use_aux_rep -eq 1 ]
 then
-    echo -e "\nUsing embeddings from auxilliary task."
-    embedding_file="aux_embeddings_${embedding_dims}d.npy"
-    extra_params="${extra_params} --use_aux_embeddings"
+    echo -e "\nUsing parameters from auxilliary task."
+    extra_params="${extra_params} --load_intermediate"
 else
     echo -e "\nUsing pre-trained embeddings."
     embedding_file="fasttextB_embeddings_${embedding_dims}d.npy"
@@ -43,12 +48,12 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --embeddings $embedding_file \
                 --embedding_dims ${embedding_dims} \
                 --num_epochs $num_epochs \
-                --tr_feat_fname trn_X_Xf.txt \
-                --tr_label_fname trn_X_Y.txt \
-		        --val_feat_fname tst_X_Xf.txt \
-                --val_label_fname tst_X_Y.txt \
-                --ts_feat_fname tst_X_Xf.txt \
-                --ts_label_fname tst_X_Y.txt \
+                --tr_feat_fname ${trn_ft_file} \
+                --tr_label_fname ${trn_lbl_file} \
+		        --val_feat_fname ${tst_ft_file} \
+                --val_label_fname ${tst_lbl_file} \
+                --ts_feat_fname ${tst_ft_file} \
+                --ts_label_fname ${tst_lbl_file} \
                 --seed ${seed} \
                 --label_padding_index ${num_labels} \
                 --top_k ${topk} \
@@ -68,7 +73,6 @@ TRAIN_PARAMS="--dlr_factor $dlr_factor \
             --shortlist_method static \
             --lr $learning_rate \
             --efS 300 \
-            --normalize \
             --num_nbrs $topk \
             --efC 300 \
             --M 100 \
@@ -85,7 +89,6 @@ PREDICT_PARAMS_TEST="--efS 300 \
                     --num_centroids 1 \
                     --num_nbrs $topk \
                     --ann_threads 12 \
-                    --normalize \
                     --keep_invalid \
                     --use_shortlist \
                     --batch_size 256 \
@@ -98,7 +101,6 @@ EXTRACT_PARAMS="--dataset ${dataset} \
                 --data_dir=${work_dir}/data \
                 --use_shortlist \
                 --model_method shortlist \
-                --normalize \
                 --model_fname ${MODEL_NAME}\
                 --batch_size 512 ${extra_params}"
 

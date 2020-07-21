@@ -2,7 +2,6 @@ import sys
 import re
 import torch.nn as nn
 import models.residual_layer as residual_layer
-import models.rnn_layer as rnn_layer
 import models.astec as astec
 import json
 from collections import OrderedDict
@@ -29,8 +28,7 @@ elements = {
     'residual': residual_layer.Residual,
     'identity': nn.Identity,
     '_identity': _Identity,
-    'astec': astec.Astec,
-    'rnn': rnn_layer.RNN
+    'astec': astec.Astec
 }
 
 

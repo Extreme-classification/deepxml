@@ -12,7 +12,7 @@ model_type=$2
 dataset=$3
 version=$4
 seeds=(22 666 786)
-beta=0.10 # Best beta value
+beta=0.75 # Best beta value
 index=0
 fnames=""
 save=0
@@ -28,7 +28,7 @@ tst_lbl_file="${data_dir}/tst_X_Y.txt"
 for seed in ${seeds[@]}; do
     echo "Running learner: ${index}.."
     ./run_main.sh ${gpu_id} ${model_type} $dataset "${version}_${index}" ${seed}
-    if [ ${model_type} == "DeepXML-fr" ]; then
+    if [ ${model_type} == "DeepXML-OVA" ]; then
         fnames="${fnames}${results_dir}/v_${version}_${index}/score.npz,"
     else
         fnames="${fnames}${results_dir}/v_${version}_${index}/score_beta_${beta}.npz,"

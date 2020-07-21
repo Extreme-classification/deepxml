@@ -113,7 +113,7 @@ class Optimizer(object):
     def _modules(self, net):
         # Useful when parameters are tied etc.
         if hasattr(net, 'modules_'):
-            return net.modules.items()
+            return net.modules_.items()
         else:
             return net._modules.items()
 

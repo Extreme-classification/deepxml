@@ -38,7 +38,7 @@ def main(targets_label_file, train_label_file, predictions_file,
                     root, "score_beta_{0:.2f}.npz".format(beta))
                 save_npz(fname, predicted_labels, compressed=False)
     else:
-        predicted_labels = load_npz(predictions_file+'.npz')
+        predicted_labels = sigmoid(load_npz(predictions_file+'.npz'))
         args = acc.eval(predicted_labels, 5)
         print(xc_metrics.format(*args))
         if save:
