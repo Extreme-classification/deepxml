@@ -79,7 +79,7 @@ class DeepXMLBase(nn.Module):
         return self.transform(
             _to_device(x, self.device))
 
-    def forward(self, batch_data):
+    def forward(self, batch_data, *args):
         """Forward pass
         * Assumes features are dense if X_w is None
         * By default classifier is identity op
@@ -119,12 +119,15 @@ class DeepXMLBase(nn.Module):
             os.remove(fname)
 
     @property
-    def num_trainable_params(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    def num_params(self, ignore_fixed=False):
+        if ignore_fixed:
+            return sum(p.numel() for p in self.parameters() if p.requires_grad)
+        else:
+            return sum(p.numel() for p in self.parameters())
 
     @property
     def model_size(self):  # Assumptions: 32bit floats
-        return self.num_trainable_params * 4 / math.pow(2, 20)
+        return self.num_params * 4 / math.pow(2, 20)
 
     def __repr__(self):
         return f"{self.embeddings}\n(Transform): {self.transform}"
@@ -146,11 +149,31 @@ class DeepXMLf(DeepXMLBase):
             params.trans_method, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
         super(DeepXMLf, self).__init__(trans_config_coarse)
+        if params.freeze_intermediate:
+            print("Freezing intermediate model parameters!")
+            for params in self.transform.parameters():
+                params.requires_grad = False
         trans_config_fine = transform_config_dict['transform_fine']
         self.transform_fine = self._construct_transform(
             trans_config_fine)
 
-    def encode(self, x, x_ind=None, return_coarse=False):
+    def encode_fine(self, x):
+        """Forward pass (assumes input is coarse computation)
+
+        Arguments:
+        -----------
+        x: torch.FloatTensor
+            (sparse features) contains weights of features as per x_ind or
+            (dense features) contains the dense representation of a point
+
+        Returns
+        -------
+        out: torch.FloatTensor
+            encoded x with fine encoder
+        """
+        return self.transform_fine(_to_device(x, self.device))
+
+    def encode(self, x, x_ind=None, bypass_fine=False):
         """Forward pass
         * Assumes features are dense if x_ind is None
 
@@ -161,7 +184,7 @@ class DeepXMLf(DeepXMLBase):
             (dense features) contains the dense representation of a point
         x_ind: torch.LongTensor or None, optional (default=None)
             contains indices of features (sparse features)
-        return_coarse: boolean, optional (default=False)
+        bypass_fine: boolean, optional (default=False)
             Return coarse features or not
 
         Returns
@@ -169,7 +192,31 @@ class DeepXMLf(DeepXMLBase):
         out: logits for each label
         """
         encoding = super().encode((x, x_ind))
-        return encoding if return_coarse else self.transform_fine(encoding)
+        return encoding if bypass_fine else self.transform_fine(encoding)
+
+    def forward(self, batch_data, bypass_coarse=False):
+        """Forward pass
+        * Assumes features are dense if X_w is None
+        * By default classifier is identity op
+
+        Arguments:
+        -----------
+        batch_data: dict
+            * 'X': torch.FloatTensor
+                feature weights for given indices or dense rep.
+            * 'X_ind': torch.LongTensor
+                feature indices (LongTensor) or None
+
+        Returns
+        -------
+        out: logits for each label
+        """
+        if bypass_coarse:
+            return self.classifier(
+                self.encode_fine(batch_data['X']))
+        else:
+            return self.classifier(
+                self.encode(batch_data['X'], batch_data['X_ind']))
 
     def _construct_classifier(self):
         if self.num_clf_partitions > 1:  # Run the distributed version
@@ -243,6 +290,10 @@ class DeepXMLs(DeepXMLBase):
             params.trans_method, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
         super(DeepXMLs, self).__init__(trans_config_coarse)
+        if params.freeze_intermediate:
+            print("Freezing intermediate model parameters!")
+            for params in self.transform.parameters():
+                params.requires_grad = False
         trans_config_fine = transform_config_dict['transform_fine']
         self.transform_fine = self._construct_transform(
             trans_config_fine)
@@ -253,7 +304,23 @@ class DeepXMLs(DeepXMLBase):
     def load_intermediate_model(self, fname):
         self.transform.load_state_dict(torch.load(fname))
 
-    def encode(self, x, x_ind=None, return_coarse=False):
+    def encode_fine(self, x):
+        """Forward pass (assumes input is coarse computation)
+
+        Arguments:
+        -----------
+        x: torch.FloatTensor
+            (sparse features) contains weights of features as per x_ind or
+            (dense features) contains the dense representation of a point
+
+        Returns
+        -------
+        out: torch.FloatTensor
+            encoded x with fine encoder
+        """
+        return self.transform_fine(_to_device(x, self.device))
+
+    def encode(self, x, x_ind=None, bypass_fine=False):
         """Forward pass
         * Assumes features are dense if x_ind is None
 
@@ -264,7 +331,7 @@ class DeepXMLs(DeepXMLBase):
             (dense features) contains the dense representation of a point
         x_ind: torch.LongTensor or None, optional (default=None)
             contains indices of features (sparse features)
-        return_coarse: boolean, optional (default=False)
+        bypass_fine: boolean, optional (default=False)
             Return coarse features or not
 
         Returns
@@ -272,10 +339,12 @@ class DeepXMLs(DeepXMLBase):
         out: logits for each label
         """
         encoding = super().encode((x, x_ind))
-        return encoding if return_coarse else self.transform_fine(encoding)
+        return encoding if bypass_fine else self.transform_fine(encoding)
 
-    def forward(self, batch_data):
+    def forward(self, batch_data, bypass_coarse=False):
         """Forward pass
+        * Assumes features are dense if X_w is None
+        * By default classifier is identity op
 
         Arguments:
         -----------
@@ -284,16 +353,18 @@ class DeepXMLs(DeepXMLBase):
                 feature weights for given indices or dense rep.
             * 'X_ind': torch.LongTensor
                 feature indices (LongTensor) or None
-            * 'Y_s': torch.LongTensor
-                indices of labels to pick for each document
 
         Returns
         -------
-        out: logits for each label in the shortlist
+        out: logits for each label
         """
-        return self.classifier(
-            self.encode(batch_data['X'], batch_data['X_ind']),
-            batch_data['Y_s'])
+        if bypass_coarse:
+            return self.classifier(
+                self.encode_fine(batch_data['X']), batch_data['Y_s'])
+        else:
+            return self.classifier(
+                self.encode(batch_data['X'], batch_data['X_ind']),
+                batch_data['Y_s'])
 
     def _construct_classifier(self):
         offset = 0

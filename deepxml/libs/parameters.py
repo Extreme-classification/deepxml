@@ -303,9 +303,9 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Keep labels which do not have any training instance!.')
         self.parser.add_argument(
-            '--freeze_embeddings',
+            '--freeze_intermediate',
             action='store_true',
-            help='Do not train word embeddings.')
+            help='Do not train intermediate rep.')
         self.parser.add_argument(
             '--use_shortlist',
             action='store_true',

@@ -40,7 +40,7 @@ class ModelBase(object):
         self.dlr_step = params.dlr_step
         self.dlr_factor = params.dlr_factor
         self.progress_step = 500
-        self.freeze_embeddings = params.freeze_embeddings
+        self.freeze_intermediate = params.freeze_intermediate
         self.model_fname = params.model_fname
         self.logger = self.get_logger(name=self.model_fname)
         self.devices = self._create_devices(params.devices)
@@ -140,7 +140,7 @@ class ModelBase(object):
         else:
             return self._compute_loss_one(out_ans, batch_data['Y'])
 
-    def _step(self, data_loader, batch_div=False):
+    def _step(self, data_loader, batch_div=False, bypass_coarse=False):
         """
             Training step
         """
@@ -151,7 +151,7 @@ class ModelBase(object):
         for batch_idx, batch_data in enumerate(data_loader):
             self.net.zero_grad()
             batch_size = batch_data['batch_size']
-            out_ans = self.net.forward(batch_data)
+            out_ans = self.net.forward(batch_data, bypass_coarse)
             loss = self._compute_loss(out_ans, batch_data)
             # If loss is sum and average over samples is required
             if batch_div:
@@ -197,13 +197,13 @@ class ModelBase(object):
         return predicted_labels, mean_loss / data_loader.dataset.num_instances
 
     def _fit(self, train_loader, validation_loader, model_dir, result_dir,
-             init_epoch, num_epochs, validate_after=5):
+             init_epoch, num_epochs, validate_after=5, bypass_coarse=False):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             cond = self.dlr_step != -1 and epoch % self.dlr_step == 0
             if epoch != 0 and cond:
                 self._adjust_parameters()
             batch_train_start_time = time.time()
-            tr_avg_loss = self._step(train_loader)
+            tr_avg_loss = self._step(train_loader, bypass_coarse=bypass_coarse)
             self.tracking.mean_train_loss.append(tr_avg_loss)
             batch_train_end_time = time.time()
             self.tracking.train_time = self.tracking.train_time + \
@@ -269,8 +269,10 @@ class ModelBase(object):
             batch_size=batch_size,
             num_workers=num_workers,
             shuffle=shuffle)
+        bypass_coarse = False
         # Compute and store representation if embeddings are fixed
-        if self.freeze_embeddings:
+        if self.freeze_intermediate:
+            bypass_coarse = True
             self.logger.info(
                 "Computing and reusing coarse document embeddings"
                 " to save computations.")
@@ -316,8 +318,9 @@ class ModelBase(object):
                 feature_type=feature_type,
                 batch_size=batch_size,
                 num_workers=num_workers)
-        self._fit(train_loader, validation_loader, model_dir,
-                  result_dir, init_epoch, num_epochs, validate_after)
+        self._fit(
+            train_loader, validation_loader, model_dir, result_dir,
+            init_epoch, num_epochs, validate_after, bypass_coarse)
 
     def _format_acc(self, acc):
         _res = ""
@@ -393,7 +396,7 @@ class ModelBase(object):
         return predicted_labels
 
     def _embeddings(self, data_loader, encoder=None,
-                    return_coarse=False, fname_out=None,
+                    bypass_fine=False, fname_out=None,
                     _dtype='float32'):
         if encoder is None:
             self.logger.info("Using the default encoder.")
@@ -414,7 +417,7 @@ class ModelBase(object):
         for _, batch_data in enumerate(data_loader):
             batch_size = batch_data['batch_size']
             out_ans = encoder(
-                batch_data['X'], batch_data['X_ind'], return_coarse)
+                batch_data['X'], batch_data['X_ind'], bypass_fine)
             embeddings[count:count+batch_size,
                        :] = out_ans.detach().cpu().numpy()
             count += batch_size
@@ -426,7 +429,7 @@ class ModelBase(object):
     def get_embeddings(self, encoder=None, data_dir=None, fname=None,
                        data=None, batch_size=1024, num_workers=6,
                        normalize=False, indices=None, fname_out=None,
-                       return_coarse=False, feature_type='sparse'):
+                       bypass_fine=False, feature_type='sparse'):
         """
             Encode given data points
         """
@@ -445,7 +448,7 @@ class ModelBase(object):
             collate_fn=construct_collate_fn(
                 feature_type=feature_type, classifier_type='None'),
             shuffle=False)
-        return self._embeddings(data_loader, encoder, return_coarse, fname_out)
+        return self._embeddings(data_loader, encoder, bypass_fine, fname_out)
 
     def _adjust_parameters(self):
         self.optimizer.adjust_lr(self.dlr_factor)

@@ -60,7 +60,7 @@ DEFAULT_PARAMS="--dataset ${dataset} \
                 --val_label_fname ${tst_lbl_file} \
                 --ts_feat_fname ${tst_ft_file} \
                 --ts_label_fname ${tst_lbl_file} \
-                --freeze_embeddings \
+                --freeze_intermediate \
                 --top_k ${topk} \
                 --seed ${seed} \
                 --num_centroids ${num_centroids} \

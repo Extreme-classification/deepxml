@@ -72,7 +72,7 @@ if [ $use_post -eq 1 ]
 then
     TRAIN_PARAMS_post="--trans_method  ${current_working_dir}/full.json \
                 --dropout 0.5 --optim Adam \
-                --freeze_embeddings \
+                --freeze_intermediate \
                 --efC 300 \
                 --efS 300 \
                 --ns_method ${ns_method} \

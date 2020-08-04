@@ -4,7 +4,7 @@
         "astec": {
             "vocabulary_dims": "#ARGS.vocabulary_dims;",
             "embedding_dims": "#ARGS.embedding_dims;",
-            "freeze": "#ARGS.freeze_embeddings;",
+            "freeze": "#ARGS.freeze_intermediate;",
             "dropout": 0.5
         }
     },

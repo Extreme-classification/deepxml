@@ -119,24 +119,24 @@ class ModelShortlist(ModelBase):
         return stripped_vals
 
     def _fit_shorty(self, features, labels, doc_embeddings=None,
-                    use_coarse=True, feature_type='sparse'):
+                    bypass_fine=True, feature_type='sparse'):
         if doc_embeddings is None:
             doc_embeddings = self.get_embeddings(
                 data=features,
                 feature_type=feature_type,
-                return_coarse=use_coarse)
+                bypass_fine=bypass_fine)
         self.shorty.fit(doc_embeddings, labels)
 
-    def _update_shortlist(self, dataset, use_coarse=True, mode='train',
+    def _update_shortlist(self, dataset, bypass_fine=True, mode='train',
                           flag=True):
         if flag:
-            if isinstance(dataset.features, DenseFeatures) and use_coarse:
+            if isinstance(dataset.features, DenseFeatures) and bypass_fine:
                 self.logger.info("Using pre-trained embeddings for shortlist.")
                 doc_embeddings = dataset.features.data
             else:
                 doc_embeddings = self.get_embeddings(
                     data=dataset.features.data,
-                    return_coarse=use_coarse)
+                    bypass_fine=bypass_fine)
             if mode == 'train':
                 self.shorty.reset()
                 self._fit_shorty(
@@ -203,7 +203,8 @@ class ModelShortlist(ModelBase):
             mean_loss / num_instances
 
     def _fit(self, train_loader, validation_loader, model_dir, result_dir,
-             init_epoch, num_epochs, validate_after, beta, use_coarse):
+             init_epoch, num_epochs, validate_after, beta,
+             bypass_fine_for_shorty, bypass_coarse):
         for epoch in range(init_epoch, init_epoch+num_epochs):
             cond = self.dlr_step != -1 and epoch % self.dlr_step == 0
             if epoch != 0 and cond:
@@ -215,14 +216,13 @@ class ModelShortlist(ModelBase):
                 shorty_start_t = time.time()
                 self._update_shortlist(
                     dataset=train_loader.dataset,
-                    use_coarse=use_coarse,
+                    bypass_fine=bypass_fine_for_shorty,
                     mode='train',
                     flag=self.shorty is not None)
-
                 if validation_loader is not None:
                     self._update_shortlist(
                         dataset=validation_loader.dataset,
-                        use_coarse=use_coarse,
+                        bypass_fine=bypass_fine_for_shorty,
                         mode='predict',
                         flag=self.shorty is not None)
                 shorty_end_t = time.time()
@@ -231,7 +231,8 @@ class ModelShortlist(ModelBase):
                 self.tracking.shortlist_time = self.tracking.shortlist_time \
                     + shorty_end_t - shorty_start_t
                 batch_train_start_time = time.time()
-            tr_avg_loss = self._step(train_loader, batch_div=True)
+            tr_avg_loss = self._step(
+                train_loader, batch_div=True, bypass_coarse=bypass_coarse)
             self.tracking.mean_train_loss.append(tr_avg_loss)
             batch_train_end_time = time.time()
             self.tracking.train_time = self.tracking.train_time + \
@@ -280,10 +281,10 @@ class ModelShortlist(ModelBase):
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4,
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
-            normalize_labels=False, validate=False, beta=0.2, use_coarse=True,
-            shortlist_method='static', validate_after=5, aux_mapping=None,
-            feature_type='sparse', tr_pretrained_shortlist=None,
-            val_pretrained_shortlist=None):
+            normalize_labels=False, validate=False, beta=0.2,
+            use_coarse_for_shorty=True, shortlist_method='static',
+            validate_after=5, aux_mapping=None, feature_type='sparse',
+            tr_pretrained_shortlist=None, val_pretrained_shortlist=None):
         pretrained_shortlist = tr_pretrained_shortlist is not None
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(
@@ -310,8 +311,10 @@ class ModelShortlist(ModelBase):
             batch_size=batch_size,
             num_workers=num_workers,
             shuffle=shuffle)
+        bypass_coarse = False
         # No need to update embeddings
-        if self.freeze_embeddings and feature_type != 'dense':
+        if self.freeze_intermediate and feature_type != 'dense':
+            bypass_coarse = True
             self.logger.info(
                 "Computing and reusing coarse document embeddings "
                 "to save computations.")
@@ -320,7 +323,7 @@ class ModelShortlist(ModelBase):
                 data_dir=None,
                 fname=None,
                 data=train_dataset.features.data,
-                return_coarse=True)
+                bypass_fine=True)
             data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
@@ -366,11 +369,12 @@ class ModelShortlist(ModelBase):
                 classifier_type='shortlist',
                 batch_size=batch_size,
                 num_workers=num_workers)
-        self._fit(train_loader, validation_loader, model_dir,
-                  result_dir, init_epoch, num_epochs,
-                  validate_after, beta, use_coarse)
+        self._fit(
+            train_loader, validation_loader, model_dir, result_dir,
+            init_epoch, num_epochs, validate_after, beta,
+            use_coarse_for_shorty, bypass_coarse)
 
-    def _predict(self, data_loader, top_k, use_coarse, **kwargs):
+    def _predict(self, data_loader, top_k, use_coarse_for_shorty, **kwargs):
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()
@@ -381,7 +385,7 @@ class ModelShortlist(ModelBase):
         self.logger.info("Fetching shortlist.")
         self._update_shortlist(
             dataset=data_loader.dataset,
-            use_coarse=use_coarse,
+            bypass_fine=use_coarse_for_shorty,
             mode='predict',
             flag=self.shorty is not None)
         num_instances = data_loader.dataset.num_instances
@@ -413,7 +417,8 @@ class ModelShortlist(ModelBase):
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
                 aux_mapping=None, feature_type='sparse',
-                pretrained_shortlist=None, use_coarse=True, **kwargs):
+                pretrained_shortlist=None,
+                use_coarse_for_shorty=True, **kwargs):
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=ts_feat_fname,
@@ -438,7 +443,7 @@ class ModelShortlist(ModelBase):
             num_workers=num_workers)
         time_begin = time.time()
         predicted_labels = self._predict(
-            data_loader, top_k, use_coarse, **kwargs)
+            data_loader, top_k, use_coarse_for_shorty, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
         acc = self.evaluate(dataset.labels.data, predicted_labels)
@@ -583,7 +588,7 @@ class ModelNS(ModelBase):
                 batch_size=batch_size,
                 num_workers=num_workers)
         self._fit(train_loader, validation_loader,
-                  model_dir, result_dir, init_epoch, 
+                  model_dir, result_dir, init_epoch,
                   num_epochs, validate_after)
 
 
