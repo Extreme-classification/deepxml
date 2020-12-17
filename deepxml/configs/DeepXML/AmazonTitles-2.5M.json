@@ -9,7 +9,7 @@
     "B": 2.6,
     "aux_method": 0,
     "use_reranker": 1,
-    "ns_method": "nsembl",
+    "ns_method": "ensemble",
     "lr_aux": 0.005,
     "num_epochs_aux": 25,
     "num_centroids_aux": 1,
