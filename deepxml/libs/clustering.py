@@ -8,7 +8,8 @@ import numpy as np
 class Cluster(object):
     """Cluster given data for given label indices in given number
     of clusters
-    Parameters
+
+    Arguments
     ----------
     indices: [int]
         Cluster these labels
@@ -25,7 +26,7 @@ class Cluster(object):
     """
 
     def __init__(self, indices, embedding_dims, num_clusters=300,
-                 max_iter=50, n_init=2, num_threads=-1):
+                 max_iter=50, n_init=1, num_threads=-1):
         self.embedding_dims = embedding_dims
         self.indices = indices
         self.num_clusters = num_clusters

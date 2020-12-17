@@ -363,9 +363,9 @@ class Parameters(ParametersBase):
             help='Is it a really large dataset?'
         )
         self.parser.add_argument(
-            '--use_coarse_for_shorty',
+            '--use_intermediate_for_shorty',
             action='store_true',
-            help='Use coarse representation for shortlist'
+            help='Use intermediate representation for shortlist'
         )
         self.parser.add_argument(
             '--get_only',

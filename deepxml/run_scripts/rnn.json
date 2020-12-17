@@ -1,0 +1,26 @@
+{
+    "transform_coarse": {
+        "order": ["astecpp", "rnn", "dropout"],
+        "astecpp": {
+            "vocabulary_dims": "#ARGS.vocabulary_dims;",
+            "embedding_dims": "#ARGS.embedding_dims;",
+            "dropout": 0.2,
+            "reduction": null
+        },
+        "rnn": {
+            "cell_type": "GRU",
+            "input_size": "#ARGS.embedding_dims;",
+            "hidden_size": 256,
+            "dropout": 0.2,
+            "num_layers": 1,
+            "bidirectional": true
+        },
+	"dropout": {
+	    "p": 0.3
+	}
+    },
+    "transform_fine": {
+        "order": ["identity"],
+        "identity": {}
+    }
+}

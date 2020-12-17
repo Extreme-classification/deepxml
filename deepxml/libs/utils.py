@@ -143,7 +143,7 @@ def update_predicted_shortlist(start_idx, batch_size, predicted_batch_labels,
     """
     top_values, top_indices = predicted_batch_labels.topk(
         k=top_k, dim=1, sorted=False)
-    batch_size, shortlist_size = shortlist.shape
+    batch_size, _ = shortlist.shape
     ind = np.zeros((top_k*batch_size, 2), dtype=np.int)
     ind[:, 0] = np.repeat(
         np.arange(start_idx, start_idx+batch_size, 1), [top_k]*batch_size)
@@ -205,39 +205,44 @@ def safe_normalize(array):
         return array
 
 
-@nb.njit(nb.types.Tuple((nb.int64[:], nb.float32[:]))(nb.int64[:, :], nb.float32[:], nb.int64))
+@nb.njit(nb.types.Tuple((nb.int64[:], nb.float32[:]))\
+    (nb.int64[:, :], nb.float32[:], nb.int64))
 def map_one(indices_labels, similarity, padding_ind):
-    unique_point_labels = np.unique(indices_labels)
-    unique_point_labels = unique_point_labels[unique_point_labels != padding_ind]
-    point_label_similarity = np.zeros((len(unique_point_labels), ), dtype=np.float32)
+    unique_pl = np.unique(indices_labels)
+    unique_pl = unique_pl[unique_pl != padding_ind]
+    pl_similarity = np.zeros((len(unique_pl), ), dtype=np.float32)
     for j in range(len(indices_labels)):
         for lbl in indices_labels[j]:
             if(lbl != padding_ind):
-                _ind = bin_index(unique_point_labels, lbl)
-                point_label_similarity[_ind] += similarity[j]
-    point_label_similarity = safe_normalize(point_label_similarity)
-    return unique_point_labels, point_label_similarity
+                _ind = bin_index(unique_pl, lbl)
+                pl_similarity[_ind] += similarity[j]
+    pl_similarity = safe_normalize(pl_similarity)
+    return unique_pl, pl_similarity
 
 
 
-@nb.njit(nb.types.Tuple((nb.int64[:, :], nb.float32[:, :]))(nb.int64[:, :], nb.float32[:, :], nb.int64[:, :], nb.int64, nb.int64, nb.float32), parallel=True)
-def map_neighbors(indices, similarity, labels, top_k, padding_ind, padding_val):
+@nb.njit(nb.types.Tuple((nb.int64[:, :], nb.float32[:, :]))\
+    (nb.int64[:, :], nb.float32[:, :], nb.int64[:, :], \
+        nb.int64, nb.int64, nb.float32), parallel=True)
+def map_neighbors(indices, similarity, labels, top_k,
+                  padding_ind, padding_val):
     m = indices.shape[0]
     point_labels = np.full(
         (m, top_k), padding_ind, dtype=np.int64)
-    point_label_similarities = np.full(
+    pl_similarities = np.full(
         (m, top_k), padding_val, dtype=np.float32)
     for i in nb.prange(m):
-        unique_point_labels, point_label_similarity = map_one(labels[indices[i]], similarity[i], padding_ind)
-        if top_k < len(unique_point_labels):
+        unique_pl, pl_similarity = map_one(
+            labels[indices[i]], similarity[i], padding_ind)
+        if top_k < len(unique_pl):
             top_indices = np.argsort(
-                point_label_similarity)[-1 * top_k:][::-1]
-            point_labels[i] = unique_point_labels[top_indices]
-            point_label_similarities[i] = point_label_similarity[top_indices]
+                pl_similarity)[-1 * top_k:][::-1]
+            point_labels[i] = unique_pl[top_indices]
+            pl_similarities[i] = pl_similarity[top_indices]
         else:
-            point_labels[i, :len(unique_point_labels)] = unique_point_labels
-            point_label_similarities[i, :len(unique_point_labels)] = point_label_similarity
-    return point_labels, point_label_similarities
+            point_labels[i, :len(unique_pl)] = unique_pl
+            pl_similarities[i, :len(unique_pl)] = pl_similarity
+    return point_labels, pl_similarities
 
 
 @nb.njit(cache=True)

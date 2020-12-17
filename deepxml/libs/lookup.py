@@ -6,7 +6,8 @@ import h5py
 class Table(object):
     """Maintain a lookup table
     Supports in-memory and memmap file
-    Parameters
+
+    Arguments
     ----------
     _type: str, optional, default='memory'
         keep data in-memory or on-disk
@@ -43,14 +44,6 @@ class Table(object):
             self.data[:] = _data[:]
             self.data.flush()
             del _data  # Save to disk and delete object in write mode
-        elif self._type == 'hdf5':
-            self._file = h5py.File(self._get_fname(_fname), 'w+')
-            self._file.create_dataset('data', data=_data)
-            self.data.flush()
-            self.data = self._file.get('data')
-            del _data
-        elif self._type == 'pytables':
-            pass
         else:
             raise NotImplementedError("Unknown type!")
 
@@ -65,11 +58,6 @@ class Table(object):
         # Save numpy array; others are already on disk
         if self._type == 'memory':
             np.save(self._get_fname(_fname), self.data)
-        # Not expected to work when filenames are same
-        elif self._type == 'hdf5':
-            _file = h5py.File(self._get_fname(_fname), 'w+')
-            _file.create_dataset('data', data=self.data)
-            _file.close()
         # Not expected to work when filenames are same
         elif self._type == 'memmap':
             _file = np.memmap(self._get_fname(_fname),
@@ -90,11 +78,6 @@ class Table(object):
             self.data = np.memmap(self._get_fname(_fname),
                                   mode='r+', shape=self._shape,
                                   dtype=self._dtype)
-        elif self._type == 'hdf5':
-            fp = h5py.File(self._get_fname(_fname), 'r+')
-            self.data = fp.get('data')
-        elif self._type == 'pytables':
-            pass
         else:
             raise NotImplementedError("Unknown type!")
 
@@ -109,8 +92,9 @@ class Table(object):
 class PartitionedTable(object):
     """Maintain multiple lookup tables
         Supports in-memory and memmap file
-    Parameters
-    ----------
+    
+    Arguments
+    ---------
     num_partitions: int, optional, default=1
         #tables to maintain
     _type: str, optional, default='memory'

@@ -8,7 +8,7 @@ A=0.6
 B=2.6
 use_reranker=1
 aux_method=0
-ns_method='kcentroid'
+ns_method='ensemble'
 
 lr_aux=(0.02)
 num_epochs_aux=25
@@ -17,7 +17,7 @@ batch_size_aux=255
 dlr_step_aux=14
 
 
-lr_org=(0.002)
+lr_org=(0.001)
 num_epochs_org=20
 num_centroids_org=1
 batch_size_org=255

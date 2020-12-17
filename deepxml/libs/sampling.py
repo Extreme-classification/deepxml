@@ -6,9 +6,10 @@ from functools import partial
 class BaseSampler(object):
     """Sampler with support for sampling from
         multinomial distribution
-    Parameters:
+
+    Arguments:
     ----------
-    a: int
+    size: int
         sample spce
     num_samples: int
         #samples
@@ -65,19 +66,21 @@ class BaseSampler(object):
 class NegativeSampler(BaseSampler):
     """Negative sampler with support for sampling from
         multinomial distribution
-    Parameters:
+
+    Arguments:
     ----------
-    num_samples: int
-        sample spce
+    size: int
+        sample space
     num_negatives: int
         #samples
     probs: np.ndarray or None, optional, default=None
         probability of each item
     replace: boolean, optional, default=False
         with or without replacement
+        * replace = True is slow
     """
-    def __init__(self, num_labels, num_negatives, prob=None, replace=False):
-        super().__init__(num_labels, num_negatives, prob, replace)
+    def __init__(self, size, num_negatives, prob=None, replace=False):
+        super().__init__(size, num_negatives, prob, replace)
 
     def _construct(self):
         self.index = partial(
@@ -88,7 +91,8 @@ class NegativeSampler(BaseSampler):
 class Sampler(BaseSampler):
     """Sampler with support for sampling from
         multinomial distribution
-    Parameters:
+
+    Arguments:
     ----------
     size: int
         sample from this space
@@ -99,8 +103,8 @@ class Sampler(BaseSampler):
     replace: boolean, optional, default=False
         with or without replacement
     """
-    def __init__(self, num_labels, num_samples, prob=None, replace=False):
-        super().__init__(num_labels, num_samples, prob, replace)
+    def __init__(self, size, num_samples, prob=None, replace=False):
+        super().__init__(size, num_samples, prob, replace)
 
     def _construct(self):
         self.index = partial(

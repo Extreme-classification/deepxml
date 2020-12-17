@@ -12,33 +12,6 @@ train () {
                                 ${3}| tee $log_tr_file
 }
 
-retrain () {
-        # TODO
-        # $1 dataset
-        # $2 data_dir
-        # $3 model_dir
-        # $4 result_dir
-        # $5 model_fname
-        # $6 batch_size
-        # $7 pred_fname
-        # $14 extra params
-
-        log_pred_file="${4}/log_predict.txt"
-        python -u ${work_dir}/programs/deepxml/deepxml/main.py --dataset $1 \
-                                --data_dir $2 \
-                                --model_dir $3 \
-                                --result_dir $4 \
-                                --embedding_dims $6 \
-                                --batch_size ${12} \
-                                --lr $5 \
-                                --dlr_step ${11} \
-                                --model_fname ${13} \
-                                --dlr_factor ${10} \
-                                --vocabulary_dims $7 \
-                                --num_labels $8 \
-                                --num_epochs $9\
-                                ${14} |& tee $log_tr_file
-}
 
 predict () {
         # $1 result_dir
@@ -63,18 +36,6 @@ extract () {
                                 ${3} | tee -a $log_pred_file
 }
 
-
-retrain_w_shorty () {
-        # $1 model_dir
-        # $2 result_dir
-        # $3 Extra Parameters
-        
-        log_tr_file="${2}/log_train_post.txt"
-        python -u ${work_dir}/programs/deepxml/deepxml/main.py --model_dir $1 \
-                                --result_dir $2 \
-                                --mode retrain_w_shorty \
-                                ${3}| tee $log_tr_file
-}
 
 evaluate () {
         # $1 result_dir
@@ -127,11 +88,7 @@ then
     # $1 PARAMS
     mkdir -p "${result_dir}/export"
     extract $result_dir $model_dir "${1}"
-elif [ "${FLAG}" == "retrain_w_shortlist" ]
-then
-    # $1 embedding files
-    # $2 file 
-    retrain_w_shorty $model_dir $result_dir "${1}"
 else
-    echo "Kuch bhi"
+    echo "Unknown flag in run_base"
+    exit
 fi

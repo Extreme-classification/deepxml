@@ -5,10 +5,13 @@ import models.transform_layer as transform_layer
 
 class Optimizer(object):
     """Wrapper for pytorch optimizer class to handle
-    mixture of sparse and dense parameters
-    - Infers sparse/dense from 'sparse' attribute
+       mixture of sparse and dense parameters
+    * Infers sparse/dense from 'sparse' attribute
+    * Best results with Adam optimizer
+    * Uses _modules() method by default; User may choose to define 
+      modules_() to change the behaviour
 
-    Parameters
+    Arguments
     ----------
     opt_type: str, optional, default='Adam'
         optimizer to use
@@ -82,11 +85,14 @@ class Optimizer(object):
 
     def adjust_lr(self, dlr_factor):
         """
-            Adjust learning rate
-            Args:
-                dlr_factor: float: dynamic learning rate factor
+        Adjust learning rate
+
+        Arguments:
+        ---------
+        dlr_factor: float
+            lr = lr * dlr_factor 
         """
-        for opt in self.optimizer:
+        for opt in self.optimizer: # for each group
             if opt:
                 for param_group in opt.param_groups:
                     param_group['lr'] *= dlr_factor
@@ -111,6 +117,12 @@ class Optimizer(object):
         return out_states
 
     def _modules(self, net):
+        """
+        Get modules (nn.Module) in the network
+
+        * _modules() method by default
+        * user may choose to define modules_() to change the behaviour
+        """
         # Useful when parameters are tied etc.
         if hasattr(net, 'modules_'):
             return net.modules_.items()
@@ -118,12 +130,22 @@ class Optimizer(object):
             return net._modules.items()
 
     def _sparse(self, item):
+        """
+        * infer (sparse attribute) if parameter group is sparse or dense
+        * assume dense of the sparse attribute is unavailable
+        """
         try:
             return item.sparse
         except AttributeError:
             return False
 
     def _parameters(self, item):
+        """
+        Return the parameters and is_sparse for each group 
+        * Uses parameters() method for a nn.Module object
+        * traverse down the tree until a nn.Module object is found
+          Unknown behaviour for infinite loop
+        """
         if isinstance(item, transform_layer.Transform):
             return self._parameters(item.transform)
         elif isinstance(item, nn.Sequential):
@@ -153,7 +175,7 @@ class Optimizer(object):
 
     def get_params(self, net):
         self.net_params = {'sparse': [], 'dense': []}
-        for key, val in self._modules(net):
+        for _, val in self._modules(net):
             p, s = self._parameters(val)
             self._get_params(p, s, self.net_params)
         return [self.net_params['sparse'], self.net_params['dense']], \

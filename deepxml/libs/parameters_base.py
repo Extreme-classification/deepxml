@@ -53,8 +53,8 @@ class ParametersBase():
             type=str,
             help='prediction file name')
         self.parser.add_argument(
-            '--tr_feat_fname',
-            dest='tr_feat_fname',
+            '--trn_feat_fname',
+            dest='trn_feat_fname',
             default='trn_X_Xf.txt',
             action='store',
             type=str,
@@ -67,15 +67,15 @@ class ParametersBase():
             type=str,
             help='validation feature file name')
         self.parser.add_argument(
-            '--ts_feat_fname',
-            dest='ts_feat_fname',
+            '--tst_feat_fname',
+            dest='tst_feat_fname',
             default='tst_X_Xf.txt',
             action='store',
             type=str,
             help='test feature file name')
         self.parser.add_argument(
-            '--tr_label_fname',
-            dest='tr_label_fname',
+            '--trn_label_fname',
+            dest='trn_label_fname',
             default='trn_X_Y.txt',
             action='store',
             type=str,
@@ -95,8 +95,8 @@ class ParametersBase():
             type=str,
             help='feature type sequential/dense/sparse')
         self.parser.add_argument(
-            '--ts_label_fname',
-            dest='ts_label_fname',
+            '--tst_label_fname',
+            dest='tst_label_fname',
             default='tst_X_Y.txt',
             action='store',
             type=str,

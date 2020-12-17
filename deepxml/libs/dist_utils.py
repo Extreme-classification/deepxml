@@ -5,7 +5,9 @@ import _pickle as pickle
 class Partitioner(object):
     """Utility to distribute an array
         Indices support: contiguous or otherwise (e.g. shortlist)
-    Parameters:
+    * useful in distributed training of classifier
+
+    Arguments:
     -----------
     size: int
         size of data

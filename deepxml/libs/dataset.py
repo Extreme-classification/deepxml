@@ -45,7 +45,8 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None,
 
 class DatasetFull(DatasetBase):
     """Dataset to load and use XML-Datasets with full output space only
-    Parameters
+
+    Arguments
     ---------
     data_dir: str
         data files are stored in this directory
@@ -61,10 +62,10 @@ class DatasetFull(DatasetBase):
         Dump data like valid labels here
     mode: str, optional, default='train'
         Mode of the dataset
-    feature_indices: np.ndarray or None, optional, default=None
-        Train with selected features only
-    label_indices: np.ndarray or None, optional, default=None
-        Train for selected labels only
+    feature_indices: str or None, optional, default=None
+        Train with selected features only (read from file)
+    label_indices: str or None, optional, default=None
+        Train for selected labels only (read from file)
     keep_invalid: bool, optional, default=False
         Don't touch data points or labels
     normalize_features: bool, optional, default=True
@@ -73,7 +74,7 @@ class DatasetFull(DatasetBase):
         Normalize labels to convert in probabilities
         Useful in-case on non-binary labels
     num_clf_partitions: int, optional, default=1
-        Partition classifier in multiple
+        Partition classifier in multiple parts
         Support for multiple GPUs
     feature_type: str, optional, default='sparse'
         sparse or dense features
@@ -156,7 +157,8 @@ class DatasetFull(DatasetBase):
 
 class DatasetShortlist(DatasetBase):
     """Dataset to load and use XML-Datasets with shortlist
-    Parameters
+
+    Arguments
     ---------
     data_dir: str
         data files are stored in this directory
@@ -172,10 +174,10 @@ class DatasetShortlist(DatasetBase):
         Dump data like valid labels here
     mode: str, optional, default='train'
         Mode of the dataset
-    feature_indices: np.ndarray or None, optional, default=None
-        Train with selected features only
-    label_indices: np.ndarray or None, optional, default=None
-        Train for selected labels only
+    feature_indices: str or None, optional, default=None
+        Train with selected features only (read from file)
+    label_indices: str or None, optional, default=None
+        Train for selected labels only (read from file)
     keep_invalid: bool, optional, default=False
         Don't touch data points or labels
     normalize_features: bool, optional, default=True
@@ -192,13 +194,15 @@ class DatasetShortlist(DatasetBase):
         type of shortlist (static or dynamic)
     shorty: obj, optional, default=None
         Useful in-case of dynamic shortlist
-    label_type: str, optional, default='dense'
-        sparse (i.e. with shortlist) or dense (OVA) labels
     aux_mapping: str, optional, default=None
         Re-map clusters as per given mapping
         e.g. when labels are clustered
+    label_type: str, optional, default='dense'
+        sparse (i.e. with shortlist) or dense (OVA) labels
     shortlist_in_memory: boolean, optional, default=True
         Keep shortlist in memory if True otherwise keep on disk
+    pretrained_shortlist: None or str, optional, default=None
+        Pre-trained shortlist (useful in a re-ranker)
     """
 
     def __init__(self, data_dir, fname_features, fname_labels, data=None,
@@ -249,7 +253,6 @@ class DatasetShortlist(DatasetBase):
         super()._process_labels(model_dir)
         # if auxiliary task is clustered labels
         if aux_mapping is not None:
-            print("Aux mapping is not None, mapping labels")
             aux_mapping = np.loadtxt(aux_mapping, dtype=np.int)
             _num_labels = len(np.unique(aux_mapping))
             mapping = dict(zip(range(len(aux_mapping)), aux_mapping))

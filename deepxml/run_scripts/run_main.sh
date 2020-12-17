@@ -1,19 +1,21 @@
 #!/bin/bash
-# $1 GPU DEIVCE ID
-# $2 Model TYPE (DeepXML/DeepXML-fr etc.)
-# $3 DATASET
-# $4 VERSION
-# $5 seed
-# eg. ./run_main.sh 0 DeepXML EURLex-4K 0 22
-# eg. ./run_main.sh 0 DeepXML-fr EURLex-4K 0 22
+# $1 GPU Device ID
+# $2 Model Type (DeepXML/DeepXML-fr etc.)
+# $3 Architecture type (Astec etc.)
+# $4 Dataset
+# $5 version
+# $6 seed
+# eg. ./run_main.sh 0 DeepXML Astec EURLex-4K 0 22
+# eg. ./run_main.sh 0 DeepXML-fr Astec EURLex-4K 0 22
 
 export CUDA_VISIBLE_DEVICES=$1
 model_type=$2
-dataset=$3
-
+arch_type=$3
+dataset=$4
+feature_type='sparse' # default
 source "../configs/${model_type}/${dataset}.sh"
-version=$4
-seed=$5
+version=$5
+seed=$6
 save_predictions=1
 betas="0.1 0.2 0.5 0.6 0.75 0.8 0.9"
 
@@ -32,7 +34,7 @@ evaluate() {
     ./run_base.sh "evaluate" ${dataset} "${work_dir}" ${version} ${model_type} "${1}" $A $B "${save_predictions} ${2}"
 }
 
-work_dir="${HOME}/scratch/XC"
+work_dir=$(cd ../../../../ && pwd)
 data_dir="${work_dir}/data/${dataset}"
 temp_model_data="${data_dir}/deepxml.aux/${aux_threshold}.${seed}"
 
@@ -73,11 +75,12 @@ run(){
     num_epochs="num_epochs_${quantile}"
     batch_size="batch_size_${quantile}"
     num_centriods="num_centroids_${quantile}"
-    echo -e "\nTraining ${quantile} .. with lr:" ${!learning_rate} "epochs:" ${!num_epochs}  
-    ./run_"${type}".sh $dataset $version $quantile $use_post ${!learning_rate} $embedding_dims \
-           ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
-           $model_type ${temp_model_data} ${topk} ${!num_centriods} \
-           ${use_reranker} ${ns_method} ${seed} "${extra_params}"
+    echo -e "\nTraining (${arch_type}) ${quantile} .. with lr:" ${!learning_rate} " & epochs:" ${!num_epochs}  
+    ./run_"${type}".sh ${arch_type} $dataset ${feature_type} $version $quantile \
+        $use_post ${!learning_rate} $embedding_dims \
+        ${!num_epochs} $dlr_factor ${!dlr_step} ${!batch_size} ${work_dir} \
+        $model_type ${temp_model_data} ${topk} ${!num_centriods} \
+        ${use_reranker} ${ns_method} ${seed} "${extra_params}"
 }
 
 results_dir="${work_dir}/results/$model_type/${dataset}/v_${version}"

@@ -105,9 +105,8 @@ class SquaredHingeLoss(_Loss):
         useful when some index has to be used as padding index
     """
 
-    def __init__(self, margin=1.0, size_average=None, reduce=True,
-                 reduction='mean'):
-        super(SquaredHingeLoss, self).__init__(size_average, reduce, reduction)
+    def __init__(self, margin=1.0, reduction='mean', pad_ind=None):
+        super(SquaredHingeLoss, self).__init__(reduction, pad_ind)
         self.margin = margin
 
     def forward(self, input, target, mask=None):

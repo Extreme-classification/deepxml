@@ -15,58 +15,45 @@ import libs.utils as utils
 
 class ModelFull(ModelBase):
     """
-        Models with fully connected output layer
+    Models with fully connected output layer
+
+    Arguments
+    ---------
+    params: NameSpace
+        object containing parameters like learning rate etc.
+    net: models.network.DeepXMLBase 
+        * DeepXMLs: network with a label shortlist
+        * DeepXMLf: network with fully-connected classifier
+    criterion: libs.loss._Loss 
+        to compute loss given y and y_hat
+    optimizer: libs.optimizer.Optimizer
+        to back-propagate and updating the parameters        
+    
     """
 
     def __init__(self, params, net, criterion, optimizer):
         super().__init__(params, net, criterion, optimizer)
         self.feature_indices = params.feature_indices
 
-    def _pp_with_shortlist(self, shorty, data_dir, dataset, model_dir,
-                           model_fname, tr_feat_fname='trn_X_Xf.txt',
-                           tr_label_fname='trn_X_Y.txt',
-                           normalize_features=True, normalize_labels=False,
-                           data={'X': None, 'Y': None}, keep_invalid=False,
-                           feature_indices=None, label_indices=None,
-                           batch_size=128, num_workers=4, aux_mapping=None):
-        """Post-process with shortlist.
-        Train an ANN without touching the classifier
-        """
-        dataset = self._create_dataset(
-            os.path.join(data_dir, dataset),
-            fname_features=tr_feat_fname,
-            fname_labels=tr_label_fname,
-            data=data,
-            mode='predict',
-            keep_invalid=keep_invalid,
-            normalize_features=normalize_features,
-            normalize_labels=normalize_labels,
-            feature_indices=feature_indices,
-            label_indices=label_indices,
-            aux_mapping=aux_mapping)
-
-        self.logger.info("Post-processing with shortlist!")
-        shorty.reset()
-        start_time = time.time()
-        doc_embeddings = self.get_embeddings(
-            None, None, dataset.features.data, batch_size, num_workers)
-
-
-
-        shortlist_utils.update(
-            data_loader, self, self.embedding_dims, shorty, flag=1)
-        end_time = time.time()
-        fname = os.path.join(model_dir, model_fname+'_ANN.pkl')
-        shorty.save(fname)
-        self.logger.info(
-            "Time in post-process: {} sec., Model size: {} MB".format(
-                end_time-start_time, os.path.getsize(fname)/math.pow(2, 20)))
-        return shorty
-
 
 class ModelShortlist(ModelBase):
     """
-        Models with label shortlist
+    Models with label shortlist
+    
+    Arguments
+    ---------
+    params: NameSpace
+        object containing parameters like learning rate etc.
+    net: models.network.DeepXMLBase 
+        * DeepXMLs: network with a label shortlist
+        * DeepXMLf: network with fully-connected classifier
+    criterion: libs.loss._Loss 
+        to compute loss given y and y_hat
+    optimizer: libs.optimizer.Optimizer
+        to back-propagate and updating the parameters        
+    shorty: libs.shortlist.Shortlist
+        to generate a shortlist of labels (typically an ANN structure)
+        * same shortlist method is used during training and prediction
     """
 
     def __init__(self, params, net, criterion, optimizer, shorty):
@@ -77,19 +64,21 @@ class ModelShortlist(ModelBase):
         self.retrain_hnsw_after = params.retrain_hnsw_after
         self.update_shortlist = params.update_shortlist
 
-    def _combine_scores_one(self, out_logits, batch_sim, beta):
-        return beta*torch.sigmoid(out_logits) \
-            + (1-beta)*torch.sigmoid(batch_sim)
-
     def _compute_loss_one(self, _pred, _true, _mask):
-        # Compute loss for one classifier
+        """
+        Compute loss for one classifier
+        """
         _true = _true.to(_pred.get_device())
         if _mask is not None:
             _mask = _mask.to(_true.get_device())
         return self.criterion(_pred, _true, _mask).to(self.devices[-1])
 
     def _compute_loss(self, out_ans, batch_data, weightage=1.0):
-        # Support loss for parallel classifier as well
+        """
+        Compute loss for given pair of ground truth and logits
+        * Support for distributed classifier as well
+        #TODO: Integrate weightage
+        """
         if self.num_clf_partitions > 1:
             out = []
             temp = zip(out_ans, batch_data['Y'], batch_data['Y_mask'])
@@ -100,18 +89,34 @@ class ModelShortlist(ModelBase):
             return self._compute_loss_one(
                 out_ans, batch_data['Y'], batch_data['Y_mask'])
 
-    def _combine_scores(self, out_logits, batch_sim, beta):
-        if isinstance(out_logits, list):  # For distributed classifier
+    def _combine_scores_one(self, logits, sim, beta):
+        """
+        Combine scores of label classifier and shortlist
+        score = beta*sigmoid(logit) + (1-beta)*sigmoid(sim) 
+        """
+        return beta*torch.sigmoid(logits) + (1-beta)*torch.sigmoid(sim)
+
+    def _combine_scores(self, logits, sim, beta):
+        """
+        Combine scores of label classifier and shortlist
+        * support for a distributed classifier (expects list of sim and logits)
+        """
+        if isinstance(logits, list):  # For distributed classifier
             out = []
-            for _, (_logits, _sim) in enumerate(zip(out_logits, batch_sim)):
+            for _, (_logits, _sim) in enumerate(zip(logits, sim)):
                 out.append(self._combine_scores_one(
                     _logits.data.cpu(), _sim.data, beta))
             return out
         else:
             return self._combine_scores_one(
-                out_logits.data.cpu(), batch_sim.data, beta)
+                logits.data.cpu(), sim.data, beta)
 
     def _strip_padding_label(self, mat, num_labels):
+        """
+        Strip padding label from a matrix
+        * Useful when a padding label is used in a classifier/shortlist
+        * Support for multiple matrics (expects dictionary) 
+        """
         stripped_vals = {}
         for key, val in mat.items():
             stripped_vals[key] = val[:, :num_labels].tocsr()
@@ -119,24 +124,64 @@ class ModelShortlist(ModelBase):
         return stripped_vals
 
     def _fit_shorty(self, features, labels, doc_embeddings=None,
-                    bypass_fine=True, feature_type='sparse'):
+                    use_intermediate=True, feature_type='sparse'):
+        """
+        Train the ANN Structure with given data
+
+        * Support for pre-computed features
+        * Features are computed when pre-computed features are not available
+
+        Arguments
+        ---------
+        features: np.ndarray or csr_matrix or None
+            features for given data (used when doc_embeddings is None)
+        labels: csr_matrix
+            ground truth matrix for given data
+        doc_embeddings: np.ndarray or None, optional, default=None
+            pre-computed features; features are computed when None
+        use_intermediate: boolean, optional, default=True
+            use intermediate representation if True
+        feature_type: str, optional, default='sparse'
+            sparse or dense features
+        """
         if doc_embeddings is None:
             doc_embeddings = self.get_embeddings(
                 data=features,
                 feature_type=feature_type,
-                bypass_fine=bypass_fine)
+                use_intermediate=use_intermediate)
         self.shorty.fit(doc_embeddings, labels)
 
-    def _update_shortlist(self, dataset, bypass_fine=True, mode='train',
+    def _update_shortlist(self, dataset, use_intermediate=True, mode='train',
                           flag=True):
+        """
+        Get nearest neighbors for the given data and 
+         update the shortlist in dataset
+
+        * Will train ANN structure for train set
+        * flag can be used to ignore (useful in case of precomputed shortlist)
+
+        Arguments
+        ---------
+        dataset: Dataset
+            Dataset object
+            * features and labels are used when required
+            * update_shortlist method is used to update neighbors and sim
+            * will directly use features for DenseFeatures 
+        use_intermediate: boolean, optional, default=True
+            use intermediate representation if True
+        mode: str, optional, default='train'
+            train the ANN structure when mode is 'train'
+        flag: boolean, optional, default=True
+            use function only when flag is True
+        """
         if flag:
-            if isinstance(dataset.features, DenseFeatures) and bypass_fine:
+            if isinstance(dataset.features, DenseFeatures) and use_intermediate:
                 self.logger.info("Using pre-trained embeddings for shortlist.")
                 doc_embeddings = dataset.features.data
             else:
                 doc_embeddings = self.get_embeddings(
                     data=dataset.features.data,
-                    bypass_fine=bypass_fine)
+                    use_intermediate=use_intermediate)
             if mode == 'train':
                 self.shorty.reset()
                 self._fit_shorty(
@@ -147,6 +192,21 @@ class ModelShortlist(ModelBase):
                 *self._predict_shorty(doc_embeddings))
 
     def _predict_shorty(self, doc_embeddings):
+        """
+        Get nearest neighbors (and sim) for given document embeddings
+
+        Arguments
+        ---------
+        doc_embeddings: np.ndarray
+            embeddings/encoding for the data points
+        
+        Returns
+        -------
+        neighbors: np.ndarray
+            indices of nearest neighbors
+        sim: np.ndarray
+            similarity with nearest neighbors
+        """
         return self.shorty.query(doc_embeddings)
 
     def _update_predicted_shortlist(self, count, batch_size, predicted_labels,
@@ -174,6 +234,24 @@ class ModelShortlist(ModelBase):
             batch_shortlist, top_k)
 
     def _validate(self, data_loader, beta=0.2):
+        """
+        predict for the given data loader
+        * retruns loss and predicted labels
+
+        Arguments
+        ---------
+        data_loader: DataLoader
+            data loader over validation dataset
+        top_k: int, optional, default=10
+            Maintain top_k predictions per data point
+
+        Returns
+        -------
+        predicted_labels: csr_matrix
+            predictions for the given dataset
+        loss: float
+            mean loss over the validation dataset
+        """
         self.net.eval()
         torch.set_grad_enabled(False)
         num_labels = data_loader.dataset.num_labels
@@ -204,7 +282,35 @@ class ModelShortlist(ModelBase):
 
     def _fit(self, train_loader, validation_loader, model_dir, result_dir,
              init_epoch, num_epochs, validate_after, beta,
-             bypass_fine_for_shorty, bypass_coarse):
+             use_intermediate_for_shorty, precomputed_intermediate):
+        """
+        Train for the given data loader
+
+        Arguments
+        ---------
+        train_loader: DataLoader
+            data loader over train dataset
+        validation_loader: DataLoader or None
+            data loader over validation dataset
+        model_dir: str
+            save checkpoints etc. in this directory
+        result_dir: str
+            save logs etc in this directory
+        init_epoch: int, optional, default=0
+            start training from this epoch
+            (useful when fine-tuning from a checkpoint)
+        num_epochs: int
+            #passes over the dataset
+        validate_after: int, optional, default=5
+            validate after a gap of these many epochs
+        beta: float
+            weightage of classifier when combining with shortlist scores
+        use_intermediate_for_shorty: boolean
+            use intermediate representation for negative sampling/ ANN search
+        precomputed_intermediate: boolean, optional, default=False
+            if precomputed intermediate features are already available
+            * avoid recomputation of intermediate features
+        """
         for epoch in range(init_epoch, init_epoch+num_epochs):
             cond = self.dlr_step != -1 and epoch % self.dlr_step == 0
             if epoch != 0 and cond:
@@ -216,13 +322,13 @@ class ModelShortlist(ModelBase):
                 shorty_start_t = time.time()
                 self._update_shortlist(
                     dataset=train_loader.dataset,
-                    bypass_fine=bypass_fine_for_shorty,
+                    use_intermediate=use_intermediate_for_shorty,
                     mode='train',
                     flag=self.shorty is not None)
                 if validation_loader is not None:
                     self._update_shortlist(
                         dataset=validation_loader.dataset,
-                        bypass_fine=bypass_fine_for_shorty,
+                        use_intermediate=use_intermediate_for_shorty,
                         mode='predict',
                         flag=self.shorty is not None)
                 shorty_end_t = time.time()
@@ -232,7 +338,8 @@ class ModelShortlist(ModelBase):
                     + shorty_end_t - shorty_start_t
                 batch_train_start_time = time.time()
             tr_avg_loss = self._step(
-                train_loader, batch_div=True, bypass_coarse=bypass_coarse)
+                train_loader, batch_div=True,
+                precomputed_intermediate=precomputed_intermediate)
             self.tracking.mean_train_loss.append(tr_avg_loss)
             batch_train_end_time = time.time()
             self.tracking.train_time = self.tracking.train_time + \
@@ -276,21 +383,91 @@ class ModelShortlist(ModelBase):
                 self.model_size))
 
     def fit(self, data_dir, model_dir, result_dir, dataset, learning_rate,
-            num_epochs, data=None, tr_feat_fname='trn_X_Xf.txt',
-            tr_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
+            num_epochs, data=None, trn_feat_fname='trn_X_Xf.txt',
+            trn_label_fname='trn_X_Y.txt', val_feat_fname='tst_X_Xf.txt',
             val_label_fname='tst_X_Y.txt', batch_size=128, num_workers=4,
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
             normalize_labels=False, validate=False, beta=0.2,
-            use_coarse_for_shorty=True, shortlist_method='static',
+            use_intermediate_for_shorty=True, shortlist_method='static',
             validate_after=5, aux_mapping=None, feature_type='sparse',
-            tr_pretrained_shortlist=None, val_pretrained_shortlist=None):
-        pretrained_shortlist = tr_pretrained_shortlist is not None
+            trn_pretrained_shortlist=None, val_pretrained_shortlist=None):
+        """
+        Train for the given data
+        * Also prints train time and model size
+
+        Arguments
+        ---------
+        data_dir: str or None, optional, default=None
+            load data from this directory when data is None
+        model_dir: str
+            save checkpoints etc. in this directory
+        result_dir: str
+            save logs etc in this directory
+        dataset: str
+            Name of the dataset
+        learning_rate: float
+            initial learning rate
+        num_epochs: int
+            #passes over the dataset
+        data: dict or None, optional, default=None
+            directly use this this data to train when available
+            * X: feature; Y: label
+        trn_feat_fname: str, optional, default='trn_X_Xf.txt'
+            train features
+        trn_label_fname: str, optional, default='trn_X_Y.txt'
+            train labels
+        val_feat_fname: str, optional, default='tst_X_Xf.txt'
+            validation features (used only when validate is True)
+        val_label_fname: str, optional, default='tst_X_Y.txt'
+            validation labels (used only when validate is True)
+        batch_size: int, optional, default=1024
+            batch size in data loader
+        num_workers: int, optional, default=6
+            #workers in data loader
+        shuffle: boolean, optional, default=True
+            shuffle train data in each epoch
+        init_epoch: int, optional, default=0
+            start training from this epoch
+            (useful when fine-tuning from a checkpoint)
+        keep_invalid: bool, optional, default=False
+            Don't touch data points or labels
+        feature_indices: str or None, optional, default=None
+            Train with selected features only (read from file)
+        label_indices: str or None, optional, default=None
+            Train for selected labels only (read from file)
+        normalize_features: bool, optional, default=True
+            Normalize data points to unit norm
+        normalize_lables: bool, optional, default=False
+            Normalize labels to convert in probabilities
+            Useful in-case on non-binary labels
+        validate: bool, optional, default=True
+            validate using the given data if flag is True
+        beta: float, optional, default=0.5
+            weightage of classifier when combining with shortlist scores
+        use_intermediate_for_shorty: boolean, optional, default=True
+            use intermediate representation for negative sampling/ANN
+        shortlist_method: str, optional, default='static'
+            static: fixed shortlist
+            dynamic: dynamically generate shortlist
+            hybrid: mixture of static and dynamic
+        validate_after: int, optional, default=5
+            validate after a gap of these many epochs
+        aux_mapping: str, optional, default=None
+            Re-map clusters as per given mapping
+            e.g. when labels are clustered
+        feature_type: str, optional, default='sparse'
+            sparse or dense features
+        trn_pretrained_shortlist: csr_matrix or None, default=None
+            Shortlist for train dataset
+        val_pretrained_shortlist: csr_matrix or None, default=None
+            Shortlist for validation dataset
+        """
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
-            fname_features=tr_feat_fname,
-            fname_labels=tr_label_fname,
+            fname_features=trn_feat_fname,
+            fname_labels=trn_label_fname,
             data=data,
             mode='train',
             keep_invalid=keep_invalid,
@@ -302,7 +479,7 @@ class ModelShortlist(ModelBase):
             feature_type=feature_type,
             label_indices=label_indices,
             aux_mapping=aux_mapping,
-            pretrained_shortlist=tr_pretrained_shortlist,
+            pretrained_shortlist=trn_pretrained_shortlist,
             _type='shortlist')
         train_loader = self._create_data_loader(
             train_dataset,
@@ -311,19 +488,19 @@ class ModelShortlist(ModelBase):
             batch_size=batch_size,
             num_workers=num_workers,
             shuffle=shuffle)
-        bypass_coarse = False
+        precomputed_intermediate = False
         # No need to update embeddings
         if self.freeze_intermediate and feature_type != 'dense':
-            bypass_coarse = True
+            precomputed_intermediate = True
             self.logger.info(
-                "Computing and reusing coarse document embeddings "
+                "Computing and reusing intermediate document embeddings "
                 "to save computations.")
             data = {'X': None, 'Y': None}
             data['X'] = self.get_embeddings(
                 data_dir=None,
                 fname=None,
                 data=train_dataset.features.data,
-                bypass_fine=True)
+                use_intermediate=True)
             data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
@@ -334,7 +511,7 @@ class ModelShortlist(ModelBase):
                 shortlist_method=shortlist_method,
                 size_shortlist=self.shortlist_size,
                 feature_type='dense',
-                pretrained_shortlist=tr_pretrained_shortlist,
+                pretrained_shortlist=trn_pretrained_shortlist,
                 keep_invalid=True,   # Invalid labels already removed
                 _type='shortlist')
             train_loader = self._create_data_loader(
@@ -372,9 +549,27 @@ class ModelShortlist(ModelBase):
         self._fit(
             train_loader, validation_loader, model_dir, result_dir,
             init_epoch, num_epochs, validate_after, beta,
-            use_coarse_for_shorty, bypass_coarse)
+            use_intermediate_for_shorty, precomputed_intermediate)
 
-    def _predict(self, data_loader, top_k, use_coarse_for_shorty, **kwargs):
+    def _predict(self, data_loader, top_k,
+                use_intermediate_for_shorty, **kwargs):
+        """
+        Predict for the given data_loader
+
+        Arguments
+        ---------
+        data_loader: DataLoader
+            DataLoader object to create batches and iterate over it
+        top_k: int
+            Maintain top_k predictions per data point
+        use_intermediate_for_shorty: bool
+            use intermediate representation for negative sampling/ANN 
+
+        Returns
+        -------
+        predicted_labels: csr_matrix
+            predictions for the given dataset
+        """
         beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()
@@ -385,7 +580,7 @@ class ModelShortlist(ModelBase):
         self.logger.info("Fetching shortlist.")
         self._update_shortlist(
             dataset=data_loader.dataset,
-            bypass_fine=use_coarse_for_shorty,
+            use_intermediate=use_intermediate_for_shorty,
             mode='predict',
             flag=self.shorty is not None)
         num_instances = data_loader.dataset.num_instances
@@ -412,17 +607,68 @@ class ModelShortlist(ModelBase):
         return self._strip_padding_label(predicted_labels, num_labels)
 
     def predict(self, data_dir, dataset, data=None,
-                ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
+                tst_feat_fname='tst_X_Xf.txt', tst_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
                 aux_mapping=None, feature_type='sparse',
                 pretrained_shortlist=None,
-                use_coarse_for_shorty=True, **kwargs):
+                use_intermediate_for_shorty=True, **kwargs):
+        """
+        Predict for the given data
+        * Also prints prediction time, precision and ndcg
+
+        Arguments
+        ---------
+        data_dir: str or None, optional, default=None
+            load data from this directory when data is None
+        dataset: str
+            Name of the dataset
+        data: dict or None, optional, default=None
+            directly use this this data when available
+            * X: feature; Y: label (can be empty)
+        tst_feat_fname: str, optional, default='tst_X_Xf.txt'
+            load features from this file when data is None
+        tst_label_fname: str, optional, default='tst_X_Y.txt'
+            load labels from this file when data is None
+            * can be dummy
+        batch_size: int, optional, default=1024
+            batch size in data loader
+        num_workers: int, optional, default=6
+            #workers in data loader
+        keep_invalid: bool, optional, default=False
+            Don't touch data points or labels
+        feature_indices: str or None, optional, default=None
+            Train with selected features only (read from file)
+        label_indices: str or None, optional, default=None
+            Train for selected labels only (read from file)
+        top_k: int
+            Maintain top_k predictions per data point
+        normalize_features: bool, optional, default=True
+            Normalize data points to unit norm
+        normalize_lables: bool, optional, default=False
+            Normalize labels to convert in probabilities
+            Useful in-case on non-binary labels
+        aux_mapping: str, optional, default=None
+            Re-map clusters as per given mapping
+            e.g. when labels are clustered
+        feature_type: str, optional, default='sparse'
+            sparse or dense features
+        trn_pretrained_shortlist: csr_matrix or None, default=None
+            Shortlist for test dataset
+            * will directly use this this shortlist when available
+        use_intermediate_for_shorty: bool
+            use intermediate representation for negative sampling/ANN 
+
+        Returns
+        -------
+        predicted_labels: csr_matrix
+            predictions for the given dataset
+        """
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
-            fname_features=ts_feat_fname,
-            fname_labels=ts_label_fname,
+            fname_features=tst_feat_fname,
+            fname_labels=tst_label_fname,
             data=data,
             mode='predict',
             feature_type=feature_type,
@@ -443,7 +689,7 @@ class ModelShortlist(ModelBase):
             num_workers=num_workers)
         time_begin = time.time()
         predicted_labels = self._predict(
-            data_loader, top_k, use_coarse_for_shorty, **kwargs)
+            data_loader, top_k, use_intermediate_for_shorty, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
         acc = self.evaluate(dataset.labels.data, predicted_labels)
@@ -500,7 +746,22 @@ class ModelShortlist(ModelBase):
 
 class ModelNS(ModelBase):
     """
-        Models with negative sampling
+    Models with negative sampling
+    * When the negative sampling is done on the fly
+
+    Arguments
+    ---------
+    params: NameSpace
+        object containing parameters like learning rate etc.
+    net: models.network.DeepXMLBase 
+        * DeepXMLs: network with a label shortlist
+        * DeepXMLf: network with fully-connected classifier
+    criterion: libs.loss._Loss 
+        to compute loss given y and y_hat
+    optimizer: libs.optimizer.Optimizer
+        to back-propagate and updating the parameters        
+    shorty: libs.shortlist.Shortlist
+        to generate a shortlist of labels
     """
 
     def __init__(self, params, net, criterion, optimizer, shorty):
@@ -510,6 +771,11 @@ class ModelNS(ModelBase):
         self.label_indices = params.label_indices
 
     def _strip_padding_label(self, mat, num_labels):
+        """
+        Strip padding label from a matrix
+        * Useful when a padding label is used in a classifier/shortlist
+        * Support for multiple matrics (expects dictionary) 
+        """
         stripped_vals = {}
         for key, val in mat.items():
             stripped_vals[key] = val[:, :num_labels].tocsr()
@@ -518,18 +784,70 @@ class ModelNS(ModelBase):
 
     def fit(self, data_dir, model_dir, result_dir, dataset,
             learning_rate, num_epochs, data=None,
-            tr_feat_fname='trn_X_Xf.txt', tr_label_fname='trn_X_Y.txt',
+            trn_feat_fname='trn_X_Xf.txt', trn_label_fname='trn_X_Y.txt',
             val_feat_fname='tst_X_Xf.txt', val_label_fname='tst_X_Y.txt',
             batch_size=128, num_workers=4, shuffle=False, init_epoch=0,
             keep_invalid=False, feature_indices=None, label_indices=None,
             normalize_features=True, normalize_labels=False, validate=False,
             validate_after=5, *args, **kwargs):
+        """
+        Train for the given data
+        * Also prints train time and model size
+
+        Arguments
+        ---------
+        data_dir: str or None, optional, default=None
+            load data from this directory when data is None
+        model_dir: str
+            save checkpoints etc. in this directory
+        result_dir: str
+            save logs etc in this directory
+        dataset: str
+            Name of the dataset
+        learning_rate: float
+            initial learning rate
+        num_epochs: int
+            #passes over the dataset
+        data: dict or None, optional, default=None
+            directly use this this data to train when available
+            * X: feature; Y: label
+        trn_feat_fname: str, optional, default='trn_X_Xf.txt'
+            train features
+        trn_label_fname: str, optional, default='trn_X_Y.txt'
+            train labels
+        val_feat_fname: str, optional, default='tst_X_Xf.txt'
+            validation features (used only when validate is True)
+        val_label_fname: str, optional, default='tst_X_Y.txt'
+            validation labels (used only when validate is True)
+        batch_size: int, optional, default=1024
+            batch size in data loader
+        num_workers: int, optional, default=6
+            #workers in data loader
+        shuffle: boolean, optional, default=True
+            shuffle train data in each epoch
+        init_epoch: int, optional, default=0
+            start training from this epoch
+            (useful when fine-tuning from a checkpoint)
+        keep_invalid: bool, optional, default=False
+            Don't touch data points or labels
+        feature_indices: str or None, optional, default=None
+            Train with selected features only (read from file)
+        label_indices: str or None, optional, default=None
+            Train for selected labels only (read from file)
+        normalize_features: bool, optional, default=True
+            Normalize data points to unit norm
+        normalize_lables: bool, optional, default=False
+            Normalize labels to convert in probabilities
+            Useful in-case on non-binary labels
+        validate: bool, optional, default=True
+            validate using the given data if flag is True
+        """
         self.logger.info("Loading training data.")
 
         train_dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
-            fname_features=tr_feat_fname,
-            fname_labels=tr_label_fname,
+            fname_features=trn_feat_fname,
+            fname_labels=trn_label_fname,
             data=data,
             mode='train',
             keep_invalid=keep_invalid,
@@ -594,7 +912,21 @@ class ModelNS(ModelBase):
 
 class ModelReRanker(ModelShortlist):
     """
-        Models with label shortlist
+    Models with a pre-computed label shortlist
+
+    Arguments
+    ---------
+    params: NameSpace
+        object containing parameters like learning rate etc.
+    net: models.network.DeepXMLBase 
+        * DeepXMLs: network with a label shortlist
+        * DeepXMLf: network with fully-connected classifier
+    criterion: libs.loss._Loss 
+        to compute loss given y and y_hat
+    optimizer: libs.optimizer.Optimizer
+        to back-propagate and updating the parameters        
+    shorty: libs.shortlist.Shortlist
+        to generate a shortlist of labels
     """
 
     def __init__(self, params, net, criterion, optimizer, shorty):

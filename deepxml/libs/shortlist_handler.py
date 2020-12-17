@@ -28,14 +28,14 @@ def construct_handler(shortlist_type, num_labels, model_dir='',
             mode, num_clf_partitions, size_shortlist, label_mapping)
     else:
         raise NotImplementedError(
-            "Unknown shortlist method: {}!".format(shortlist_method))
+            "Unknown shortlist method: {}!".format(shortlist_type))
 
 
 class ShortlistHandlerBase(object):
     """Base class for ShortlistHandler
     - support for partitioned classifier
 
-    Parameters
+    Arguments
     ----------
     num_labels: int
         number of labels
@@ -187,7 +187,8 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
     """ShortlistHandler with static shortlist
     - save/load/update/process shortlist
     - support for partitioned classifier
-    Parameters
+
+    Arguments
     ----------
     num_labels: int
         number of labels
@@ -281,7 +282,7 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
 class ShortlistHandlerDynamic(ShortlistHandlerBase):
     """ShortlistHandler with dynamic shortlist
 
-    Parameters
+    Arguments
     ----------
     num_labels: int
         number of labels
@@ -314,7 +315,8 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
     """ShortlistHandler with hybrid shortlist
     - save/load/update/process shortlist
     - support for partitioned classifier
-    Parameters
+
+    Arguments
     ----------
     num_labels: int
         number of labels

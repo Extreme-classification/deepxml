@@ -9,6 +9,12 @@ from xclib.utils.sparse import binarize
 
 def construct(data_dir, fname, Y=None, normalize=False, _type='sparse'):
     """Construct label class based on given parameters
+
+    Support for:
+    * pkl file: Key 'Y' is used to access the labels
+    * txt file: sparse libsvm format with header
+    * npz file: numpy's sparse format
+
     Arguments
     ----------
     data_dir: str
@@ -36,7 +42,8 @@ def construct(data_dir, fname, Y=None, normalize=False, _type='sparse'):
 
 class LabelsBase(object):
     """Base class for Labels
-    Parameters
+
+    Arguments:
     ----------
     data_dir: str
         data directory
@@ -70,6 +77,8 @@ class LabelsBase(object):
             elif fname.lower().endswith('.txt'):
                 return data_utils.read_sparse_file(
                     fname, dtype=np.float32)
+            elif fname.lower().endswith('.npy'):
+                return np.load(fname)
             elif fname.lower().endswith('.npz'):
                 return load_npz(fname)
             else:
@@ -135,7 +144,9 @@ class LabelsBase(object):
 
 class DenseLabels(LabelsBase):
     """Class for dense labels
-    Parameters:
+
+    Arguments:
+    ----------
     data_dir: str
         data directory
     fname: str
@@ -149,6 +160,8 @@ class DenseLabels(LabelsBase):
 
     def __init__(self, data_dir, fname, Y=None, normalize=False):
         super().__init__(data_dir, fname, Y)
+        if normalize:
+            self.normalize(norm='max')
 
     def __getitem__(self, index):
         return super().__getitem__(
@@ -157,6 +170,10 @@ class DenseLabels(LabelsBase):
 
 class SparseLabels(LabelsBase):
     """Class for sparse labels
+
+    Arguments:
+    ----------
+
     data_dir: str
         data directory
     fname: str
@@ -170,6 +187,8 @@ class SparseLabels(LabelsBase):
 
     def __init__(self, data_dir, fname, Y=None, normalize=False):
         super().__init__(data_dir, fname, Y)
+        if normalize:
+            self.normalize(norm='max')
 
     def __getitem__(self, index):
         y = self.Y[index].indices

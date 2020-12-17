@@ -3,12 +3,13 @@ import numpy as np
 import _pickle as pickle
 from xclib.data import data_utils
 import os
-import re
-import json
+from scipy.sparse import load_npz
+from operator import itemgetter
 
 
 def construct(data_dir, fname, X=None, normalize=False, _type='sparse'):
     """Construct feature class based on given parameters
+
     Arguments
     ----------
     data_dir: str
@@ -89,18 +90,23 @@ class FeaturesBase(object):
             assert fname is not None, "Filename can not be None."
             fname = os.path.join(data_dir, fname)
             if fname.lower().endswith('.pkl'):
-                return pickle.load(open(fname, 'rb'))['X']
+                return pickle.load(open(fname, 'rb'))
             elif fname.lower().endswith('.txt'):
                 return data_utils.read_sparse_file(
                     fname, dtype=np.float32)
+            elif fname.lower().endswith('.npz'):
+                return load_npz(fname)
             elif fname.lower().endswith('.npy'):
                 return np.load(fname)
             else:
                 raise NotImplementedError("Unknown file extension")
 
+    def normalize(self, norm='l2', copy=False):
+        pass
+
     @property
     def num_instances(self):
-        return self.X.shape[0]
+        return len(self.X)
 
     @property
     def num_features(self):
@@ -120,7 +126,8 @@ class FeaturesBase(object):
 
 class DenseFeatures(FeaturesBase):
     """Class for dense features
-    Parameters
+
+    Arguments
     ----------
     data_dir: str
         data directory
@@ -149,7 +156,8 @@ class DenseFeatures(FeaturesBase):
 
 class SparseFeatures(FeaturesBase):
     """Class for sparse features
-    Parameters
+    
+    Arguments
     ----------
     data_dir: str
         data directory
@@ -180,3 +188,38 @@ class SparseFeatures(FeaturesBase):
         x = self.X[index].indices + 1
         w = self.X[index].data
         return x, w
+
+    @property
+    def num_instances(self):
+        return self.X.shape[0]
+
+
+class SequentialFeatures(FeaturesBase):
+    """Class for sequential features
+    
+    Arguments
+    ----------
+    data_dir: str
+        data directory
+    fname: str
+        load data from this file
+    X: csr_matrix or None, optional, default=None
+        data is already provided
+    normalize: boolean, optional, default=False
+        Normalize the data or not
+    """
+
+    def __init__(self, data_dir, fname, X=None):
+        super().__init__(data_dir, fname, X)
+
+    def frequency(self, axis=0):
+        pass
+
+    def _select_instances(self, indices):
+        self.X = list(itemgetter(*indices)(self.X))
+
+    def get_valid(self, axis=0):
+        return np.arange(len(self.X))
+
+    def __getitem__(self, index):
+        return np.array(self.X[index])

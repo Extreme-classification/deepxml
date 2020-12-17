@@ -14,8 +14,10 @@ from .labels import construct as construct_l
 
 class DatasetTensor(torch.utils.data.Dataset):
     """Dataset to load and use sparse/dense matrix
-    Support npz, pickle, npy or libsvm file format
-    Parameters
+    * Support npz, pickle, npy or libsvm file format
+    * Useful when iterating over features or labels
+
+    Arguments
     ---------
     data_dir: str
         data files are stored in this directory
@@ -25,8 +27,12 @@ class DatasetTensor(torch.utils.data.Dataset):
     data: scipy.sparse or np.ndarray, optional, default=None
         Read data directly from this obj rather than files
         Files are ignored if this is not None
+    indices: None or str, optional, default=None
+        Use only these indices in the given list
     normalize: bool, optional, default=True
         Normalize the rows to unit norm
+    _type: str, optional, default='sparse'
+        Type of data (sparse/dense)
     """
 
     def __init__(self, data_dir, fname, data=None, indices=None,
@@ -65,7 +71,8 @@ class DatasetTensor(torch.utils.data.Dataset):
 class DatasetBase(torch.utils.data.Dataset):
     """Dataset to load and use XML-Datasets
     Support pickle or libsvm file format
-    Parameters
+
+    Arguments
     ---------
     data_dir: str
         data files are stored in this directory
@@ -81,10 +88,10 @@ class DatasetBase(torch.utils.data.Dataset):
         Dump data like valid labels here
     mode: str, optional, default='train'
         Mode of the dataset
-    feature_indices: np.ndarray or None, optional, default=None
-        Train with selected features only
-    label_indices: np.ndarray or None, optional, default=None
-        Train for selected labels only
+    feature_indices: str or None, optional, default=None
+        Train with selected features only (read from file)
+    label_indices: str or None, optional, default=None
+        Train for selected labels only (read from file)
     keep_invalid: bool, optional, default=False
         Don't touch data points or labels
     normalize_features: bool, optional, default=True
