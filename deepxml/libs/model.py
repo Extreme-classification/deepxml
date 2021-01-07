@@ -21,14 +21,13 @@ class ModelFull(ModelBase):
     ---------
     params: NameSpace
         object containing parameters like learning rate etc.
-    net: models.network.DeepXMLBase 
+    net: models.network.DeepXMLBase
         * DeepXMLs: network with a label shortlist
         * DeepXMLf: network with fully-connected classifier
-    criterion: libs.loss._Loss 
+    criterion: libs.loss._Loss
         to compute loss given y and y_hat
     optimizer: libs.optimizer.Optimizer
-        to back-propagate and updating the parameters        
-    
+        to back-propagate and updating the parameters
     """
 
     def __init__(self, params, net, criterion, optimizer):
@@ -39,18 +38,18 @@ class ModelFull(ModelBase):
 class ModelShortlist(ModelBase):
     """
     Models with label shortlist
-    
+
     Arguments
     ---------
     params: NameSpace
         object containing parameters like learning rate etc.
-    net: models.network.DeepXMLBase 
+    net: models.network.DeepXMLBase
         * DeepXMLs: network with a label shortlist
         * DeepXMLf: network with fully-connected classifier
-    criterion: libs.loss._Loss 
+    criterion: libs.loss._Loss
         to compute loss given y and y_hat
     optimizer: libs.optimizer.Optimizer
-        to back-propagate and updating the parameters        
+        to back-propagate and updating the parameters
     shorty: libs.shortlist.Shortlist
         to generate a shortlist of labels (typically an ANN structure)
         * same shortlist method is used during training and prediction
@@ -92,7 +91,7 @@ class ModelShortlist(ModelBase):
     def _combine_scores_one(self, logits, sim, beta):
         """
         Combine scores of label classifier and shortlist
-        score = beta*sigmoid(logit) + (1-beta)*sigmoid(sim) 
+        score = beta*sigmoid(logit) + (1-beta)*sigmoid(sim)
         """
         return beta*torch.sigmoid(logits) + (1-beta)*torch.sigmoid(sim)
 
@@ -115,7 +114,7 @@ class ModelShortlist(ModelBase):
         """
         Strip padding label from a matrix
         * Useful when a padding label is used in a classifier/shortlist
-        * Support for multiple matrics (expects dictionary) 
+        * Support for multiple matrics (expects dictionary)
         """
         stripped_vals = {}
         for key, val in mat.items():
@@ -154,7 +153,7 @@ class ModelShortlist(ModelBase):
     def _update_shortlist(self, dataset, use_intermediate=True, mode='train',
                           flag=True):
         """
-        Get nearest neighbors for the given data and 
+        Get nearest neighbors for the given data and
          update the shortlist in dataset
 
         * Will train ANN structure for train set
@@ -166,7 +165,7 @@ class ModelShortlist(ModelBase):
             Dataset object
             * features and labels are used when required
             * update_shortlist method is used to update neighbors and sim
-            * will directly use features for DenseFeatures 
+            * will directly use features for DenseFeatures
         use_intermediate: boolean, optional, default=True
             use intermediate representation if True
         mode: str, optional, default='train'
@@ -199,7 +198,7 @@ class ModelShortlist(ModelBase):
         ---------
         doc_embeddings: np.ndarray
             embeddings/encoding for the data points
-        
+
         Returns
         -------
         neighbors: np.ndarray
@@ -390,7 +389,7 @@ class ModelShortlist(ModelBase):
             feature_indices=None, label_indices=None, normalize_features=True,
             normalize_labels=False, validate=False, beta=0.2,
             use_intermediate_for_shorty=True, shortlist_method='static',
-            validate_after=5, aux_mapping=None, feature_type='sparse',
+            validate_after=5, surrogate_mapping=None, feature_type='sparse',
             trn_pretrained_shortlist=None, val_pretrained_shortlist=None):
         """
         Train for the given data
@@ -453,7 +452,7 @@ class ModelShortlist(ModelBase):
             hybrid: mixture of static and dynamic
         validate_after: int, optional, default=5
             validate after a gap of these many epochs
-        aux_mapping: str, optional, default=None
+        surrogate_mapping: str, optional, default=None
             Re-map clusters as per given mapping
             e.g. when labels are clustered
         feature_type: str, optional, default='sparse'
@@ -463,6 +462,9 @@ class ModelShortlist(ModelBase):
         val_pretrained_shortlist: csr_matrix or None, default=None
             Shortlist for validation dataset
         """
+        # Reset the logger to dump in train log file
+        self.logger.addHandler(
+            logging.FileHandler(os.path.join(result_dir, 'log_train.txt')))
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
@@ -478,7 +480,7 @@ class ModelShortlist(ModelBase):
             shortlist_method=shortlist_method,
             feature_type=feature_type,
             label_indices=label_indices,
-            aux_mapping=aux_mapping,
+            surrogate_mapping=surrogate_mapping,
             pretrained_shortlist=trn_pretrained_shortlist,
             _type='shortlist')
         train_loader = self._create_data_loader(
@@ -489,6 +491,9 @@ class ModelShortlist(ModelBase):
             num_workers=num_workers,
             shuffle=shuffle)
         precomputed_intermediate = False
+        if self.freeze_intermediate or not self.update_shortlist:
+            self.retrain_hnsw_after = 10000
+
         # No need to update embeddings
         if self.freeze_intermediate and feature_type != 'dense':
             precomputed_intermediate = True
@@ -538,7 +543,7 @@ class ModelShortlist(ModelBase):
                 feature_indices=feature_indices,
                 pretrained_shortlist=val_pretrained_shortlist,
                 label_indices=label_indices,
-                aux_mapping=aux_mapping,
+                surrogate_mapping=surrogate_mapping,
                 _type='shortlist')
             validation_loader = self._create_data_loader(
                 validation_dataset,
@@ -550,9 +555,11 @@ class ModelShortlist(ModelBase):
             train_loader, validation_loader, model_dir, result_dir,
             init_epoch, num_epochs, validate_after, beta,
             use_intermediate_for_shorty, precomputed_intermediate)
+        train_time = self.tracking.train_time + self.tracking.shortlist_time
+        return train_time, self.model_size
 
     def _predict(self, data_loader, top_k,
-                use_intermediate_for_shorty, **kwargs):
+                 use_intermediate_for_shorty, **kwargs):
         """
         Predict for the given data_loader
 
@@ -563,7 +570,7 @@ class ModelShortlist(ModelBase):
         top_k: int
             Maintain top_k predictions per data point
         use_intermediate_for_shorty: bool
-            use intermediate representation for negative sampling/ANN 
+            use intermediate representation for negative sampling/ANN
 
         Returns
         -------
@@ -606,12 +613,12 @@ class ModelShortlist(ModelBase):
             del batch_data
         return self._strip_padding_label(predicted_labels, num_labels)
 
-    def predict(self, data_dir, dataset, data=None,
+    def predict(self, data_dir, result_dir, dataset, data=None,
                 tst_feat_fname='tst_X_Xf.txt', tst_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
-                aux_mapping=None, feature_type='sparse',
+                surrogate_mapping=None, feature_type='sparse',
                 pretrained_shortlist=None,
                 use_intermediate_for_shorty=True, **kwargs):
         """
@@ -649,7 +656,7 @@ class ModelShortlist(ModelBase):
         normalize_lables: bool, optional, default=False
             Normalize labels to convert in probabilities
             Useful in-case on non-binary labels
-        aux_mapping: str, optional, default=None
+        surrogate_mapping: str, optional, default=None
             Re-map clusters as per given mapping
             e.g. when labels are clustered
         feature_type: str, optional, default='sparse'
@@ -658,13 +665,15 @@ class ModelShortlist(ModelBase):
             Shortlist for test dataset
             * will directly use this this shortlist when available
         use_intermediate_for_shorty: bool
-            use intermediate representation for negative sampling/ANN 
+            use intermediate representation for negative sampling/ANN
 
         Returns
         -------
         predicted_labels: csr_matrix
             predictions for the given dataset
         """
+        self.logger.addHandler(
+            logging.FileHandler(os.path.join(result_dir, 'log_predict.txt')))
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=tst_feat_fname,
@@ -680,7 +689,7 @@ class ModelShortlist(ModelBase):
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
             label_indices=label_indices,
-            aux_mapping=aux_mapping)
+            surrogate_mapping=surrogate_mapping)
         data_loader = self._create_data_loader(
             feature_type=feature_type,
             classifier_type='shortlist',
@@ -692,6 +701,7 @@ class ModelShortlist(ModelBase):
             data_loader, top_k, use_intermediate_for_shorty, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
+        avg_prediction_time = prediction_time*1000/len(data_loader.dataset)
         acc = self.evaluate(dataset.labels.data, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info(
@@ -699,8 +709,8 @@ class ModelShortlist(ModelBase):
             "Prediction time (per sample): {:.2f} msec., "
             "P@k(%): {:s}".format(
                 prediction_time,
-                prediction_time*1000/data_loader.dataset.num_instances, _res))
-        return predicted_labels
+                avg_prediction_time, _res))
+        return predicted_labels, prediction_time, avg_prediction_time
 
     def save_checkpoint(self, model_dir, epoch):
         # Avoid purge call from base class
@@ -753,13 +763,13 @@ class ModelNS(ModelBase):
     ---------
     params: NameSpace
         object containing parameters like learning rate etc.
-    net: models.network.DeepXMLBase 
+    net: models.network.DeepXMLBase
         * DeepXMLs: network with a label shortlist
         * DeepXMLf: network with fully-connected classifier
-    criterion: libs.loss._Loss 
+    criterion: libs.loss._Loss
         to compute loss given y and y_hat
     optimizer: libs.optimizer.Optimizer
-        to back-propagate and updating the parameters        
+        to back-propagate and updating the parameters
     shorty: libs.shortlist.Shortlist
         to generate a shortlist of labels
     """
@@ -908,6 +918,8 @@ class ModelNS(ModelBase):
         self._fit(train_loader, validation_loader,
                   model_dir, result_dir, init_epoch,
                   num_epochs, validate_after)
+        train_time = self.tracking.train_time + self.tracking.shortlist_time
+        return train_time, self.model_size
 
 
 class ModelReRanker(ModelShortlist):
@@ -918,13 +930,13 @@ class ModelReRanker(ModelShortlist):
     ---------
     params: NameSpace
         object containing parameters like learning rate etc.
-    net: models.network.DeepXMLBase 
+    net: models.network.DeepXMLBase
         * DeepXMLs: network with a label shortlist
         * DeepXMLf: network with fully-connected classifier
-    criterion: libs.loss._Loss 
+    criterion: libs.loss._Loss
         to compute loss given y and y_hat
     optimizer: libs.optimizer.Optimizer
-        to back-propagate and updating the parameters        
+        to back-propagate and updating the parameters
     shorty: libs.shortlist.Shortlist
         to generate a shortlist of labels
     """
@@ -933,4 +945,4 @@ class ModelReRanker(ModelShortlist):
         super().__init__(params, net, criterion, optimizer, shorty)
 
     def _combine_scores_one(self, out_logits, batch_sim, beta):
-        return out_logits + batch_sim
+        return beta*out_logits + (1-beta)*batch_sim

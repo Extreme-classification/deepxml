@@ -20,20 +20,20 @@ def construct_dataset(data_dir, fname_features, fname_labels, data=None,
                       keep_invalid=False, feature_type='sparse',
                       num_clf_partitions=1, feature_indices=None,
                       label_indices=None, shortlist_method='static',
-                      shorty=None, aux_mapping=None, _type='full',
+                      shorty=None, surrogate_mapping=None, _type='full',
                       pretrained_shortlist=None):
     if _type == 'full':  # with OVA classifier
         return DatasetFull(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
-            normalize_labels, num_clf_partitions, feature_type, aux_mapping)
+            normalize_labels, num_clf_partitions, feature_type, surrogate_mapping)
     elif _type == 'shortlist':  # with a shortlist
         #  Construct dataset for sparse data
         return DatasetShortlist(
             data_dir, fname_features, fname_labels, data, model_dir, mode,
             feature_indices, label_indices, keep_invalid, normalize_features,
             normalize_labels, num_clf_partitions, size_shortlist,
-            feature_type, shortlist_method, shorty, aux_mapping,
+            feature_type, shortlist_method, shorty, surrogate_mapping,
             pretrained_shortlist=pretrained_shortlist)
     elif _type == 'tensor':
         return DatasetTensor(
@@ -80,7 +80,7 @@ class DatasetFull(DatasetBase):
         sparse or dense features
     label_type: str, optional, default='dense'
         sparse (i.e. with shortlist) or dense (OVA) labels
-    aux_mapping: str, optional, default=None
+    surrogate_mapping: str, optional, default=None
         Re-map clusters as per given mapping
         e.g. when labels are clustered
     """
@@ -90,7 +90,7 @@ class DatasetFull(DatasetBase):
                  label_indices=None, keep_invalid=False,
                  normalize_features=True, normalize_labels=False,
                  num_clf_partitions=1, feature_type='sparse',
-                 aux_mapping=None, label_type='dense'):
+                 surrogate_mapping=None, label_type='dense'):
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
                          keep_invalid, normalize_features, normalize_labels,
@@ -100,7 +100,7 @@ class DatasetFull(DatasetBase):
             self._remove_samples_wo_features_and_labels()
         if not keep_invalid and self.labels._valid:
             # Remove labels w/o any positive instance
-            self._process_labels(model_dir, aux_mapping)
+            self._process_labels(model_dir, surrogate_mapping)
         self.feature_type = feature_type
         self.partitioner = None
         self.num_clf_partitions = 1
@@ -125,14 +125,15 @@ class DatasetFull(DatasetBase):
         # TODO Take care of this select and padding index
         self.label_padding_index = self.num_labels
 
-    def _process_labels(self, model_dir, aux_mapping):
+    def _process_labels(self, model_dir, surrogate_mapping):
         super()._process_labels(model_dir)
-        # if auxiliary task is clustered labels
-        if aux_mapping is not None:
-            print("Aux mapping is not None, mapping labels")
-            aux_mapping = np.loadtxt(aux_mapping, dtype=np.int)
-            _num_labels = len(np.unique(aux_mapping))
-            mapping = dict(zip(range(len(aux_mapping)), aux_mapping))
+        # if surrogate task is clustered labels
+        if surrogate_mapping is not None:
+            print("Surrogate mapping is not None, mapping labels")
+            surrogate_mapping = np.loadtxt(surrogate_mapping, dtype=np.int)
+            _num_labels = len(np.unique(surrogate_mapping))
+            mapping = dict(
+                zip(range(len(surrogate_mapping)), surrogate_mapping))
             self.labels.Y = _map(self.labels.Y, mapping=mapping,
                                  shape=(self.num_instances, _num_labels),
                                  axis=1)
@@ -194,7 +195,7 @@ class DatasetShortlist(DatasetBase):
         type of shortlist (static or dynamic)
     shorty: obj, optional, default=None
         Useful in-case of dynamic shortlist
-    aux_mapping: str, optional, default=None
+    surrogate_mapping: str, optional, default=None
         Re-map clusters as per given mapping
         e.g. when labels are clustered
     label_type: str, optional, default='dense'
@@ -211,7 +212,7 @@ class DatasetShortlist(DatasetBase):
                  normalize_features=True, normalize_labels=False,
                  num_clf_partitions=1, size_shortlist=-1,
                  feature_type='sparse', shortlist_method='static',
-                 shorty=None, aux_mapping=None, label_type='sparse',
+                 shorty=None, surrogate_mapping=None, label_type='sparse',
                  shortlist_in_memory=True, pretrained_shortlist=None):
         super().__init__(data_dir, fname_features, fname_labels, data,
                          model_dir, mode, feature_indices, label_indices,
@@ -233,7 +234,7 @@ class DatasetShortlist(DatasetBase):
 
         if not keep_invalid:
             # Remove labels w/o any positive instance
-            self._process_labels(model_dir, aux_mapping)
+            self._process_labels(model_dir, surrogate_mapping)
 
         self.shortlist = construct_handler(
             shortlist_type=shortlist_method,
@@ -249,13 +250,14 @@ class DatasetShortlist(DatasetBase):
         self.use_shortlist = True if self.size_shortlist > 0 else False
         self.label_padding_index = self.num_labels
 
-    def _process_labels(self, model_dir, aux_mapping):
+    def _process_labels(self, model_dir, surrogate_mapping):
         super()._process_labels(model_dir)
-        # if auxiliary task is clustered labels
-        if aux_mapping is not None:
-            aux_mapping = np.loadtxt(aux_mapping, dtype=np.int)
-            _num_labels = len(np.unique(aux_mapping))
-            mapping = dict(zip(range(len(aux_mapping)), aux_mapping))
+        # if surrogate task is clustered labels
+        if surrogate_mapping is not None:
+            surrogate_mapping = np.loadtxt(surrogate_mapping, dtype=np.int)
+            _num_labels = len(np.unique(surrogate_mapping))
+            mapping = dict(
+                zip(range(len(surrogate_mapping)), surrogate_mapping))
             self.labels.Y = _map(self.labels.Y, mapping=mapping,
                                  shape=(self.num_instances, _num_labels),
                                  axis=1)

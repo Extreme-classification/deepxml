@@ -146,7 +146,7 @@ class DeepXMLf(DeepXMLBase):
         self.num_labels = params.num_labels
         self.num_clf_partitions = params.num_clf_partitions
         transform_config_dict = transform_layer.fetch_json(
-            params.trans_method, params)
+            params.arch, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
         super(DeepXMLf, self).__init__(trans_config_coarse)
         if params.freeze_intermediate:
@@ -287,7 +287,7 @@ class DeepXMLs(DeepXMLBase):
         self.num_clf_partitions = params.num_clf_partitions
         self.label_padding_index = params.label_padding_index
         transform_config_dict = transform_layer.fetch_json(
-            params.trans_method, params)
+            params.arch, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
         super(DeepXMLs, self).__init__(trans_config_coarse)
         if params.freeze_intermediate:

@@ -102,7 +102,7 @@ def save_parameters(fname, params):
                'use_shortlist': params.use_shortlist,
                'ann_method': params.ann_method,
                'num_nbrs': params.num_nbrs,
-               'trans_method': params.trans_method,
+               'arch': params.arch,
                'embedding_dims': params.embedding_dims,
                'num_clf_partitions': params.num_clf_partitions,
                'label_padding_index': params.label_padding_index,
@@ -117,7 +117,7 @@ def load_parameters(fname, params):
     params.num_labels = temp['num_labels']
     params.vocabulary_dims = temp['vocabulary_dims']
     params.num_nbrs = temp['num_nbrs']
-    params.trans_method = temp['trans_method']
+    params.arch = temp['arch']
     params.num_clf_partitions = temp['num_clf_partitions']
     params.label_padding_index = temp['label_padding_index']
     params.ann_method = temp['ann_method']

@@ -19,30 +19,35 @@ def merge(predictions):
     return reduce(lambda a, b: a+b, predictions)
 
 
-def main(targets_label_file, train_label_file, prediction_files,
-         A, B, save):
-    prediction_files = prediction_files.rstrip(",").split(",")
-    true_labels = data_utils.read_sparse_file(targets_label_file)
-    trn_labels = data_utils.read_sparse_file(train_label_file)
+def main(tst_label_fname, trn_label_fname, pred_fname,
+         A, B, save, *args, **kwargs):
+    true_labels = data_utils.read_sparse_file(tst_label_fname)
+    trn_labels = data_utils.read_sparse_file(trn_label_fname)
     inv_propen = xc_metrics.compute_inv_propesity(trn_labels, A, B)
     acc = xc_metrics.Metrics(true_labels, inv_psp=inv_propen)
-    root = os.path.dirname(prediction_files[0])
-    predicted_labels = read_files(prediction_files)
-    predicted_labels.append(merge(predicted_labels))
-    for pred in predicted_labels:
+    root = os.path.dirname(pred_fname[0])
+    predicted_labels = read_files(pred_fname)
+    ens_predicted_labels = merge(predicted_labels)
+    ans = ""
+    for idx, pred in enumerate(predicted_labels):
         args = acc.eval(pred, 5)
-        print(xc_metrics.format(*args)+"\n")
-        if save:
-            print("Saving predictions..")
-            fname = os.path.join(root, "score.npz")
-            save_npz(fname, pred, compressed=False)
+        ans = ans + f"learner: {idx}\n{xc_metrics.format(*args)}\n"
+    args = acc.eval(ens_predicted_labels, 5)
+    ans = ans + f"Ensemble\n{xc_metrics.format(*args)}"
+    if save:
+        print("Saving predictions..")
+        fname = os.path.join(root, "score.npz")
+        save_npz(fname, ens_predicted_labels, compressed=False)
+    line = "-"*30
+    print(f"\n{line}\n{ans}\n{line}")
+    return ans
 
 
 if __name__ == '__main__':
-    trn_label_file = sys.argv[1]
-    target_file = sys.argv[2]
-    pred_files = sys.argv[3]
+    trn_label_fname = sys.argv[1]
+    tst_label_fname = sys.argv[2]
+    pred_fname = sys.argv[3].rstrip(",").split(",")
     A = float(sys.argv[4])
     B = float(sys.argv[5])
     save = int(sys.argv[6])
-    main(target_file, trn_label_file, pred_files, A, B, save)
+    main(tst_label_fname, trn_label_fname, pred_fname, A, B, save)

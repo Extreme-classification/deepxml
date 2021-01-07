@@ -5,6 +5,9 @@ import operator
 from multiprocessing import Pool
 from sklearn.cluster import KMeans
 import time
+import xclib.data.data_utils as data_utils
+import os
+import json
 
 
 def compute_centroid(X, Y):
@@ -95,22 +98,24 @@ def cluster_labels(labels, clusters, num_nodes, splitter, num_threads=10):
     return clusters, mapping
 
 
-class AuxMapping(object):
+class SurrogateMapping(object):
     """
-    Generate mapping of labels for auxilliary task
+    Generate mapping of labels for surrogate task
 
     Arguments:
     ----------
     method: int, optional (default: 0)
-        - 0 cluster labels & treat clusters as new labels
-        - 1 pick topk labels based on given label frequency
-        - 2 pick topk labels
+        - 0 none (use extreme task)
+        - 1 cluster labels & treat clusters as new labels
+        - 2 pick topk labels based on given label frequency
+        - 3 pick topk labels
 
     threshold: int, optional (default: 65536)
-        - method 0: number of clusters
-        - method 1: label frequency; pick labels more with
+        - method 0: none
+        - method 1: number of clusters
+        - method 2: label frequency; pick labels more with
                     frequency more than given value
-        - method 2: #labels to pick
+        - method 3: #labels to pick
     """
     def __init__(self, method=0, threshold=65536):
         self.method = method
@@ -126,7 +131,7 @@ class AuxMapping(object):
             num_nodes=self.threshold,
             splitter=functools.partial(balanced_kmeans))
         self.mapping = [None]*len(mapping)
-        self.num_aux_labels = self.threshold
+        self.num_surrogate_labels = self.threshold
         for key, val in mapping.items():
             self.mapping[key] = val
 
@@ -143,9 +148,15 @@ class AuxMapping(object):
         labels = labels[indices]
         return features, labels
 
+    def map_none(self):
+        self.num_surrogate_labels = len(self.valid_labels)
+        self.mapping = self.valid_labels
+
     def gen_mapping(self, features, labels):
         # Assumes invalid labels are already removed
         if self.method == 0:
+            self.map_none()    
+        elif self.method == 1:
             self.map_on_cluster(features, labels)    
         elif self.method == 1:
             self.map_on_frequency(labels)
@@ -167,3 +178,30 @@ class AuxMapping(object):
         # keep only valid labels; main code will also remove invalid labels
         labels, self.valid_labels = self.get_valid_labels(labels)
         self.gen_mapping(features, labels)
+
+
+def run(feat_fname, lbl_fname, method, threshold, seed, tmp_dir):
+    np.random.seed(seed)
+    features = data_utils.read_sparse_file(feat_fname)
+    labels = data_utils.read_sparse_file(lbl_fname)
+    assert features.shape[0] == labels.shape[0], \
+        "Number of instances must be same in features and labels"
+    num_features = features.shape[1]
+    stats_obj = {}
+    stats_obj['threshold'] = threshold
+    stats_obj['method'] = method
+
+    sd = SurrogateMapping(method=method, threshold=threshold)
+    sd.fit(features, labels)
+    stats_obj['surrogate'] = "{},{},{}".format(
+        num_features, sd.num_surrogate_labels, sd.num_surrogate_labels)
+    stats_obj['extreme'] = "{},{},{}".format(
+        num_features, sd.num_labels, len(sd.valid_labels))
+
+    json.dump(stats_obj, open(
+        os.path.join(tmp_dir, "data_stats.json"), 'w'), indent=4)
+
+    np.savetxt(os.path.join(tmp_dir, "valid_labels.txt"),
+               sd.valid_labels, fmt='%d')
+    np.savetxt(os.path.join(tmp_dir, "surrogate_mapping.txt"),
+               sd.mapping, fmt='%d')

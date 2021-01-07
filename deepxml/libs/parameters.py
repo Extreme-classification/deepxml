@@ -13,9 +13,9 @@ class Parameters(ParametersBase):
     def _construct(self):
         super()._construct()
         self.parser.add_argument(
-            '--trans_method',
-            dest='trans_method',
-            default='non_linear',
+            '--arch',
+            dest='arch',
+            default='astec',
             type=str,
             action='store',
             help='which network to use')
@@ -27,12 +27,12 @@ class Parameters(ParametersBase):
             type=float,
             help='Learning rate')
         self.parser.add_argument(
-            '--aux_mapping',
-            dest='aux_mapping',
+            '--surrogate_mapping',
+            dest='surrogate_mapping',
             default=None,
             action='store',
             type=str,
-            help='aux_mapping')
+            help='surrogate_mapping')
         self.parser.add_argument(
             '--dlr_step',
             dest='dlr_step',
@@ -351,11 +351,6 @@ class Parameters(ParametersBase):
             '--update_shortlist',
             action='store_true',
             help='Update shortlist while predicting'
-        )
-        self.parser.add_argument(
-            '--use_aux_embeddings',
-            action='store_true',
-            help='Use aux embeddings?'
         )
         self.parser.add_argument(
             '--huge_dataset',

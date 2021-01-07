@@ -48,7 +48,7 @@ class ParametersBase():
         self.parser.add_argument(
             '--pred_fname',
             dest='pred_fname',
-            default='predictions.npy',
+            default='predictions',
             action='store',
             type=str,
             help='prediction file name')
@@ -103,7 +103,10 @@ class ParametersBase():
             help='test label file name')
 
     def parse_args(self):
-        self.params = self.parser.parse_args()
+        self.params, _ = self.parser.parse_known_args()
+
+    def update(self, _dict):
+        self.params.__dict__.update(_dict)
 
     def load(self, fname):
         vars(self.params).update(json.load(open(fname)))

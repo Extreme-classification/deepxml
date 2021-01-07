@@ -26,14 +26,13 @@ class ModelBase(object):
     ---------
     params: NameSpace
         object containing parameters like learning rate etc.
-    net: models.network.DeepXMLBase 
+    net: models.network.DeepXMLBase
         * DeepXMLs: network with a label shortlist
         * DeepXMLf: network with fully-connected classifier
-    criterion: libs.loss._Loss 
+    criterion: libs.loss._Loss
         to compute loss given y and y_hat
     optimizer: libs.optimizer.Optimizer
-        to back-propagate and updating the parameters        
-    
+        to back-propagate and updating the parameters
     """
 
     def __init__(self, params, net, criterion, optimizer, *args, **kwargs):
@@ -64,7 +63,7 @@ class ModelBase(object):
         self.net.to()
 
     def _create_devices(self, _devices):
-        #TODO
+        # TODO
         if len(_devices) < 2:  # Repeat devices if required
             _devices = _devices*2
         # Allows model distributed training
@@ -80,7 +79,7 @@ class ModelBase(object):
                         keep_invalid=False, feature_indices=None,
                         label_indices=None, size_shortlist=-1,
                         shortlist_method='static', shorty=None,
-                        aux_mapping=None, _type='full',
+                        surrogate_mapping=None, _type='full',
                         pretrained_shortlist=None):
         """
         Create dataset as per given data and parameters
@@ -118,8 +117,8 @@ class ModelBase(object):
             dynamic: dynamically generate shortlist
             hybrid: mixture of static and dynamic
         shorty: libs.shortlist.Shortlist or None, optional, default=None
-            to generate a shortlist of labels        
-        aux_mapping: str, optional, default=None
+            to generate a shortlist of labels
+        surrogate_mapping: str, optional, default=None
             Re-map clusters as per given mapping
             e.g. when labels are clustered
         pretrained_shortlist: csr_matrix or None, default=None
@@ -151,7 +150,7 @@ class ModelBase(object):
             label_indices=label_indices,
             shortlist_method=shortlist_method,
             shorty=shorty,
-            aux_mapping=aux_mapping,
+            surrogate_mapping=surrogate_mapping,
             pretrained_shortlist=pretrained_shortlist,
             _type=_type)
         return _dataset
@@ -193,15 +192,20 @@ class ModelBase(object):
         """
         Return logging object!
         """
-        logging.basicConfig(level=level, stream=sys.stdout)
         logger = logging.getLogger(name)
+        if (logger.hasHandlers()):
+            logger.handlers.clear()
+        logger.propagate = False
+        logging.Formatter(fmt='%(levelname)s:%(message)s')
+        logger.addHandler(logging.StreamHandler(sys.stdout))
+        logger.setLevel(level=level)
         return logger
 
     def _to_device(self, tensor, index=-1):
         """
             Transfer model to respective devices
         """
-        #FIXME: For now it assumes classifier is on last device
+        # FIXME: For now it assumes classifier is on last device
         return tensor.to(self.devices[index])
 
     def _compute_loss_one(self, _pred, _true):
@@ -225,7 +229,8 @@ class ModelBase(object):
         else:
             return self._compute_loss_one(out_ans, batch_data['Y'])
 
-    def _step(self, data_loader, batch_div=False, precomputed_intermediate=False):
+    def _step(self, data_loader, batch_div=False,
+              precomputed_intermediate=False):
         """
         Training step (one pass over dataset)
 
@@ -397,7 +402,7 @@ class ModelBase(object):
             shuffle=False, init_epoch=0, keep_invalid=False,
             feature_indices=None, label_indices=None, normalize_features=True,
             normalize_labels=False, validate=False, validate_after=5,
-            feature_type='sparse', aux_mapping=None, **kwargs):
+            feature_type='sparse', surrogate_mapping=None, **kwargs):
         """
         Train for the given data
         * Also prints train time and model size
@@ -453,10 +458,13 @@ class ModelBase(object):
             validate after a gap of these many epochs
         feature_type: str, optional, default='sparse'
             sparse or dense features
-        aux_mapping: str, optional, default=None
+        surrogate_mapping: str, optional, default=None
             Re-map clusters as per given mapping
             e.g. when labels are clustered
         """
+        # Reset the logger to dump in train log file
+        self.logger.addHandler(
+            logging.FileHandler(os.path.join(result_dir, 'log_train.txt'))) 
         self.logger.info("Loading training data.")
         train_dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
@@ -470,7 +478,7 @@ class ModelBase(object):
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
             label_indices=label_indices,
-            aux_mapping=aux_mapping)
+            surrogate_mapping=surrogate_mapping)
         train_loader = self._create_data_loader(
             train_dataset,
             feature_type=feature_type,
@@ -489,7 +497,7 @@ class ModelBase(object):
                 data_dir=None,
                 fname=None,
                 data=train_dataset.features.data,
-                bypass_fine=True)
+                use_intermediate=True)
             data['Y'] = train_dataset.labels.data
             train_dataset = self._create_dataset(
                 os.path.join(data_dir, dataset),
@@ -520,7 +528,7 @@ class ModelBase(object):
                 normalize_labels=normalize_labels,
                 feature_indices=feature_indices,
                 label_indices=label_indices,
-                aux_mapping=aux_mapping)
+                surrogate_mapping=surrogate_mapping)
             validation_loader = self._create_data_loader(
                 validation_dataset,
                 feature_type=feature_type,
@@ -529,6 +537,8 @@ class ModelBase(object):
         self._fit(
             train_loader, validation_loader, model_dir, result_dir,
             init_epoch, num_epochs, validate_after, precomputed_intermediate)
+        train_time = self.tracking.train_time + self.tracking.shortlist_time
+        return train_time, self.model_size
 
     def _format_acc(self, acc):
         """
@@ -545,12 +555,12 @@ class ModelBase(object):
             _res = "(clf): {}".format(_val)
         return _res
 
-    def predict(self, data_dir, dataset, data=None,
+    def predict(self, data_dir, result_dir, dataset, data=None,
                 ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
-                aux_mapping=None, feature_type='sparse',
+                surrogate_mapping=None, feature_type='sparse',
                 classifier_type='full', **kwargs):
         """
         Predict for the given data
@@ -587,7 +597,7 @@ class ModelBase(object):
         normalize_lables: bool, optional, default=False
             Normalize labels to convert in probabilities
             Useful in-case on non-binary labels
-        aux_mapping: str, optional, default=None
+        surrogate_mapping: str, optional, default=None
             Re-map clusters as per given mapping
             e.g. when labels are clustered
         feature_type: str, optional, default='sparse'
@@ -600,6 +610,9 @@ class ModelBase(object):
         predicted_labels: csr_matrix
             predictions for the given dataset
         """
+        # Reset the logger to dump in predict log file
+        self.logger.addHandler(
+            logging.FileHandler(os.path.join(result_dir, 'log_predict.txt')))
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
             fname_features=ts_feat_fname,
@@ -614,7 +627,7 @@ class ModelBase(object):
             normalize_labels=normalize_labels,
             feature_indices=feature_indices,
             label_indices=label_indices,
-            aux_mapping=aux_mapping)
+            surrogate_mapping=surrogate_mapping)
         data_loader = self._create_data_loader(
             feature_type=feature_type,
             classifier_type=classifier_type,
@@ -625,14 +638,15 @@ class ModelBase(object):
         predicted_labels = self._predict(data_loader, top_k, **kwargs)
         time_end = time.time()
         prediction_time = time_end - time_begin
+        avg_prediction_time = prediction_time*1000/len(data_loader.dataset)
         acc = self.evaluate(dataset.labels.data, predicted_labels)
         _res = self._format_acc(acc)
         self.logger.info(
             "Prediction time (total): {:.2f} sec.,"
             "Prediction time (per sample): {:.2f} msec., P@k(%): {:s}".format(
                 prediction_time,
-                prediction_time*1000/data_loader.dataset.num_instances, _res))
-        return predicted_labels
+                avg_prediction_time, _res))
+        return predicted_labels, prediction_time, avg_prediction_time
 
     def _predict(self, data_loader, top_k, **kwargs):
         """
@@ -683,7 +697,7 @@ class ModelBase(object):
             DataLoader object to create batches and iterate over it
         encoder: callable or None, optional, default=None
             use this function to encode given dataset
-            * net.encode is used when None 
+            * net.encode is used when None
         use_intermediate: boolean, optional, default=False
             return intermediate representation if True
         fname_out: str or None, optional, default=None
@@ -731,7 +745,7 @@ class ModelBase(object):
         ---------
         encoder: callable or None, optional, default=None
             use this function to encode given dataset
-            * net.encode is used when None 
+            * net.encode is used when None
         data_dir: str or None, optional, default=None
             load data from this directory when data is None
         fname: str or None, optional, default=None
@@ -790,7 +804,7 @@ class ModelBase(object):
         """
         Save checkpoint on disk
         * save network, optimizer and loss
-        * filename: checkpoint_net_epoch.pkl for network 
+        * filename: checkpoint_net_epoch.pkl for network
 
         Arguments:
         ---------
@@ -818,7 +832,7 @@ class ModelBase(object):
         """
         Load checkpoint from disk
         * load network, optimizer and loss
-        * filename: checkpoint_net_epoch.pkl for network 
+        * filename: checkpoint_net_epoch.pkl for network
 
         Arguments:
         ---------
@@ -837,7 +851,7 @@ class ModelBase(object):
     def save(self, model_dir, fname, *args):
         """
         Save model on disk
-        * uses prefix: _network.pkl for network 
+        * uses prefix: _network.pkl for network
 
         Arguments:
         ---------
@@ -855,7 +869,7 @@ class ModelBase(object):
     def load(self, model_dir, fname, *args):
         """
         Load model from disk
-        * uses prefix: _network.pkl for network 
+        * uses prefix: _network.pkl for network
 
         Arguments:
         ---------
@@ -907,7 +921,7 @@ class ModelBase(object):
 
         Returns
         --------
-        acc: list or dict of list  
+        acc: list or dict of list
             return precision and ndcg
             * output dictionary uses same keys as input
         """

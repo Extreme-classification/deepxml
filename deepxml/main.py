@@ -37,26 +37,20 @@ def load_emeddings(params):
         - generating random embeddings
     * vocabulary_dims must match #rows in embeddings
     """
-    if params.use_aux_embeddings:
-        embeddings = np.load(
-            os.path.join(os.path.dirname(params.model_dir),
-                         params.embeddings))
-    else:
+    try:
         fname = os.path.join(
             params.data_dir, params.dataset, params.embeddings)
-        if Path(fname).is_file():
-            embeddings = np.load(fname)
-        else:
-            print("Generating random embeddings")
-            embeddings = np.random.rand(
-                params.vocabulary_dims, params.embedding_dims)
+        embeddings = np.load(fname)
+    except FileNotFoundError:
+        print("Generating random embeddings")
+        embeddings = np.random.rand(
+            params.vocabulary_dims, params.embedding_dims)
     if params.feature_indices is not None:
         indices = np.genfromtxt(params.feature_indices, dtype=np.int32)
         embeddings = embeddings[indices, :]
         del indices
     assert params.vocabulary_dims == embeddings.shape[0]
     return embeddings
-
 
 
 def train(model, params):
@@ -76,11 +70,11 @@ def train(model, params):
     # useful in case of re-ranker or where shortlist is already available
     if params.use_pretrained_shortlist:
         trn_pretrained_shortlist = os.path.join(
-            params.model_dir, 'train_shortlist.npz')
+            params.model_dir, 'trn_shortlist.npz')
         if params.validate:
             val_pretrained_shortlist = os.path.join(
-                params.model_dir, 'test_shortlist.npz')
-    model.fit(
+                params.model_dir, 'tst_shortlist.npz')
+    train_time, model_size = model.fit(
         data_dir=params.data_dir,
         model_dir=params.model_dir,
         result_dir=params.result_dir,
@@ -109,8 +103,9 @@ def train(model, params):
         label_indices=params.label_indices,
         trn_pretrained_shortlist=trn_pretrained_shortlist,
         val_pretrained_shortlist=val_pretrained_shortlist,
-        aux_mapping=params.aux_mapping)
+        surrogate_mapping=params.surrogate_mapping)
     model.save(params.model_dir, params.model_fname)
+    return train_time, model_size
 
 
 def get_document_embeddings(model, params, _save=True):
@@ -198,9 +193,10 @@ def inference(model, params):
         classifier_type = 'shortlist'
     if params.use_pretrained_shortlist:
         pretrained_shortlist = os.path.join(
-            params.model_dir, 'test_shortlist.npz')
-    predicted_labels = model.predict(
+            params.model_dir, 'tst_shortlist.npz')
+    predicted_labels, prediction_time, avg_prediction_time = model.predict(
         data_dir=params.data_dir,
+        result_dir=params.result_dir,
         dataset=params.dataset,
         tst_label_fname=params.tst_label_fname,
         tst_feat_fname=params.tst_feat_fname,
@@ -217,7 +213,7 @@ def inference(model, params):
         label_indices=params.label_indices,
         use_intermediate_for_shorty=params.use_intermediate_for_shorty,
         shortlist_method=params.shortlist_method,
-        aux_mapping=params.aux_mapping,
+        surrogate_mapping=params.surrogate_mapping,
         pretrained_shortlist=pretrained_shortlist
     )
     # Real number of labels
@@ -240,6 +236,7 @@ def inference(model, params):
         predicted_labels, params.result_dir,
         label_mapping, num_samples, num_labels,
         prefix=params.pred_fname, get_fnames=params.get_only)
+    return predicted_labels, prediction_time, avg_prediction_time
 
 
 def construct_network(params):
@@ -396,6 +393,7 @@ def main(params):
     """
         Main function
     """
+    output = None
     set_seed(params.seed)
     if params.mode == 'train':
         # Use last index as padding label
@@ -423,7 +421,7 @@ def main(params):
         shorty = construct_shortlist(params)
         model = construct_model(params, net, criterion, opt, shorty)
         model.transfer_to_devices()
-        train(model, params)
+        output = train(model, params)
         fname = os.path.join(params.result_dir, 'params.json')
         if params.save_intermediate: # save the intermediate representation
             net.save_intermediate_model(
@@ -441,7 +439,7 @@ def main(params):
         model = construct_model(params, net, None, None, shorty)
         model.transfer_to_devices()
         model.load(params.model_dir, params.model_fname)
-        inference(model, params)
+        output = inference(model, params)
 
     # extract model parameters or compute embeddings
     elif params.mode == 'extract':
@@ -461,12 +459,10 @@ def main(params):
             get_classifier_wts(model, params)
         else:
             get_document_embeddings(model, params)
-
     else:
         raise NotImplementedError("Unknown mode!")
+    return output
 
 
 if __name__ == '__main__':
-    args = parameters.Parameters("Parameters")
-    args.parse_args()
-    main(args.params)
+    pass
