@@ -1,101 +1,17 @@
 import numpy as np
-from xclib.utils.sparse import binarize, normalize
+from xclib.utils.sparse import binarize, normalize, compute_centroid
 import functools
-import operator
-from multiprocessing import Pool
-from sklearn.cluster import KMeans
-import time
 import xclib.data.data_utils as data_utils
+from xclib.utils.graph import RandomWalk
+from xclib.utils.clustering import cluster_balance
+from xclib.utils.clustering import b_kmeans_sparse, b_kmeans_dense
 import os
 import json
 
 
-def compute_centroid(X, Y):
-    return Y.T.dot(X).tocsr()
-
-
-def balanced_kmeans(labels_features, index, metric='cosine', tol=1e-4,
-                    leakage=None):
-    if labels_features.shape[0] == 1:
-        return [index]
-    cluster = np.random.randint(low=0, high=labels_features.shape[0], size=(2))
-    while cluster[0] == cluster[1]:
-        cluster = np.random.randint(
-            low=0, high=labels_features.shape[0], size=(2))
-    _centeroids = labels_features[cluster].todense()
-    _similarity = _sdist(labels_features, _centeroids,
-                         metric=metric, norm='l2')
-    old_sim, new_sim = -1000000, -2
-    while new_sim - old_sim >= tol:
-        clustered_lbs = np.array_split(
-            np.argsort(_similarity[:, 1]-_similarity[:, 0]), 2)
-        _centeroids = np.vstack([
-            labels_features[x, :].mean(
-                axis=0) for x in clustered_lbs
-        ])
-        _similarity = _sdist(labels_features, _centeroids,
-                             metric=metric, norm='l2')
-        old_sim, new_sim = new_sim, np.sum(
-            [np.sum(
-                _similarity[indx, i]
-            ) for i, indx in enumerate(clustered_lbs)])
-
-    if leakage is not None:
-        _distance = 1-_similarity
-        # Upper boundary under which labels will co-exists
-        ex_r = [(1+leakage)*np.max(_distance[indx, i])
-                for i, indx in enumerate(clustered_lbs)]
-        """
-        Check for labels in 2nd cluster who are ex_r_0 closer to
-        1st Cluster and append them in first cluster
-        """
-        clustered_lbs = list(
-            map(lambda x: np.concatenate(
-                [clustered_lbs[x[0]],
-                 x[1][_distance[x[1], x[0]] <= ex_r[x[0]]]
-                 ]),
-                enumerate(clustered_lbs[::-1])
-                )
-        )
-    return list(map(lambda x: index[x], clustered_lbs))
-
-
-def _sdist(XA, XB, metric, norm=None):
-    if norm is not None:
-        XA = normalize(XA, norm)
-        XB = normalize(XB, norm)
-    if metric == 'cosine':
-        score = XA.dot(XB.transpose())
-
-    if metric == 'sigmoid':
-        score = 2/(1 + np.exp(-XA.dot(XB.transpose())))-1
-    return score
-
-
-def cluster_labels(labels, clusters, num_nodes, splitter, num_threads=10):
-    with Pool(num_threads) as p:
-        while len(clusters) != num_nodes:
-            start_time = time.time()
-            temp_cluster_list = functools.reduce(
-                operator.iconcat,
-                p.starmap(
-                    splitter,
-                    map(lambda cluster: (labels[cluster], cluster),
-                        clusters)
-                ), [])
-            end_time = time.time()
-            print("Total clusters {}; Avg cluster size: {}; "
-                  "Time taken (sec): {}".format(
-                    len(temp_cluster_list),
-                    np.mean(list(map(len, temp_cluster_list))),
-                    end_time-start_time))
-            clusters = temp_cluster_list
-            del temp_cluster_list
-    mapping = {}
-    for idx, item in enumerate(clusters):
-        for _item in item:
-            mapping[_item] = idx
-    return clusters, mapping
+def compute_correlation(Y, walk_to=50, p_reset=0.2, k=10):
+    rw = RandomWalk(Y)
+    return rw.simulate(walk_to=walk_to, p_reset=p_reset, k=k)
 
 
 class SurrogateMapping(object):
@@ -117,23 +33,30 @@ class SurrogateMapping(object):
                     frequency more than given value
         - method 3: #labels to pick
     """
-    def __init__(self, method=0, threshold=65536):
+    def __init__(self, method=0, threshold=65536, feature_type='sparse'):
+        self.feature_type = feature_type
         self.method = method
         self.threshold = threshold
 
     def map_on_cluster(self, features, labels):
         label_centroids = compute_centroid(features, labels)
-        cooc = normalize(labels.T.dot(labels).tocsr(), norm='l1')
-        label_centroids = cooc.dot(label_centroids)
-        _, mapping = cluster_labels(
-            labels=label_centroids,
+        cooc = normalize(compute_correlation(labels), norm="l1")
+        try:
+            label_centroids = cooc.dot(label_centroids)
+        except RuntimeError:
+            print("Correlation matrix is too dense; ignoring.")
+        if self.feature_type == 'sparse':
+            splitter=functools.partial(b_kmeans_sparse)
+        elif self.feature_type == 'dense':
+            splitter=functools.partial(b_kmeans_dense)
+        else:
+            raise NotImplementedError("Unknown feature type!")
+        _, self.mapping = cluster_balance(
+            X=label_centroids,
             clusters=[np.asarray(np.arange(labels.shape[1]), dtype=np.int64)],
-            num_nodes=self.threshold,
-            splitter=functools.partial(balanced_kmeans))
-        self.mapping = [None]*len(mapping)
+            num_clusters=self.threshold,
+            splitter=splitter)
         self.num_surrogate_labels = self.threshold
-        for key, val in mapping.items():
-            self.mapping[key] = val
 
     def map_on_frequency(self, labels):
         raise NotImplementedError("")
@@ -142,6 +65,10 @@ class SurrogateMapping(object):
         raise NotImplementedError("")
 
     def remove_documents_wo_features(self, features, labels):
+        if isinstance(features, np.ndarray):
+            features = np.power(features, 2)
+        else:
+            features = features.power(2)
         freq = np.array(features.sum(axis=1)).ravel()
         indices = np.where(freq > 0)[0]
         features = features[indices]
@@ -180,9 +107,14 @@ class SurrogateMapping(object):
         self.gen_mapping(features, labels)
 
 
-def run(feat_fname, lbl_fname, method, threshold, seed, tmp_dir):
+def run(feat_fname, lbl_fname, feature_type, method, threshold, seed, tmp_dir):
     np.random.seed(seed)
-    features = data_utils.read_sparse_file(feat_fname)
+    if feature_type == 'dense':
+        features = data_utils.read_gen_dense(feat_fname)
+    elif feature_type == 'sparse':
+        features = data_utils.read_gen_sparse(feat_fname)
+    else:
+        raise NotImplementedError()
     labels = data_utils.read_sparse_file(lbl_fname)
     assert features.shape[0] == labels.shape[0], \
         "Number of instances must be same in features and labels"
@@ -191,7 +123,8 @@ def run(feat_fname, lbl_fname, method, threshold, seed, tmp_dir):
     stats_obj['threshold'] = threshold
     stats_obj['method'] = method
 
-    sd = SurrogateMapping(method=method, threshold=threshold)
+    sd = SurrogateMapping(
+        method=method, threshold=threshold, feature_type=feature_type)
     sd.fit(features, labels)
     stats_obj['surrogate'] = "{},{},{}".format(
         num_features, sd.num_surrogate_labels, sd.num_surrogate_labels)

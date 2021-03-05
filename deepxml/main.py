@@ -203,6 +203,7 @@ def inference(model, params):
         normalize_features=params.normalize,
         normalize_labels=params.nbn_rel,
         beta=params.beta,
+        batch_size=params.batch_size,
         feature_type=params.feature_type,
         classifier_type=classifier_type,
         num_workers=params.num_workers,
@@ -400,15 +401,17 @@ def main(params):
         if params.use_shortlist:
             params.label_padding_index = params.num_labels
         net = construct_network(params)
-        if params.load_intermediate:
+        if params.init == 'intermediate':
             print("Loading the intermediate representation.")
             net.load_intermediate_model(
                 os.path.join(os.path.dirname(params.model_dir), "Z.pkl"))
-        else:
+        elif params.init == 'token_embeddings':
             embeddings = load_emeddings(params)
             net.initialize(embeddings)
             del embeddings
             print("Initialized embeddings!")
+        else:
+            pass
         criterion = construct_loss(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)

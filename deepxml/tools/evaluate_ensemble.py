@@ -25,7 +25,7 @@ def main(tst_label_fname, trn_label_fname, pred_fname,
     trn_labels = data_utils.read_sparse_file(trn_label_fname)
     inv_propen = xc_metrics.compute_inv_propesity(trn_labels, A, B)
     acc = xc_metrics.Metrics(true_labels, inv_psp=inv_propen)
-    root = os.path.dirname(pred_fname[0])
+    root = os.path.dirname(pred_fname[-1])
     predicted_labels = read_files(pred_fname)
     ens_predicted_labels = merge(predicted_labels)
     ans = ""

@@ -20,13 +20,24 @@ class _Identity(nn.Module):
         pass
 
 
+class Identity(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
+
+    def initialize(self, *args, **kwargs):
+        pass
+
+
 elements = {
     'dropout': nn.Dropout,
     'batchnorm1d': nn.BatchNorm1d,
     'linear': nn.Linear,
     'relu': nn.ReLU,
     'residual': residual_layer.Residual,
-    'identity': nn.Identity,
+    'identity': Identity,
     '_identity': _Identity,
     'astec': astec.Astec
 }

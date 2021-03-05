@@ -299,6 +299,13 @@ class Parameters(ParametersBase):
             action='store',
             help='train or predict')
         self.parser.add_argument(
+            '--init',
+            dest='init',
+            default='token_embeddings',
+            type=str,
+            action='store',
+            help='initialize model parameters using')
+        self.parser.add_argument(
             '--keep_invalid',
             action='store_true',
             help='Keep labels which do not have any training instance!.')
@@ -310,10 +317,6 @@ class Parameters(ParametersBase):
             '--use_shortlist',
             action='store_true',
             help='Use shortlist or full')
-        self.parser.add_argument(
-            '--load_intermediate',
-            action='store_true',
-            help='Load existing model for intermediate rep.')
         self.parser.add_argument(
             '--save_intermediate',
             action='store_true',

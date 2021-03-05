@@ -11,6 +11,9 @@ from .features import DenseFeatures
 import numpy as np
 import sys
 import libs.utils as utils
+from xclib.utils.matrix import SMatrix
+from xclib.utils.sparse import sigmoid
+from tqdm import tqdm
 
 
 class ModelFull(ModelBase):
@@ -88,39 +91,13 @@ class ModelShortlist(ModelBase):
             return self._compute_loss_one(
                 out_ans, batch_data['Y'], batch_data['Y_mask'])
 
-    def _combine_scores_one(self, logits, sim, beta):
+    def _combine_scores(self, logit, sim, beta):
         """
         Combine scores of label classifier and shortlist
         score = beta*sigmoid(logit) + (1-beta)*sigmoid(sim)
         """
-        return beta*torch.sigmoid(logits) + (1-beta)*torch.sigmoid(sim)
-
-    def _combine_scores(self, logits, sim, beta):
-        """
-        Combine scores of label classifier and shortlist
-        * support for a distributed classifier (expects list of sim and logits)
-        """
-        if isinstance(logits, list):  # For distributed classifier
-            out = []
-            for _, (_logits, _sim) in enumerate(zip(logits, sim)):
-                out.append(self._combine_scores_one(
-                    _logits.data.cpu(), _sim.data, beta))
-            return out
-        else:
-            return self._combine_scores_one(
-                logits.data.cpu(), sim.data, beta)
-
-    def _strip_padding_label(self, mat, num_labels):
-        """
-        Strip padding label from a matrix
-        * Useful when a padding label is used in a classifier/shortlist
-        * Support for multiple matrics (expects dictionary)
-        """
-        stripped_vals = {}
-        for key, val in mat.items():
-            stripped_vals[key] = val[:, :num_labels].tocsr()
-            del val
-        return stripped_vals
+        return beta*sigmoid(logit, copy=True) \
+            + (1-beta)*sigmoid(sim, copy=True)
 
     def _fit_shorty(self, features, labels, doc_embeddings=None,
                     use_intermediate=True, feature_type='sparse'):
@@ -209,30 +186,22 @@ class ModelShortlist(ModelBase):
         return self.shorty.query(doc_embeddings)
 
     def _update_predicted_shortlist(self, count, batch_size, predicted_labels,
-                                    batch_out, batch_data, beta, top_k=50):
-        _score = self._combine_scores(batch_out, batch_data['Y_sim'], beta)
+                                    batch_out, batch_data):
         # IF rev mapping exist; case of distributed classifier
         if 'Y_map' in batch_data:
-            batch_shortlist = batch_data['Y_map'].numpy()
+            _indices = batch_data['Y_map']
             # Send this as merged?
-            _knn_score = torch.cat(batch_data['Y_sim'], 1)
-            _clf_score = torch.cat(batch_out, 1).data
-            _score = torch.cat(_score, 1)
+            _knn_score = torch.cat(batch_data['Y_sim'], 1).data.cpu().numpy()
+            _clf_score = torch.cat(batch_out, 1).data.cpu().numpy()
         else:
-            batch_shortlist = batch_data['Y_s'].numpy()
-            _knn_score = batch_data['Y_sim']
-            _clf_score = batch_out.data
-        utils.update_predicted_shortlist(
-            count, batch_size, _clf_score, predicted_labels['clf'],
-            batch_shortlist, top_k)
-        utils.update_predicted_shortlist(
-            count, batch_size, _knn_score, predicted_labels['knn'],
-            batch_shortlist, top_k)
-        utils.update_predicted_shortlist(
-            count, batch_size, _score, predicted_labels['combined'],
-            batch_shortlist, top_k)
+            _indices = batch_data['Y_s'].numpy()
+            _knn_score = batch_data['Y_sim'].numpy()
+            _clf_score = batch_out.data.cpu().numpy()
+        predicted_labels['clf'].update_block(count, _indices, _clf_score)
+        predicted_labels['knn'].update_block(count, _indices, _knn_score)
 
-    def _validate(self, data_loader, beta=0.2):
+
+    def _validate(self, data_loader, beta=0.2, top_k=20):
         """
         predict for the given data loader
         * retruns loss and predicted labels
@@ -254,30 +223,34 @@ class ModelShortlist(ModelBase):
         self.net.eval()
         torch.set_grad_enabled(False)
         num_labels = data_loader.dataset.num_labels
-        offset = 1 if self.label_padding_index is not None else 0
-        _num_labels = data_loader.dataset.num_labels + offset
         num_instances = data_loader.dataset.num_instances
-        num_batches = num_instances//data_loader.batch_size
         mean_loss = 0
         predicted_labels = {}
-        predicted_labels['combined'] = lil_matrix((num_instances, _num_labels))
-        predicted_labels['knn'] = lil_matrix((num_instances, _num_labels))
-        predicted_labels['clf'] = lil_matrix((num_instances, _num_labels))
+        predicted_labels['knn'] = SMatrix(
+            n_rows=num_instances,
+            n_cols=num_labels,
+            nnz=top_k)
+
+        predicted_labels['clf'] = SMatrix(
+            n_rows=num_instances,
+            n_cols=num_labels,
+            nnz=top_k)
+
         count = 0
-        for batch_idx, batch_data in enumerate(data_loader):
+        for batch_data in tqdm(data_loader):
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             loss = self._compute_loss(out_ans, batch_data)/batch_size
             mean_loss += loss.item()*batch_size
             self._update_predicted_shortlist(
-                count, batch_size, predicted_labels, out_ans, batch_data, beta)
+                count, batch_size, predicted_labels, out_ans, batch_data)
             count += batch_size
-            if batch_idx % self.progress_step == 0:
-                self.logger.info(
-                    "Validation progress: [{}/{}]".format(
-                        batch_idx, num_batches))
-        return self._strip_padding_label(predicted_labels, num_labels), \
-            mean_loss / num_instances
+        for k, v in predicted_labels.items():
+            predicted_labels[k] = v.data()
+        predicted_labels['ens'] = self._combine_scores(
+            predicted_labels['clf'], predicted_labels['knn'], beta)
+        return predicted_labels, mean_loss / num_instances
+
 
     def _fit(self, train_loader, validation_loader, model_dir, result_dir,
              init_epoch, num_epochs, validate_after, beta,
@@ -351,24 +324,22 @@ class ModelShortlist(ModelBase):
             if validation_loader is not None and epoch % validate_after == 0:
                 val_start_t = time.time()
                 predicted_labels, val_avg_loss = self._validate(
-                    validation_loader, beta)
+                    validation_loader, beta, self.shortlist_size)
                 val_end_t = time.time()
                 _acc = self.evaluate(
                     validation_loader.dataset.labels.data, predicted_labels)
                 self.tracking.validation_time = self.tracking.validation_time \
                     + val_end_t - val_start_t
                 self.tracking.mean_val_loss.append(val_avg_loss)
-                self.tracking.val_precision.append(_acc['combined'][0])
-                self.tracking.val_ndcg.append(_acc['combined'][1])
+                self.tracking.val_precision.append(_acc['ens'][0])
+                self.tracking.val_ndcg.append(_acc['ens'][1])
                 self.logger.info("Model saved after epoch: {}".format(epoch))
                 self.save_checkpoint(model_dir, epoch+1)
                 self.tracking.last_saved_epoch = epoch
+                _res = self._format_acc(_acc)
                 self.logger.info(
-                    "P@1 (combined): {:.2f}, P@1 (knn): {:.2f}, P@1"
-                    " (clf): {:.2f}, loss: {:.6f}, time: {:.2f} sec".format(
-                        _acc['combined'][0][0]*100, _acc['knn'][0][0]*100,
-                        _acc['clf'][0][0]*100, val_avg_loss,
-                        val_end_t-val_start_t))
+                    "P@k {:s}, loss: {:.6f}, time: {:.2f} sec".format(
+                        _res, val_avg_loss, val_end_t-val_start_t))
             self.tracking.last_epoch += 1
 
         self.save_checkpoint(model_dir, epoch+1)
@@ -558,8 +529,8 @@ class ModelShortlist(ModelBase):
         train_time = self.tracking.train_time + self.tracking.shortlist_time
         return train_time, self.model_size
 
-    def _predict(self, data_loader, top_k,
-                 use_intermediate_for_shorty, **kwargs):
+    def _predict(self, data_loader, top_k, beta,
+                use_intermediate_for_shorty):
         """
         Predict for the given data_loader
 
@@ -577,12 +548,9 @@ class ModelShortlist(ModelBase):
         predicted_labels: csr_matrix
             predictions for the given dataset
         """
-        beta = kwargs['beta'] if 'beta' in kwargs else 0.5
         self.logger.info("Loading test data.")
         self.net.eval()
         num_labels = data_loader.dataset.num_labels
-        offset = 1 if self.label_padding_index is not None else 0
-        _num_labels = data_loader.dataset.num_labels + offset
         torch.set_grad_enabled(False)
         self.logger.info("Fetching shortlist.")
         self._update_shortlist(
@@ -591,27 +559,32 @@ class ModelShortlist(ModelBase):
             mode='predict',
             flag=self.shorty is not None)
         num_instances = data_loader.dataset.num_instances
-        num_batches = num_instances//data_loader.batch_size
-
         predicted_labels = {}
-        predicted_labels['combined'] = lil_matrix((num_instances, _num_labels))
-        predicted_labels['knn'] = lil_matrix((num_instances, _num_labels))
-        predicted_labels['clf'] = lil_matrix((num_instances, _num_labels))
+        predicted_labels['knn'] = SMatrix(
+            n_rows=num_instances,
+            n_cols=num_labels,
+            nnz=top_k)
+
+        predicted_labels['clf'] = SMatrix(
+            n_rows=num_instances,
+            n_cols=num_labels,
+            nnz=top_k)
 
         count = 0
-        for batch_idx, batch_data in enumerate(data_loader):
+        for batch_data in tqdm(data_loader):
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             self._update_predicted_shortlist(
                 count, batch_size, predicted_labels,
-                out_ans, batch_data, beta, top_k)
+                out_ans, batch_data)
             count += batch_size
-            if batch_idx % self.progress_step == 0:
-                self.logger.info(
-                    "Prediction progress: [{}/{}]".format(
-                        batch_idx, num_batches))
             del batch_data
-        return self._strip_padding_label(predicted_labels, num_labels)
+        for k, v in predicted_labels.items():
+            predicted_labels[k] = v.data()
+        predicted_labels['ens'] = self._combine_scores(
+            predicted_labels['clf'], predicted_labels['knn'], beta)
+        return predicted_labels
+
 
     def predict(self, data_dir, result_dir, dataset, data=None,
                 tst_feat_fname='tst_X_Xf.txt', tst_label_fname='tst_X_Y.txt',
@@ -619,7 +592,7 @@ class ModelShortlist(ModelBase):
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
                 surrogate_mapping=None, feature_type='sparse',
-                pretrained_shortlist=None,
+                pretrained_shortlist=None, beta=0.5,
                 use_intermediate_for_shorty=True, **kwargs):
         """
         Predict for the given data
@@ -698,7 +671,7 @@ class ModelShortlist(ModelBase):
             num_workers=num_workers)
         time_begin = time.time()
         predicted_labels = self._predict(
-            data_loader, top_k, use_intermediate_for_shorty, **kwargs)
+            data_loader, top_k, beta, use_intermediate_for_shorty)
         time_end = time.time()
         prediction_time = time_end - time_begin
         avg_prediction_time = prediction_time*1000/len(data_loader.dataset)
@@ -944,5 +917,5 @@ class ModelReRanker(ModelShortlist):
     def __init__(self, params, net, criterion, optimizer, shorty):
         super().__init__(params, net, criterion, optimizer, shorty)
 
-    def _combine_scores_one(self, out_logits, batch_sim, beta):
-        return beta*out_logits + (1-beta)*batch_sim
+    def _combine_scores(self, logit, sim, beta):
+        return beta*logit + (1-beta)*sim

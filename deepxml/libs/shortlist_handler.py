@@ -7,21 +7,22 @@ from .lookup import Table, PartitionedTable
 from .sampling import NegativeSampler
 from scipy.sparse import load_npz
 from xclib.utils import sparse as sp
+from xclib.utils.matrix import SMatrix
 
 
-def construct_handler(shortlist_type, num_labels, model_dir='',
-                      mode='train', size_shortlist=-1,
+def construct_handler(shortlist_type, num_instances, num_labels,
+                      model_dir='', mode='train', size_shortlist=-1,
                       label_mapping=None, in_memory=True,
                       shorty=None, fname=None, corruption=200,
                       num_clf_partitions=1):
     if shortlist_type == 'static':
         return ShortlistHandlerStatic(
-            num_labels, model_dir, num_clf_partitions, mode, size_shortlist,
-            in_memory, label_mapping, fname)
+            num_instances, num_labels, model_dir, num_clf_partitions, mode,
+            size_shortlist, in_memory, label_mapping, fname)
     elif shortlist_type == 'hybrid':
         return ShortlistHandlerHybrid(
-            num_labels, model_dir, num_clf_partitions, mode, size_shortlist,
-            in_memory, label_mapping, corruption)
+            num_instances, num_labels, model_dir, num_clf_partitions, mode,
+            size_shortlist, in_memory, label_mapping, corruption)
     elif shortlist_type == 'dynamic':
         return ShortlistHandlerDynamic(
             num_labels, shorty, model_dir,
@@ -132,14 +133,9 @@ class ShortlistHandlerBase(object):
         return _shortlist, _target, _sim
 
     def _get_sl_one(self, index, pos_labels):
-        if self.shortlist.data_init:
-            shortlist, sim = self.query(index)
-            shortlist, target, sim = self._adjust_shortlist(
-                pos_labels, shortlist, sim)
-        else:
-            shortlist = np.zeros(self.size_shortlist, dtype=np.int64)
-            target = np.zeros(self.size_shortlist, dtype=np.float32)
-            sim = np.zeros(self.size_shortlist, dtype=np.float32)
+        shortlist, sim = self.query(index)
+        shortlist, target, sim = self._adjust_shortlist(
+            pos_labels, shortlist, sim)
         mask = shortlist != self.label_padding_index
         return shortlist, target, sim, mask
 
@@ -206,13 +202,13 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         map labels as per this mapping
     """
 
-    def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
-                 mode='train', size_shortlist=-1, in_memory=True,
-                 label_mapping=None, fname=None):
+    def __init__(self, num_instances, num_labels, model_dir='', 
+                 num_clf_partitions=1, mode='train', size_shortlist=-1,
+                 in_memory=True, label_mapping=None, fname=None):
         super().__init__(num_labels, None, model_dir, num_clf_partitions,
                          mode, size_shortlist, label_mapping)
         self.in_memory = in_memory
-        self._create_shortlist()
+        self._create_shortlist(num_instances, num_labels, size_shortlist)
         if fname is not None:
             self.from_pretrained(fname)
 
@@ -224,59 +220,40 @@ class ShortlistHandlerStatic(ShortlistHandlerBase):
         _ind, _sim = sp.topk(shortlist,
                              self.size_shortlist, self.num_labels,
                              -1000, return_values=True)
-        self.update_shortlist(_ind, _sim, fname='tmp_reranker')
+        self.update_shortlist(_ind, _sim)
 
     def query(self, index):
-        shortlist = self.shortlist.query(index)
-        sim = self.sim.query(index)
-        return shortlist, sim
+        ind, sim = self.shortlist[index]
+        return ind, sim
 
-    def _create_shortlist(self):
+    def _create_shortlist(self, num_instances, num_labels, k):
         """
             Create structure to hold shortlist
         """
         _type = 'memory' if self.in_memory else 'memmap'
         if self.num_clf_partitions > 1:
-            self.shortlist = PartitionedTable(
-                num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.int64)
-            self.sim = PartitionedTable(
-                num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.float32)
+            raise NotImplementedError()
         else:
-            self.shortlist = Table(_type=_type, _dtype=np.int64)
-            self.sim = Table(_type=_type, _dtype=np.float32)
+            self.shortlist = SMatrix(num_instances, num_labels, k)
 
-    def update_shortlist(self, shortlist, sim, fname='tmp', idx=-1):
+    def update_shortlist(self, ind, sim, fname='tmp'):
         """
             Update label shortlist for each instance
         """
-        prefix = 'train' if self.mode == 'train' else 'test'
-        self.shortlist.create(shortlist, os.path.join(
-            self.model_dir,
-            '{}.{}.shortlist.indices'.format(fname, prefix)),
-            idx)
-        self.sim.create(sim, os.path.join(
-            self.model_dir,
-            '{}.{}.shortlist.sim'.format(fname, prefix)),
-            idx)
-        del sim, shortlist
+        self.shortlist.update(ind, sim)
+        del sim, ind
 
     def save_shortlist(self, fname):
         """
             Save label shortlist and similarity for each instance
         """
-        self.shortlist.save(os.path.join(
-            self.model_dir, fname+'.shortlist.indices'))
-        self.sim.save(os.path.join(self.model_dir, fname+'.shortlist.sim'))
+        raise NotImplementedError()
 
     def load_shortlist(self, fname):
         """
             Load label shortlist and similarity for each instance
         """
-        self.shortlist.load(os.path.join(
-            self.model_dir, fname+'.shortlist.indices'))
-        self.sim.load(os.path.join(self.model_dir, fname+'.shortlist.sim'))
+        raise NotImplementedError()
 
 
 class ShortlistHandlerDynamic(ShortlistHandlerBase):
@@ -336,68 +313,48 @@ class ShortlistHandlerHybrid(ShortlistHandlerBase):
         add these many random labels
     """
 
-    def __init__(self, num_labels, model_dir='', num_clf_partitions=1,
-                 mode='train', size_shortlist=-1, in_memory=True,
-                 label_mapping=None, _corruption=200):
+    def __init__(self, num_instances, num_labels, model_dir='',
+                 num_clf_partitions=1, mode='train', size_shortlist=-1,
+                 in_memory=True, label_mapping=None, _corruption=200):
         super().__init__(num_labels, None, model_dir, num_clf_partitions,
                          mode, size_shortlist, label_mapping)
         self.in_memory = in_memory
-        self._create_shortlist()
+        self._create_shortlist(num_instances, num_labels, size_shortlist)
         self.shortlist_dynamic = NegativeSampler(num_labels, _corruption+20)
         self.size_shortlist = size_shortlist+_corruption  # Both
 
     def query(self, index):
-        shortlist = self.shortlist.query(index)
-        sim = self.sim.query(index)
-        _shortlist, _sim = self.shortlist_dynamic.query(1)
-        shortlist = np.concatenate([shortlist, _shortlist])
+        ind, sim = self.shortlist[index]
+        _ind, _sim = self.shortlist_dynamic.query(1)
+        ind = np.concatenate([ind, _ind])
         sim = np.concatenate([sim, _sim])
-        return shortlist, sim
+        return ind, sim
 
-    def _create_shortlist(self):
+    def _create_shortlist(self, num_instances, num_labels, k):
         """
             Create structure to hold shortlist
         """
         _type = 'memory' if self.in_memory else 'memmap'
         if self.num_clf_partitions > 1:
-            self.shortlist = PartitionedTable(
-                num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.int64)
-            self.sim = PartitionedTable(
-                num_partitions=self.num_clf_partitions,
-                _type=_type, _dtype=np.float32)
+            raise NotImplementedError()
         else:
-            self.shortlist = Table(_type=_type, _dtype=np.int64)
-            self.sim = Table(_type=_type, _dtype=np.float32)
+            self.shortlist = SMatrix(num_instances, num_labels, k)
 
-    def update_shortlist(self, shortlist, sim, fname='tmp', idx=-1):
+    def update_shortlist(self, ind, sim, fname='tmp'):
         """
             Update label shortlist for each instance
         """
-        prefix = 'train' if self.mode == 'train' else 'test'
-        self.shortlist.create(shortlist, os.path.join(
-            self.model_dir,
-            '{}.{}.shortlist.indices'.format(fname, prefix)),
-            idx)
-        self.sim.create(sim, os.path.join(
-            self.model_dir,
-            '{}.{}.shortlist.sim'.format(fname, prefix)),
-            idx)
-        del sim, shortlist
+        self.shortlist.update(ind, sim)
+        del sim, ind
 
     def save_shortlist(self, fname):
         """
             Save label shortlist and similarity for each instance
         """
-        self.shortlist.save(os.path.join(
-            self.model_dir, fname+'.shortlist.indices'))
-        self.sim.save(os.path.join(self.model_dir, fname+'.shortlist.sim'))
+        raise NotImplementedError()
 
     def load_shortlist(self, fname):
         """
             Load label shortlist and similarity for each instance
         """
-        self.shortlist.load(os.path.join(
-            self.model_dir, fname+'.shortlist.indices'))
-        self.sim.load(os.path.join(
-            self.model_dir, fname+'.shortlist.sim'))
+        raise NotImplementedError()

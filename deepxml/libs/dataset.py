@@ -10,7 +10,6 @@ import xclib.data.data_utils as data_utils
 from .dist_utils import Partitioner
 import operator
 from xclib.utils.sparse import _map
-from .lookup import Table, PartitionedTable
 from .shortlist_handler import construct_handler
 
 
@@ -238,6 +237,7 @@ class DatasetShortlist(DatasetBase):
 
         self.shortlist = construct_handler(
             shortlist_type=shortlist_method,
+            num_instances=self.num_instances,
             num_labels=self.num_labels,
             model_dir=model_dir,
             shorty=shorty,
@@ -266,7 +266,7 @@ class DatasetShortlist(DatasetBase):
     def update_shortlist(self, ind, sim, fname='tmp', idx=-1):
         """Update label shortlist for each instance
         """
-        self.shortlist.update_shortlist(ind, sim, fname, idx)
+        self.shortlist.update_shortlist(ind, sim, fname)
 
     def save_shortlist(self, fname):
         """Save label shortlist and distance for each instance

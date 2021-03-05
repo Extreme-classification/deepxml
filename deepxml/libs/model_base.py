@@ -16,6 +16,8 @@ from .collate_fn import construct_collate_fn
 from .tracking import Tracking
 import torch.utils.data
 from torch.utils.data import DataLoader
+from xclib.utils.matrix import SMatrix
+from tqdm import tqdm
 
 
 class ModelBase(object):
@@ -252,9 +254,9 @@ class ModelBase(object):
         """
         self.net.train()
         torch.set_grad_enabled(True)
-        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
         mean_loss = 0
-        for batch_idx, batch_data in enumerate(data_loader):
+        pbar = tqdm(data_loader)
+        for batch_data in pbar:
             self.net.zero_grad()
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data, precomputed_intermediate)
@@ -265,11 +267,8 @@ class ModelBase(object):
             mean_loss += loss.item()*batch_size
             loss.backward()
             self.optimizer.step()
-            if batch_idx % self.progress_step == 0:
-                self.logger.info(
-                    "Training progress: [{}/{}]".format(
-                        batch_idx, num_batches))
-            # TODO Delete items from tuple
+            pbar.set_description(
+                f"loss: {loss.item():.5f}")
             del batch_data
         return mean_loss / data_loader.dataset.num_instances
 
@@ -301,27 +300,26 @@ class ModelBase(object):
         self.net.eval()
         top_k = min(top_k, data_loader.dataset.num_labels)
         torch.set_grad_enabled(False)
-        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
         mean_loss = 0
-        predicted_labels = lil_matrix((data_loader.dataset.num_instances,
-                                       data_loader.dataset.num_labels))
+        predicted_labels = SMatrix(
+            n_rows=data_loader.dataset.num_instances,
+            n_cols=data_loader.dataset.num_labels,
+            nnz=top_k)
         count = 0
-        for batch_idx, batch_data in enumerate(data_loader):
+        for batch_data in tqdm(data_loader):
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             loss = self._compute_loss(out_ans, batch_data)
             mean_loss += loss.item()*batch_size
             if self.num_clf_partitions > 1:
                 out_ans = torch.cat(out_ans, dim=1)
-            utils.update_predicted(
-                count, batch_size, out_ans.data, predicted_labels, top_k)
+            vals, ind = torch.topk(out_ans, k=top_k, dim=-1, sorted=False)
+            predicted_labels.update_block(
+                count, ind.cpu().numpy(), vals.cpu().numpy())
             count += batch_size
-            if batch_idx % self.progress_step == 0:
-                self.logger.info(
-                    "Validation progress: [{}/{}]".format(
-                        batch_idx, num_batches))
             del batch_data
-        return predicted_labels, mean_loss / data_loader.dataset.num_instances
+        return predicted_labels.data(), \
+            mean_loss / data_loader.dataset.num_instances
 
     def _fit(self, train_loader, validation_loader, model_dir,
              result_dir, init_epoch, num_epochs, validate_after=5,
@@ -355,17 +353,17 @@ class ModelBase(object):
             if epoch != 0 and cond:
                 self._adjust_parameters()
             batch_train_start_time = time.time()
-            tr_avg_loss = self._step(
+            trn_avg_loss = self._step(
                 train_loader,
                 precomputed_intermediate=precomputed_intermediate)
-            self.tracking.mean_train_loss.append(tr_avg_loss)
+            self.tracking.mean_train_loss.append(trn_avg_loss)
             batch_train_end_time = time.time()
             self.tracking.train_time = self.tracking.train_time + \
                 batch_train_end_time - batch_train_start_time
 
             self.logger.info(
                 "Epoch: {:d}, loss: {:.6f}, time: {:.2f} sec".format(
-                    epoch, tr_avg_loss,
+                    epoch, trn_avg_loss,
                     batch_train_end_time - batch_train_start_time))
             if validation_loader is not None and epoch % validate_after == 0:
                 val_start_t = time.time()
@@ -553,10 +551,10 @@ class ModelBase(object):
         else:
             _val = ','.join(map(lambda x: '%0.2f' % (x*100), acc[0]))
             _res = "(clf): {}".format(_val)
-        return _res
+        return _res.strip()
 
     def predict(self, data_dir, result_dir, dataset, data=None,
-                ts_feat_fname='tst_X_Xf.txt', ts_label_fname='tst_X_Y.txt',
+                tst_feat_fname='tst_X_Xf.txt', tst_label_fname='tst_X_Y.txt',
                 batch_size=256, num_workers=6, keep_invalid=False,
                 feature_indices=None, label_indices=None, top_k=50,
                 normalize_features=True, normalize_labels=False,
@@ -615,8 +613,8 @@ class ModelBase(object):
             logging.FileHandler(os.path.join(result_dir, 'log_predict.txt')))
         dataset = self._create_dataset(
             os.path.join(data_dir, dataset),
-            fname_features=ts_feat_fname,
-            fname_labels=ts_label_fname,
+            fname_features=tst_feat_fname,
+            fname_labels=tst_label_fname,
             data=data,
             mode='predict',
             feature_type=feature_type,
@@ -666,23 +664,21 @@ class ModelBase(object):
         """
         self.net.eval()
         torch.set_grad_enabled(False)
-        num_batches = data_loader.dataset.num_instances//data_loader.batch_size
-        predicted_labels = lil_matrix((data_loader.dataset.num_instances,
-                                       data_loader.dataset.num_labels))
+        predicted_labels = SMatrix(
+            n_rows=data_loader.dataset.num_instances,
+            n_cols=data_loader.dataset.num_labels,
+            nnz=top_k)
         count = 0
-        for batch_idx, batch_data in enumerate(data_loader):
+        for batch_data in tqdm(data_loader):
             batch_size = batch_data['batch_size']
             out_ans = self.net.forward(batch_data)
             if self.num_clf_partitions > 1:
                 out_ans = torch.cat(out_ans, dim=1)
-            utils.update_predicted(
-                count, batch_size, out_ans.data, predicted_labels, top_k)
+            vals, ind = torch.topk(out_ans, k=top_k, dim=-1, sorted=False)
+            predicted_labels.update_block(
+                count, ind.cpu().numpy(), vals.cpu().numpy())
             count += batch_size
-            if batch_idx % self.progress_step == 0:
-                self.logger.info(
-                    "Prediction progress: [{}/{}]".format(
-                        batch_idx, num_batches))
-        return predicted_labels
+        return predicted_labels.data()
 
     def _embeddings(self, data_loader, encoder=None,
                     use_intermediate=False, fname_out=None,
@@ -721,7 +717,7 @@ class ModelBase(object):
                 self.net.representation_dims),
                 dtype=_dtype)
         count = 0
-        for _, batch_data in enumerate(data_loader):
+        for batch_data in tqdm(data_loader):
             batch_size = batch_data['batch_size']
             out_ans = encoder(
                 batch_data['X'], batch_data['X_ind'], use_intermediate)

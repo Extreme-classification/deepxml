@@ -21,6 +21,7 @@ def create_surrogate_mapping(data_dir, g_config, seed):
         surrogate_mapping.run(
             feat_fname=os.path.join(data_dir, g_config["trn_feat_fname"]),
             lbl_fname=os.path.join(data_dir, g_config["trn_label_fname"]),
+            feature_type=g_config["feature_type"],
             method=g_config['surrogate_method'],
             threshold=g_config['surrogate_threshold'],
             seed=seed,
@@ -58,12 +59,16 @@ def evaluate(g_config, data_dir, pred_fname, betas=-1, n_learners=1):
     return ans
 
 
-def print_run_stats(train_time, model_size, avg_prediction_time):
+def print_run_stats(train_time, model_size, avg_prediction_time, fname=None):
     line = "-"*30 
     out = f"Training time (sec): {train_time:.2f}\n"
     out += f"Model size (MB): {model_size:.2f}\n"
     out += f"Avg. Prediction time (msec): {avg_prediction_time:.2f}"
-    print(f"\n\n{line}\n{out}\n{line}\n\n")
+    out = f"\n\n{line}\n{out}\n{line}\n\n"
+    print(out)
+    if fname is not None:
+        with open(fname, "a") as fp:
+            fp.write(out)
 
 
 def run_deepxml(work_dir, version, seed, config):
@@ -154,7 +159,8 @@ def run_deepxml(work_dir, version, seed, config):
         data_dir=data_dir,
         pred_fname=pred_fname,
         betas=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90])
-    with open(os.path.join(result_dir, 'log_eval.txt'), 'w') as fp:
+    f_rstats = os.path.join(result_dir, 'log_eval.txt')
+    with open(f_rstats, "w") as fp:
         fp.write(ans)
 
     # run re-ranker
@@ -196,13 +202,13 @@ def run_deepxml(work_dir, version, seed, config):
 
         # re-rank the predictions using the re-ranker
         args.mode = 'predict'
-        args.get_only = 'combined'
+        args.get_only = 'ens'
         args.pred_fname = 'tst_predictions_reranker'
         _, _ , _pred_time = main(args)
         avg_prediction_time += _pred_time
         shutil.copy(
             os.path.join(result_dir, 'reranker',
-                        'tst_predictions_reranker_combined.npz'),
+                        'tst_predictions_reranker_ens.npz'),
             os.path.join(result_dir, 'tst_predictions_reranker_clf.npz'))
 
         shutil.copy(
@@ -216,10 +222,10 @@ def run_deepxml(work_dir, version, seed, config):
             data_dir=data_dir,
             pred_fname=pred_fname,
             betas=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90])
-        with open(os.path.join(result_dir, 'log_eval.txt'), 'a') as fp:
+        with open(f_rstats, 'a') as fp:
             fp.write("\nRe-ranker\n\n")
             fp.write(ans)
-    print_run_stats(train_time, model_size, avg_prediction_time)
+    print_run_stats(train_time, model_size, avg_prediction_time, f_rstats)
     return os.path.join(result_dir, f"score_{g_config['beta']:.2f}.npz"), \
         train_time, model_size, avg_prediction_time
 
@@ -275,9 +281,10 @@ def run_deepxml_ova(work_dir, version, seed, config):
         g_config=g_config,
         data_dir=data_dir,
         pred_fname=pred_fname)
-    with open(os.path.join(result_dir, 'log_eval.txt'), 'w') as fp:
+    f_rstats = os.path.join(result_dir, 'log_eval.txt')
+    with open(f_rstats, 'w') as fp:
         fp.write(ans)
-    print_run_stats(train_time, model_size, avg_prediction_time)
+    print_run_stats(train_time, model_size, avg_prediction_time, f_rstats)
     return os.path.join(result_dir, "score.npz"), \
         train_time, model_size, avg_prediction_time
 
@@ -335,9 +342,10 @@ def run_deepxml_ann(work_dir, version, seed, config):
         data_dir=data_dir,
         pred_fname=pred_fname,
         betas=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90])
-    with open(os.path.join(result_dir, 'log_eval.txt'), 'w') as fp:
+    f_rstats = os.path.join(result_dir, 'log_eval.txt')
+    with open(f_rstats, 'w') as fp:
         fp.write(ans)
-    print_run_stats(train_time, model_size, avg_prediction_time)
+    print_run_stats(train_time, model_size, avg_prediction_time, f_rstats)
     return os.path.join(result_dir, f"score_{g_config['beta']:.2f}.npz"), \
         train_time, model_size, avg_prediction_time
 
@@ -357,7 +365,7 @@ def run_ensemble(work_dir, model_type, version, seeds, config):
     train_time, model_size, avg_prediction_time = 0, 0, 0
     pred_fname = []
     for idx, seed in enumerate(seeds):
-        print(f"Running learner {idx+1} with seed {seed}")
+        print(f"Running learner {idx} with seed {seed}")
         f, tt, ms, pt = run_one(
             work_dir, model_type, f"{version}_{seed}", seed, config)        
         train_time += tt
@@ -374,9 +382,10 @@ def run_ensemble(work_dir, model_type, version, seeds, config):
         data_dir=os.path.join(work_dir, 'data'),
         pred_fname=pred_fname,
         n_learners=len(seeds))
-    with open(os.path.join(result_dir, 'log_ens_eval.txt'), 'w') as fp:
+    f_rstats = os.path.join(result_dir, "log_ens_eval.txt")
+    with open(f_rstats, 'w') as fp:
         fp.write(ans)
-    print_run_stats(train_time, model_size, avg_prediction_time)
+    print_run_stats(train_time, model_size, avg_prediction_time, f_rstats)
 
 
 if __name__ == "__main__":
@@ -386,10 +395,18 @@ if __name__ == "__main__":
     config = sys.argv[4]
     seed = sys.argv[5]
     if "," in seed:
-        seed = list(map(int, seed.split(",")))
+        seeds = list(map(int, seed.split(",")))
         run_ensemble(
-            work_dir, model_type, version, seed, json.load(open(config)))
+            work_dir=work_dir,
+            model_type=model_type,
+            version=version,
+            seeds=seeds,
+            config=json.load(open(config)))
     else:
         seed = int(seed)
         run_one(
-            work_dir, model_type, version, seed, json.load(open(config)))
+            work_dir=work_dir,
+            model_type=model_type,
+            version=f"{version}_{seed}",
+            seed=seed,
+            config=json.load(open(config)))

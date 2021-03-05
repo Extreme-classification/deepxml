@@ -28,7 +28,8 @@ class Linear(nn.Module):
         self.device = device  # Useful in case of multiple GPUs
         self.input_size = input_size
         self.output_size = output_size
-        self.weight = Parameter(torch.Tensor(self.output_size, self.input_size))
+        self.weight = Parameter(
+            torch.Tensor(self.output_size, self.input_size))
         if bias:
             self.bias = Parameter(torch.Tensor(self.output_size, 1))
         else:
@@ -37,9 +38,11 @@ class Linear(nn.Module):
 
     def forward(self, input):
         if self.bias is not None:
-            return F.linear(input.to(self.device), self.weight, self.bias.view(-1))
+            return F.linear(
+                input.to(self.device), self.weight, self.bias.view(-1))
         else:
-            return F.linear(input.to(self.device), self.weight)
+            return F.linear(
+                input.to(self.device), self.weight)
 
     def to(self):
         """Transfer to device
@@ -49,10 +52,15 @@ class Linear(nn.Module):
     def reset_parameters(self):
         """Initialize vectors
         """
-        stdv = 1. / math.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
+        torch.nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
-            self.bias.data.uniform_(-stdv, stdv)
+            fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in)
+            torch.nn.init.uniform_(self.bias, -bound, bound)
+        # stdv = 1. / math.sqrt(self.weight.size(1))
+        # self.weight.data.uniform_(-stdv, stdv)
+        # if self.bias is not None:
+        #     self.bias.data.uniform_(-stdv, stdv)
 
     def get_weights(self):
         """Get weights as numpy array
@@ -133,10 +141,7 @@ class SparseLinear(Linear):
     def reset_parameters(self):
         """Initialize weights vectors
         """
-        stdv = 1. / math.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
-        if self.bias is not None:
-            self.bias.data.uniform_(-stdv, stdv)
+        super().reset_parameters()
         if self.padding_idx is not None:
             self.weight.data[self.padding_idx].fill_(0)
 
