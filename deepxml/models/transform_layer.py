@@ -12,8 +12,7 @@ class _Identity(nn.Module):
         super(_Identity, self).__init__()
 
     def forward(self, x):
-        # useful when x_ind is None
-        x, x_ind = x
+        x, _ = x
         return x
 
     def initialize(self, *args, **kwargs):
@@ -87,11 +86,6 @@ class Transform(nn.Module):
 
     def to(self):
         super().to(self.device)
-
-    @property
-    def representation_dims(self):
-        # TODO: Hardcoded for now; compute it
-        return 300
 
     def get_token_embeddings(self):
         return self.transform.get_token_embeddings()

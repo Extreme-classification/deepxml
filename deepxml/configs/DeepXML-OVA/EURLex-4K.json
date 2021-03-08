@@ -32,7 +32,7 @@
         "validate": true,
         "model_method": "full",
         "normalize": true,
-        "load_intermediate": false,
+        "init": "token_embeddings",
         "use_shortlist": false,
         "embeddings": "fasttextB_embeddings_300d.npy"
     }

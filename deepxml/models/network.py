@@ -57,7 +57,11 @@ class DeepXMLBase(nn.Module):
 
     @property
     def representation_dims(self):
-        return self.transform.representation_dims
+        return self._repr_dims
+
+    @representation_dims.setter
+    def representation_dims(self, dims):
+        self._repr_dims = dims
 
     def encode(self, x):
         """Forward pass
@@ -148,6 +152,8 @@ class DeepXMLf(DeepXMLBase):
         transform_config_dict = transform_layer.fetch_json(
             params.arch, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
+        self.representation_dims = int(
+            transform_config_dict['representation_dims'])
         super(DeepXMLf, self).__init__(trans_config_coarse)
         if params.freeze_intermediate:
             print("Freezing intermediate model parameters!")
@@ -289,6 +295,8 @@ class DeepXMLs(DeepXMLBase):
         transform_config_dict = transform_layer.fetch_json(
             params.arch, params)
         trans_config_coarse = transform_config_dict['transform_coarse']
+        self.representation_dims = int(
+            transform_config_dict['representation_dims'])
         super(DeepXMLs, self).__init__(trans_config_coarse)
         if params.freeze_intermediate:
             print("Freezing intermediate model parameters!")

@@ -42,9 +42,7 @@ def load_emeddings(params):
             params.data_dir, params.dataset, params.embeddings)
         embeddings = np.load(fname)
     except FileNotFoundError:
-        print("Generating random embeddings")
-        embeddings = np.random.rand(
-            params.vocabulary_dims, params.embedding_dims)
+        exit("Embedding File not found. Check path or set 'init' to null")
     if params.feature_indices is not None:
         indices = np.genfromtxt(params.feature_indices, dtype=np.int32)
         embeddings = embeddings[indices, :]
@@ -409,9 +407,9 @@ def main(params):
             embeddings = load_emeddings(params)
             net.initialize(embeddings)
             del embeddings
-            print("Initialized embeddings!")
+            print("Initialized token embeddings!")
         else:
-            pass
+            print("Using random initialization!")
         criterion = construct_loss(params)
         print("Model parameters: ", params)
         print("\nModel configuration: ", net)

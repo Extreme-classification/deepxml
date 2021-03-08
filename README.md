@@ -56,8 +56,9 @@ An ensemble can be trained as follows. A json file is used to specify architectu
 
 ---
 
+### Expected directory structure
+
 ```txt
-Expected directory structure
 +-- work_dir
 |  +-- programs
 |  |  +-- deepxml
@@ -68,6 +69,17 @@ Expected directory structure
 |  +-- results_dir
 
 ```
+
+### Convert the data to new format
+
+```perl
+# A perl script is provided (deepxml/tools) to convert the data into new format as expected by DeepXML
+perl convert_format.pl <data_dir>/train.txt <data_dir>/trn_X_Xf.txt <data_dir>/trn_X_Y.txt
+
+perl convert_format.pl <data_dir>/test.txt <data_dir>/tst_X_Xf.txt <data_dir>/tst_X_Y.txt
+```
+
+### Run details
 
 ```txt
 ./run_main.sh <gpu_id> <framework> <dataset> <version> <seed>
@@ -82,8 +94,11 @@ Expected directory structure
 * dataset
   - Name of the dataset.
   - Expected files in work_dir/data/<dataset>
-    - train.txt
-    - test.txt
+    - trn_X_Xf.txt
+    - trn_X_Y.txt
+    - tst_X_Xf.txt
+    - tst_X_Y.txt
+    - fasttextB_embeddings_300d.npy or fasttextB_embeddings_512d.npy 
 
 * version
   - different runs could be managed by version and seed.
@@ -94,10 +109,30 @@ Expected directory structure
   - an ensemble is learned if multiple comma separated values are passed.
 ```
 
+### Notes
+
+```txt
+* Other file formats such as npy, npz, pickle are also supported.
+* Initializing with token embeddings (computed from FastText) leads to noticible accuracy gain in Astec. Please ensure that the token embedding file is available in data directory, if 'init=token_embeddings', otherwise it'll throw an error.
+* Config files are made available in deepxml/configs/<framework>/<method> for datasets in XC repository. You can use them when trying out Astec/DeepXML on new datasets.
+```
+
+## Cite as
+
+```bib
+@InProceedings{Dahiya21,
+    author = "Dahiya, K. and Saini, D. and Mittal, A. and Shaw, A. and Dave, K. and Soni, A. and Jain, H. and Agarwal, S. and Varma, M.",
+    title = "DeepXML: A Deep Extreme Multi-Label Learning Framework Applied to Short Text Documents",
+    booktitle = "Proceedings of the ACM International Conference on Web Search and Data Mining",
+    month = "March",
+    year = "2021"
+}
+```
+
 ## References
 
 ---
-[1] Dahiya, K., Saini, D., Mittal, A., Shaw, A., Dave, K., Soni,A., Jain, H., Agarwal, S., and Varma, M.  Deepxml:  Adeep extreme multi-label learning framework applied toshort text documents. In WSDM, 2021.
+[1] K. Dahiya, D. Saini, A. Mittal, A. Shaw, K. Dave, A. Soni, H. Jain, S. Agarwal, and M. Varma. Deepxml:  A deep extreme multi-label learning framework applied to short text documents. In WSDM, 2021.
 
 [2] pyxclib: <https://github.com/kunaldahiya/pyxclib>
 
@@ -107,4 +142,4 @@ Expected directory structure
 
 [5]  R. Babbar, and B. Schölkopf, DiSMEC - Distributed Sparse Machines for Extreme Multi-label Classification In WSDM, 2017.
 
-[6] Bojanowski, P., Grave, E., Joulin, A., & Mikolov, T. Enriching word vectors with subword information. In TACL, 2017.
+[6] P., Bojanowski, E. Grave, A. Joulin, and T. Mikolov. Enriching word vectors with subword information. In TACL, 2017.
