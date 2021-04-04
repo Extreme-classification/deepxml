@@ -2,16 +2,6 @@
 
 Code for _DeepXML: A Deep Extreme Multi-Label Learning Framework Applied to Short Text Documents_
 
-## Requirements
-
----
-
-* Pyxclib
-* NumPy
-* PyTorch
-* Numba
-* Scikit-learn
-
 ---
 
 ## Architectures and algorithms
@@ -32,13 +22,51 @@ DeepXML supports multiple feature architectures such as Bag-of-embedding/Astec, 
 
 ---
 
+## Setting up
+
+---
+
+### Expected directory structure
+
+```txt
++-- <work_dir>
+|  +-- programs
+|  |  +-- deepxml
+|  |    +-- deepxml
+|  +-- data
+|    +-- <dataset>
+|  +-- models
+|  +-- results
+
+```
+
+### Download data for Astec
+
+```txt
+* Download the (zipped file) BoW features from XML repository.  
+* Extract the zipped file into data directory. 
+* The following files should be available in <work_dir>/data/<dataset>
+    - train.txt
+    - test.txt
+    - fasttextB_embeddings_300d.npy or fasttextB_embeddings_512d.npy 
+```
+
+### Convert to new data format
+
+```perl
+# A perl script is provided (in deepxml/tools) to convert the data into new format as expected by Astec
+# Either set the $data_dir variable to the data directory of a particular dataset or replace it with the path
+perl convert_format.pl $data_dir/train.txt $data_dir/trn_X_Xf.txt $data_dir/trn_X_Y.txt
+perl convert_format.pl $data_dir/test.txt $data_dir/tst_X_Xf.txt $data_dir/tst_X_Y.txt
+```
+
 ## Example use cases
 
 ---
 
 ### A single learner with DeepXML framework
 
-The DeepXML framework can be utilized as follows. A json file is used to specify architecture and other arguments.
+The DeepXML framework can be utilized as follows. A json file is used to specify architecture and other arguments. Please refer to the full documentation below for more details.
 
 ```bash
 ./run_main.sh 0 DeepXML EURLex-4K 0 108
@@ -52,34 +80,7 @@ An ensemble can be trained as follows. A json file is used to specify architectu
 ./run_main.sh 0 DeepXML EURLex-4K 0 108,666,786
 ```
 
-## Full documentation
-
----
-
-### Expected directory structure
-
-```txt
-+-- work_dir
-|  +-- programs
-|  |  +-- deepxml
-|  |    +-- deepxml
-|  +-- data_dir
-|    +-- dataset
-|  +-- model_dir
-|  +-- results_dir
-
-```
-
-### Convert the data to new format
-
-```perl
-# A perl script is provided (deepxml/tools) to convert the data into new format as expected by DeepXML
-perl convert_format.pl <data_dir>/train.txt <data_dir>/trn_X_Xf.txt <data_dir>/trn_X_Y.txt
-
-perl convert_format.pl <data_dir>/test.txt <data_dir>/tst_X_Xf.txt <data_dir>/tst_X_Y.txt
-```
-
-### Run details
+## Full Documentation
 
 ```txt
 ./run_main.sh <gpu_id> <framework> <dataset> <version> <seed>
@@ -93,12 +94,13 @@ perl convert_format.pl <data_dir>/test.txt <data_dir>/tst_X_Xf.txt <data_dir>/ts
 
 * dataset
   - Name of the dataset.
-  - Expected files in work_dir/data/<dataset>
+  - Astec expects the following files in <work_dir>/data/<dataset>
     - trn_X_Xf.txt
     - trn_X_Y.txt
     - tst_X_Xf.txt
     - tst_X_Y.txt
-    - fasttextB_embeddings_300d.npy or fasttextB_embeddings_512d.npy 
+    - fasttextB_embeddings_300d.npy or fasttextB_embeddings_512d.npy
+  - You can set the 'embedding_dims' in config file to switch between 300d and 512d embeddings.
 
 * version
   - different runs could be managed by version and seed.

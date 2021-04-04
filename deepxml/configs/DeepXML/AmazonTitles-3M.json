@@ -12,6 +12,7 @@
         "embedding_dims": 300,
         "beta": 0.10,
         "top_k": 300,
+        "save_top_k": 100,
         "save_predictions": true, 
         "trn_label_fname": "trn_X_Y.txt",
         "val_label_fname": "tst_X_Y.txt",
@@ -36,7 +37,7 @@
     "extreme": {
         "num_epochs": 15,
         "dlr_factor": 0.5,
-        "learning_rate": 0.002,
+        "learning_rate": 0.0005,
         "batch_size": 255,
         "dlr_step": 14,
         "ns_method": "ensemble",

@@ -1,0 +1,17 @@
+torch==1.8.0
+xclib==0.96
+cudatoolkit=11.1.1=h6406543_8
+scikit-learn=0.24.1=py38ha9443f7_0
+scipy=1.6.1=py38h91f5cce_0
+cython=0.29.22=py38h2531618_0
+numba=0.51.1=pypi_0
+numexpr=2.7.3=py38hb2eb853_0
+numpy=1.19.5=pypi_0
+numpy-base=1.19.2=py38hfa32c7d_0
+numpydoc=1.1.0=pyhd3eb1b0_1
+cython=0.29.22=py38h2531618_0
+nmslib=2.0.6=pypi_0
+matplotlib=3.3.4=py38h06a4308_0
+matplotlib-base=3.3.4=py38h62a2d02_0
+setuptools=52.0.0=py38h06a4308_0
+tqdm=4.59.0=pyhd3eb1b0_1

@@ -41,13 +41,15 @@ class SurrogateMapping(object):
     def map_on_cluster(self, features, labels):
         label_centroids = compute_centroid(features, labels)
         cooc = normalize(compute_correlation(labels), norm="l1")
-        try:
-            label_centroids = cooc.dot(label_centroids)
-        except RuntimeError:
-            print("Correlation matrix is too dense; ignoring.")
         if self.feature_type == 'sparse':
+            freq = labels.getnnz(axis = 0)
+            if freq.max() > 5000:
+                print("Correlation matrix is too dense. Skipping..")
+            else:
+                label_centroids = cooc.dot(label_centroids)    
             splitter=functools.partial(b_kmeans_sparse)
         elif self.feature_type == 'dense':
+            label_centroids = cooc.dot(label_centroids)
             splitter=functools.partial(b_kmeans_dense)
         else:
             raise NotImplementedError("Unknown feature type!")

@@ -25,7 +25,7 @@
         "dlr_factor": 0.5,
         "learning_rate": 0.02,
         "batch_size": 255,
-        "dlr_step": 14,
+        "dlr_step": 10,
         "normalize": true,
         "optim": "Adam",
         "init": "token_embeddings",

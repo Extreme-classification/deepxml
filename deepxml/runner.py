@@ -36,7 +36,7 @@ def create_surrogate_mapping(data_dir, g_config, seed):
     return data_stats, mapping
 
 
-def evaluate(g_config, data_dir, pred_fname, betas=-1, n_learners=1):
+def evaluate(g_config, data_dir, pred_fname, filter_fname=None, betas=-1, n_learners=1):
     if n_learners == 1:
         func = evalaute_one.main
     else:
@@ -46,6 +46,10 @@ def evaluate(g_config, data_dir, pred_fname, betas=-1, n_learners=1):
     data_dir = os.path.join(data_dir, dataset)
     A = g_config['A']
     B = g_config['B']
+    if 'save_top_k' in g_config:
+        top_k = g_config['save_top_k']
+    else:
+        top_k = g_config['top_k']
     ans = func(
         tst_label_fname=os.path.join(
             data_dir, g_config["tst_label_fname"]),
@@ -53,7 +57,9 @@ def evaluate(g_config, data_dir, pred_fname, betas=-1, n_learners=1):
             data_dir, g_config["trn_label_fname"]),
         pred_fname=pred_fname,
         A=A, 
-        B=B, 
+        B=B,
+        top_k=top_k,
+        filter_fname=filter_fname, 
         betas=betas, 
         save=g_config["save_predictions"])
     return ans
@@ -86,6 +92,11 @@ def run_deepxml(work_dir, version, seed, config):
 
     # Directory and filenames
     data_dir = os.path.join(work_dir, 'data')
+
+    filter_fname = os.path.join(data_dir, dataset, 'filter_labels_test.txt')
+    if not os.path.isfile(filter_fname):
+        filter_fname = None
+    
     result_dir = os.path.join(
         work_dir, 'results', 'DeepXML', arch, dataset, f'v_{version}')
     model_dir = os.path.join(
@@ -158,6 +169,7 @@ def run_deepxml(work_dir, version, seed, config):
         g_config=g_config,
         data_dir=data_dir,
         pred_fname=pred_fname,
+        filter_fname=filter_fname,
         betas=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90])
     f_rstats = os.path.join(result_dir, 'log_eval.txt')
     with open(f_rstats, "w") as fp:
@@ -220,6 +232,7 @@ def run_deepxml(work_dir, version, seed, config):
         ans = evaluate(
             g_config=g_config,
             data_dir=data_dir,
+            filter_fname=filter_fname,
             pred_fname=pred_fname,
             betas=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90])
         with open(f_rstats, 'a') as fp:
@@ -241,6 +254,9 @@ def run_deepxml_ova(work_dir, version, seed, config):
         work_dir, 'results', 'DeepXML-OVA', arch, dataset, f'v_{version}')
     model_dir = os.path.join(
         work_dir, 'models', 'DeepXML-OVA', arch, dataset, f'v_{version}')
+    filter_fname = os.path.join(data_dir, dataset, 'filter_labels_test.txt')
+    if not os.path.isfile(filter_fname):
+        filter_fname = None
 
     _args = parameters.Parameters("Parameters")
     _args.parse_args()
@@ -279,6 +295,7 @@ def run_deepxml_ova(work_dir, version, seed, config):
     pred_fname = os.path.join(result_dir, 'tst_predictions')
     ans = evaluate(
         g_config=g_config,
+        filter_fname=filter_fname,
         data_dir=data_dir,
         pred_fname=pred_fname)
     f_rstats = os.path.join(result_dir, 'log_eval.txt')
@@ -300,6 +317,9 @@ def run_deepxml_ann(work_dir, version, seed, config):
         work_dir, 'results', 'DeepXML-ANNS', arch, dataset, f'v_{version}')
     model_dir = os.path.join(
         work_dir, 'models', 'DeepXML-ANNS', arch, dataset, f'v_{version}')
+    filter_fname = os.path.join(data_dir, dataset, 'filter_labels_test.txt')
+    if not os.path.isfile(filter_fname):
+        filter_fname = None
     _args = parameters.Parameters("Parameters")
     _args.parse_args()
     _args.update(config['global'])
@@ -339,6 +359,7 @@ def run_deepxml_ann(work_dir, version, seed, config):
     pred_fname = os.path.join(result_dir, 'tst_predictions')
     ans = evaluate(
         g_config=g_config,
+        filter_fname=filter_fname,
         data_dir=data_dir,
         pred_fname=pred_fname,
         betas=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90])

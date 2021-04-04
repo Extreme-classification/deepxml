@@ -1,4 +1,5 @@
 {
+    "representation_dims": "#ARGS.embedding_dims;",
     "transform_coarse": {
         "order": ["_identity"],
         "_identity": {}
