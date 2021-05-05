@@ -45,7 +45,13 @@ DeepXML supports multiple feature architectures such as Bag-of-embedding/Astec, 
 ```txt
 * Download the (zipped file) BoW features from XML repository.  
 * Extract the zipped file into data directory. 
-* The following files should be available in <work_dir>/data/<dataset>
+* The following files should be available in <work_dir>/data/<dataset> for new datasets (ignore the next step)
+    - trn_X_Xf.txt
+    - trn_X_Y.txt
+    - tst_X_Xf.txt
+    - tst_X_Y.txt
+    - fasttextB_embeddings_300d.npy or fasttextB_embeddings_512d.npy
+* The following files should be available in <work_dir>/data/<dataset> if the dataset is in old format (please refer to next step to convert the data to new format)
     - train.txt
     - test.txt
     - fasttextB_embeddings_300d.npy or fasttextB_embeddings_512d.npy 
@@ -89,8 +95,8 @@ An ensemble can be trained as follows. A json file is used to specify architectu
 
 * framework
   - DeepXML: Divides the XML problems in 4 modules as proposed in the paper.
-  - DeepXML-OVA: Train the method in 1-vs-all fashion [4][5], i.e., loss is computed for each label in each iteration.
-  - DeepXML-ANNS: Train the method using a label shortlist. Support is available for a fixed graph or periodic training of the ANNS graph.
+  - DeepXML-OVA: Train the architecture in 1-vs-all fashion [4][5], i.e., loss is computed for each label in each iteration.
+  - DeepXML-ANNS: Train the architecture using a label shortlist. Support is available for a fixed graph or periodic training of the ANNS graph.
 
 * dataset
   - Name of the dataset.
@@ -117,6 +123,8 @@ An ensemble can be trained as follows. A json file is used to specify architectu
 * Other file formats such as npy, npz, pickle are also supported.
 * Initializing with token embeddings (computed from FastText) leads to noticible accuracy gain in Astec. Please ensure that the token embedding file is available in data directory, if 'init=token_embeddings', otherwise it'll throw an error.
 * Config files are made available in deepxml/configs/<framework>/<method> for datasets in XC repository. You can use them when trying out Astec/DeepXML on new datasets.
+* We conducted our experiments on a 24-core Intel Xeon 2.6 GHz machine with 440GB RAM with a single Nvidia P40 GPU. 128GB memory should suffice for most datasets.
+* Astec make use of CPU (mainly for nmslib) as well as GPU. 
 ```
 
 ## Cite as

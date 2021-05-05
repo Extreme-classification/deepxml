@@ -11,6 +11,7 @@
         "surrogate_method": 1,
         "embedding_dims": 300,
         "top_k": 350,
+        "save_top_k": 100,
         "beta": 0.60,
         "save_predictions": true, 
         "trn_label_fname": "trn_X_Y.txt",
