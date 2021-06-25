@@ -15,3 +15,5 @@ matplotlib=3.3.4=py38h06a4308_0
 matplotlib-base=3.3.4=py38h62a2d02_0
 setuptools=52.0.0=py38h06a4308_0
 tqdm=4.59.0=pyhd3eb1b0_1
+h5py
+hnswlib
