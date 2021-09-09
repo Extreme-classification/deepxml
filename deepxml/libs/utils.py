@@ -44,8 +44,9 @@ def append_padding_classifier_one(classifier, num_labels,
         _device = classifier[key_w].device
         classifier[key_w] = torch.cat(
             [classifier[key_w], torch.zeros(1, dims).to(_device)], 0)
-        classifier[key_b] = torch.cat(
-            [classifier[key_b], -1e5*torch.ones(1, 1).to(_device)], 0)
+        if key_b in classifier:
+            classifier[key_b] = torch.cat(
+                [classifier[key_b], -1e5*torch.ones(1, 1).to(_device)], 0)
     else:
         status = "Shapes are fine, Not padding again."
     return status

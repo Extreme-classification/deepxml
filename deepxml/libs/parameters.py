@@ -330,6 +330,12 @@ class Parameters(ParametersBase):
             action='store_true',
             help='Validate or just train')
         self.parser.add_argument(
+            '--bias',
+            action='store',
+            default=True,
+            type=bool,
+            help='Use bias term or not!')
+        self.parser.add_argument(
             '--shuffle',
             action='store',
             default=True,

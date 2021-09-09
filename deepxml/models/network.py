@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import numpy as np
 import math
 import os
 import models.transform_layer as transform_layer
@@ -154,6 +153,7 @@ class DeepXMLf(DeepXMLBase):
         trans_config_coarse = transform_config_dict['transform_coarse']
         self.representation_dims = int(
             transform_config_dict['representation_dims'])
+        self._bias = params.bias
         super(DeepXMLf, self).__init__(trans_config_coarse)
         if params.freeze_intermediate:
             print("Freezing intermediate model parameters!")
@@ -226,7 +226,7 @@ class DeepXMLf(DeepXMLBase):
 
     def _construct_classifier(self):
         if self.num_clf_partitions > 1:  # Run the distributed version
-            _bias = [True for _ in range(self.num_clf_partitions)]
+            _bias = [self._bias for _ in range(self.num_clf_partitions)]
             _clf_devices = ["cuda:{}".format(
                 idx) for idx in range(self.num_clf_partitions)]
             return linear_layer.ParallelLinear(
@@ -239,7 +239,7 @@ class DeepXMLf(DeepXMLBase):
             return linear_layer.Linear(
                 input_size=self.representation_dims,
                 output_size=self.num_labels,  # last one is padding index
-                bias=True
+                bias=self._bias
             )
 
     def get_token_embeddings(self):
@@ -297,6 +297,7 @@ class DeepXMLs(DeepXMLBase):
         trans_config_coarse = transform_config_dict['transform_coarse']
         self.representation_dims = int(
             transform_config_dict['representation_dims'])
+        self._bias = params.bias
         super(DeepXMLs, self).__init__(trans_config_coarse)
         if params.freeze_intermediate:
             print("Freezing intermediate model parameters!")
@@ -383,7 +384,7 @@ class DeepXMLs(DeepXMLBase):
             # last one is padding index for each partition
             _num_labels = self.num_labels + offset
             _padding_idx = [None for _ in range(self.num_clf_partitions)]
-            _bias = [True for _ in range(self.num_clf_partitions)]
+            _bias = [self._bias for _ in range(self.num_clf_partitions)]
             _clf_devices = ["cuda:{}".format(
                 idx) for idx in range(self.num_clf_partitions)]
             return linear_layer.ParallelSparseLinear(
@@ -399,7 +400,7 @@ class DeepXMLs(DeepXMLBase):
                 input_size=self.representation_dims,
                 output_size=self.num_labels + offset,
                 padding_idx=self.label_padding_index,
-                bias=True)
+                bias=self._bias)
 
     def to(self):
         """Send layers to respective devices

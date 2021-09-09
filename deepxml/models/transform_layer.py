@@ -1,10 +1,9 @@
-import sys
 import re
 import torch.nn as nn
 import models.residual_layer as residual_layer
 import models.astec as astec
 import json
-from collections import OrderedDict
+import models.mlp as mlp
 
 
 class _Identity(nn.Module):
@@ -38,7 +37,8 @@ elements = {
     'residual': residual_layer.Residual,
     'identity': Identity,
     '_identity': _Identity,
-    'astec': astec.Astec
+    'astec': astec.Astec,
+    'mlp': mlp.MLP
 }
 
 
