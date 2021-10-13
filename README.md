@@ -139,6 +139,11 @@ An ensemble can be trained as follows. A json file is used to specify architectu
 }
 ```
 
+
+## YOU MAY ALSO LIKE
+- [DECAF: Deep Extreme Classification with Label Features](https://github.com/Extreme-classification/DECAF)
+- [ECLARE: Extreme Classification with Label Graph Correlations](https://github.com/Extreme-classification/ECLARE)
+
 ## References
 
 ---
