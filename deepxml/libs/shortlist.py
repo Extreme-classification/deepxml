@@ -1,9 +1,5 @@
-import numpy as np
-import _pickle as pickle
-from scipy.sparse import csr_matrix, diags
+import pickle
 from xclib.utils.sparse import topk, csr_from_arrays
-import os
-import numba
 from xclib.utils.shortlist import Shortlist
 from xclib.utils.shortlist import ShortlistCentroids
 from xclib.utils.shortlist import ShortlistInstances

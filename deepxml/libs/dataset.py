@@ -1,14 +1,7 @@
-import torch
-import _pickle as pickle
 import os
-import sys
-from scipy.sparse import lil_matrix
 import numpy as np
-from sklearn.preprocessing import normalize
 from .dataset_base import DatasetBase, DatasetTensor
-import xclib.data.data_utils as data_utils
 from .dist_utils import Partitioner
-import operator
 from xclib.utils.sparse import _map
 from .shortlist_handler import construct_handler
 

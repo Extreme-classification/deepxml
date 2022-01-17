@@ -1,5 +1,5 @@
 import numpy as np
-import _pickle as pickle
+import pickle
 from functools import partial
 
 

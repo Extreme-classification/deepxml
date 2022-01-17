@@ -1,9 +1,7 @@
 import logging
-import math
 import os
 import time
-from scipy.sparse import lil_matrix, issparse
-import _pickle as pickle
+from scipy.sparse import issparse
 import sys
 import torch.utils.data
 from torch.utils.data import DataLoader

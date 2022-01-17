@@ -1,8 +1,5 @@
 from xclib.data.features import FeaturesBase, DenseFeatures, SparseFeatures
 import numpy as np
-import _pickle as pickle
-from xclib.data import data_utils
-import os
 from operator import itemgetter
 
 

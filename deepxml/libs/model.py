@@ -1,16 +1,9 @@
 import logging
-import math
 import os
 import time
-from scipy.sparse import lil_matrix
-import _pickle as pickle
 from .model_base import ModelBase
 import torch.utils.data
-from torch.utils.data import DataLoader
 from .features import DenseFeatures
-import numpy as np
-import sys
-import libs.utils as utils
 from xclib.utils.matrix import SMatrix
 from xclib.utils.sparse import sigmoid
 from tqdm import tqdm

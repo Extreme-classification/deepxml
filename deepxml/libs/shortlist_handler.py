@@ -1,9 +1,6 @@
 import numpy as np
-import _pickle as pickle
 from .dist_utils import Partitioner
-import operator
 import os
-from .lookup import Table, PartitionedTable
 from .sampling import NegativeSampler
 from scipy.sparse import load_npz
 from xclib.utils import sparse as sp

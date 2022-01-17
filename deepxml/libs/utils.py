@@ -1,10 +1,8 @@
-import numpy as np
 import torch
 import json
 import os
-from scipy.sparse import csr_matrix, save_npz
-import numba as nb
-from xclib.utils.sparse import _map
+from scipy.sparse import save_npz
+from xclib.utils.sparse import _map_cols
 
 
 def save_predictions(preds, result_dir, valid_labels, num_samples,
@@ -14,10 +12,9 @@ def save_predictions(preds, result_dir, valid_labels, num_samples,
         for _fname, _pred in preds.items():
             if _fname in get_fnames:
                 if valid_labels is not None:
-                    predicted_labels = _map(
+                    predicted_labels = _map_cols(
                         _pred, valid_labels,
-                        shape=(num_samples, num_labels),
-                        axis=1)
+                        shape=(num_samples, num_labels))
                 else:
                     predicted_labels = _pred
                 save_npz(os.path.join(
@@ -25,10 +22,9 @@ def save_predictions(preds, result_dir, valid_labels, num_samples,
                     predicted_labels, compressed=False)
     else:
         if valid_labels is not None:
-            predicted_labels = _map(
+            predicted_labels = _map_cols(
                 preds, valid_labels,
-                shape=(num_samples, num_labels),
-                axis=1)
+                shape=(num_samples, num_labels))
         else:
             predicted_labels = preds
         save_npz(os.path.join(result_dir, '{}.npz'.format(prefix)),
