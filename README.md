@@ -142,6 +142,7 @@ An ensemble can be trained as follows. A json file is used to specify architectu
 
 ## YOU MAY ALSO LIKE
 - [DECAF: Deep Extreme Classification with Label Features](https://github.com/Extreme-classification/DECAF)
+- [GalaXC: Graph Neural Networks with Labelwise Attention for Extreme Classification](https://github.com/Extreme-classification/GalaXC)
 - [ECLARE: Extreme Classification with Label Graph Correlations](https://github.com/Extreme-classification/ECLARE)
 
 ## References
